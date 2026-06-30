@@ -48,7 +48,6 @@ async function loadConfig() {
   state.scrubEnabled = !!c.scrub_enabled;
   $("#aboutVersion").textContent = c.version;
   $("#aboutCount").textContent = c.count;
-  $("#vaultCount").textContent = c.count + " notas";
   const sel = $("#projsel");
   (c.projects || []).forEach(p => { const o = el("option", null, p); o.value = p; sel.appendChild(o); });
   sel.addEventListener("change", () => { state.project = sel.value; render(); });

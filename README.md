@@ -1,90 +1,183 @@
-# COGO
+<h1 align="center">COGO</h1>
 
-**La capa de memoria con color para construir software con agentes IA.**
+<p align="center"><b>La memoria con semáforo de confianza para construir software con IA.</b></p>
 
-COGO guarda lo que sabés de un proyecto como notas Markdown, y a cada nota le pone
-un **color de confianza computado**. Tu agente —o vos— consume ese color en vez de
-adivinar si algo es confiable.
+<p align="center">Cada cosa que sabés de tu proyecto, con un color que dice cuánto podés confiar en ella.</p>
 
-- 🟢 **verde** — verificado
-- 🟡 **amarillo** — probable
-- 🔴 **rojo** — suposición, no te fíes
+---
 
-El color **no se escribe a mano**: COGO lo calcula a partir de la evidencia, de la
-frescura (las cosas caducan) y de qué dependen las notas. Es auditable y no miente.
-Esa es la única parte original; todo lo demás es Markdown en una carpeta de git.
+## El problema
+
+Cuando construís software —vos o un agente de IA (Claude Code, Cursor, Copilot)— vas
+juntando "verdades": *"la base está en tal host"*, *"el bug lo causa X"*, *"decidimos Y"*.
+Con el tiempo se **pudren**: algunas nunca se verificaron, otras quedaron viejas, otras
+eran una corazonada. El problema es que **todas parecen igual de ciertas** — y entonces
+actuás (o el agente actúa) sobre una suposición creyendo que es un hecho.
+
+## Qué hace COGO
+
+COGO guarda ese conocimiento como **notas Markdown**, y a cada nota le pone un
+**color de confianza que él mismo calcula**:
+
+| | | |
+|---|---|---|
+| 🟢 | **verde** | verificado — podés confiar |
+| 🟡 | **amarillo** | probable — falta confirmarlo |
+| 🔴 | **rojo** | suposición — no te fíes |
+
+El color **no lo elegís vos**: COGO lo deriva de cuatro cosas — ¿hay **evidencia**?, ¿se
+**verificó**?, ¿está **fresco** (las cosas caducan)?, ¿**depende** de algo dudoso? Por eso
+es auditable y no miente: nadie puede pintar una nota de verde "porque sí".
+
+## Cómo se ve en la práctica
+
+Estás debuggeando:
+
+1. Anotás *"el worker no llega a Redis"* — es una corazonada, sin evidencia → 🔴 **roja**.
+2. Mirás los logs, encontrás la prueba, la sumás como evidencia → 🟡 **amarilla** (tenés
+   evidencia, pero todavía no corriste el test que lo confirma).
+3. Corrés el test, da bien, apretás **"verificar"** → 🟢 **verde**.
+4. La semana que viene le pedís ayuda a Claude. Claude lee tus notas, ve que la de Redis
+   está **verde** (la usa como hecho) y otra está **roja** (no se apoya en ella). No pierde
+   tiempo re-investigando ni actúa sobre la corazonada.
+
+Eso es COGO: **una memoria con semáforo de confianza, para vos y para tus herramientas de IA.**
+
+## Editar una nota cambia el color (es el punto)
+
+El semáforo refleja el estado actual de la nota, **siempre**. En el visor editás una nota y
+COGO **recomputa el color en vivo mientras escribís** (lo ves antes de guardar):
+
+- sumás evidencia observada → más verde
+- la dejás envejecer → decae sola a amarillo y después a rojo
+- cambiás la afirmación → se reinicia a "hay que re-verificar"
+- apretás **"verificar"** (ya lo chequeé) → verde
 
 ## Arrancar (la pavada)
 
-**Con Docker:**
+**Con Docker** — un comando, y abrís el navegador:
 
 ```bash
 docker run -p 8095:8080 -v cogo-vault:/vault ghcr.io/diegoparras/cogo
 ```
 
-Abrí <http://localhost:8095> → ves tu vault pintado por confianza, capturás y
-editás notas, todo desde el navegador. Nada de terminal.
+→ <http://localhost:8095>. Ves tu vault pintado por confianza, capturás y editás notas,
+todo desde la web. **Cero terminal.**
 
-**Sin Docker** (un solo binario, sin runtime):
+**Sin Docker** — un solo binario, sin runtime:
 
 ```bash
 cogo serve -http :8080 -vault ./vault
 ```
 
+**Conectarlo a tu agente (MCP)** — el mismo binario es un servidor MCP. En Claude Code,
+un `.mcp.json`:
+
+```json
+{ "mcpServers": { "cogo": { "command": "cogo", "args": ["serve", "-vault", "./vault"] } } }
+```
+
+Desde ahí, en cualquier sesión pedís `pack "<tema>"` y obtenés contexto coloreado, o
+`capture` un hallazgo. Lo que Claude aprende hoy, mañana lo lee Cursor: **el mismo vault.**
+
+## Cómo se computa el color
+
+```
+confianza = min( evidencia , frescura , dependencia más débil , contradicción )
+```
+
+Una nota es **verde** solo cuando **nada** la empuja para abajo: evidencia observada, con un
+check que pasó, fresca, todas sus dependencias verdes y sin contradicciones. Cada color trae
+su `color_reason`, así que siempre podés auditar **por qué** quedó como quedó.
+
+La **evidencia** define el techo del color: observada (un log, un comando, un test, un
+archivo) puede llegar a verde; reportada o inferida tapa en amarillo; sin evidencia, rojo.
+La **frescura** decae por tipo (un comando dura 30 días; una decisión de arquitectura, 180).
+
 ## Las tres caras, una sola lógica
 
 | Cara | Para quién | Cómo |
 |------|------------|------|
-| **Visor web** | todos | `cogo serve -http :8080` → navegador |
-| **MCP** | tu agente (Claude Code, Codex, Cursor, Gemini…) | `cogo serve` (stdio) |
-| **CLI** | power users que quieran rosquear | `cogo add · pack · lint · …` |
+| **Visor web** | todos | `cogo serve -http :8080` → navegador (Vault · Frescura · Pack · Grafo · Revisión) |
+| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — 5 tools: `pack` `search` `open` `capture` `verify` |
+| **CLI** | power users | `cogo add · pack · search · stale · verify · lint` |
 
-Cualquier herramienta que hable MCP se conecta al **mismo** vault: lo que Claude
-aprende hoy, mañana lo lee Cursor.
+Es un **solo binario Go** (imagen Docker `scratch` de ~12 MB) que es las tres cosas a la vez.
 
-## Capturar una nota
+## Accesorios opcionales (apagados por default)
 
-Desde el visor: botón **+ Nueva nota**, escribís el claim, sumás evidencia, y ves
-el color computado **en vivo** antes de guardar.
+COGO es 100% determinista y standalone sin nada de esto. Se prenden por variable de entorno
+y **nunca tocan el núcleo**:
 
-Desde la terminal:
-
-```bash
-cogo add nota.md          # valida, computa el color, la guarda
-cogo pack "redis"         # arma un contexto coloreado para un tema
-cogo verify <id>          # "ya lo chequeé": revalida y re-colorea
-cogo lint                 # links rotos, vencidas, y contradicciones (si hay LLM)
-```
-
-## Cómo se computa el color (§4)
-
-`confianza = min( evidencia , frescura , dependencia más débil , contradicción )`
-
-Una nota es verde solo cuando **nada** la empuja para abajo: evidencia observada,
-con un check que pasó, fresca, todas sus dependencias en verde y sin
-contradicciones. Cada color trae el motivo (`color_reason`), así que siempre
-podés auditar por qué quedó como quedó.
-
-## LLM opcional (apagado por defecto)
-
-COGO es 100% determinista sin ningún modelo. Si querés que detecte
-**contradicciones** entre notas, apuntá un provider OpenAI-compatible —local
-(Ollama) o remoto (OpenRouter, DeepSeek, Qwen…):
+| Accesorio | Se prende con | Para |
+|---|---|---|
+| **Modelo IA** (OpenRouter, Ollama, DeepSeek…) | `COGO_LLM_BASE_URL` + `COGO_LLM_MODEL` (o Ajustes en la GUI) | detectar **contradicciones** entre notas |
+| **Scrub Anonimal** | `ANONIMAL_URL` | que secretos/PII no entren al vault |
+| **Login Lockatus (OIDC)** | `AUTH_MODE=federado` | federar con la Suite Escriba |
 
 ```bash
+# ejemplo: detectar contradicciones con un modelo de OpenRouter
 export COGO_LLM_BASE_URL=https://openrouter.ai/api/v1
 export COGO_LLM_MODEL=deepseek/deepseek-chat
 export COGO_LLM_API_KEY=sk-or-...
 cogo lint
 ```
 
-Solo salen al modelo las frases de *claim* de los pares candidatos, nunca el vault
-entero. El servidor MCP no tiene red de salida: la única llamada al modelo vive en
-`cogo lint`, que corrés a propósito.
+## CLI (para rosquear)
+
+```bash
+cogo init                 # crea un vault
+cogo add nota.md          # valida, computa el color, la guarda (stdin si no hay archivo)
+cogo pack "redis"         # arma un contexto coloreado para un tema (degrada el rojo)
+cogo search "worker"      # lista: color · id · resumen (sin cuerpos)
+cogo stale                # qué está vencido o por vencer
+cogo verify <id>          # "ya lo chequeé": revalida y re-colorea
+cogo lint                 # enlaces rotos, vencidas, y contradicciones (si hay modelo)
+cogo serve -http :8080    # visor web + servidor MCP por HTTP
+cogo serve                # servidor MCP por stdio
+```
+
+## Formato de una nota
+
+```yaml
+---
+id: fisherboy-redis-hostname
+type: bug                 # decision|bug|runbook|architecture|constraint|command|mistake
+project: fisherboy
+evidence:
+  - kind: direct_log      # observada → puede llegar a verde
+    ref: "api log 2026-06-27T14:03Z: connect OK to redis:6379"
+check:
+  test: "leer el env efectivo del worker; probar conectividad a fisherboy-redis:6379"
+  status: not_run         # passed | failed | not_run
+last_verified: 2026-06-27
+depends_on: [fisherboy-redis-topology]
+# ---- computed by COGO · do not edit ----
+confidence: yellow
+color_reason: "evidencia observada pero el check no pasó"
+---
+
+## Claim
+El worker probablemente falla porque no resuelve el hostname interno de Redis.
+```
+
+El vault Markdown es la **única fuente de verdad**: portable, diffeable, sobrevive a que la
+herramienta muera. Todo lo demás es un cliente fino o un caché reconstruible.
 
 ## Filosofía
 
-Parte de la [Suite Escriba](https://getescriba.com): self-hosted, Docker, interno
-por defecto. El vault Markdown es la única fuente de verdad; todo lo demás es un
-cliente fino o un caché reconstruible. Simple por sustracción: el día que le crezca
-un kanban, falló.
+Parte de la **Suite Escriba** (getescriba.com): self-hosted, Docker, interno por defecto,
+MIT. **Standalone-first**: un `docker run` y anda; la federación es un accesorio. Simple por
+sustracción — el día que le crezca un kanban, falló.
+
+## Build / desarrollo
+
+```bash
+go build -o cogo ./cmd/cogo     # un binario estático, sin CGO
+go test ./...                   # toda la suite
+docker build -t cogo .          # imagen scratch (~12 MB)
+```
+
+## Licencia
+
+[MIT](LICENSE) · Diego Parrás · Ecosistema Escriba.
