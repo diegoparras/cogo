@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/web"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -48,6 +49,7 @@ func cmdServe(args []string) error {
 
 func newMCPServer(dir string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "cogo", Version: version}, nil)
+	scrubber := scrub.FromEnv()
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "pack",
@@ -118,6 +120,9 @@ func newMCPServer(dir string) *mcp.Server {
 		}
 		for _, e := range in.Evidence {
 			note.Evidence = append(note.Evidence, core.Evidence{Kind: e.Kind, Ref: e.Ref})
+		}
+		if err := scrub.Note(ctx, scrubber, note); err != nil {
+			return errResult(fmt.Errorf("scrub failed: %w", err)), nil, nil
 		}
 
 		vault, err := core.LoadVault(dir)

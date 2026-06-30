@@ -20,6 +20,7 @@ import (
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
+	"github.com/diegoparras/cogo/internal/scrub"
 )
 
 //go:embed assets
@@ -35,11 +36,13 @@ type Server struct {
 	mu             sync.RWMutex
 	provider       llm.Provider
 	contradictions map[string]bool
+	scrubber       scrub.Scrubber
 }
 
 func New(dir string, today func() core.Date) *Server {
 	s := &Server{dir: dir, today: today, contradictions: map[string]bool{}}
 	s.provider = s.loadProvider()
+	s.scrubber = scrub.FromEnv()
 	return s
 }
 
@@ -94,6 +97,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"version": Version, "projects": projects, "count": len(vault),
 		"llm_configured": s.prov().Available(),
+		"scrub_enabled":  s.scrubber.Enabled(),
 	})
 }
 
@@ -254,6 +258,10 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n := s.noteFromDraft(d)
+	if err := scrub.Note(r.Context(), s.scrubber, n); err != nil {
+		http.Error(w, "scrub (Anonimal) failed; note not saved: "+err.Error(), http.StatusBadGateway)
+		return
+	}
 	path := filepath.Join(s.dir, n.ID+".md")
 	if existing, ok := vault[n.ID]; ok && existing.Path != "" {
 		path = existing.Path

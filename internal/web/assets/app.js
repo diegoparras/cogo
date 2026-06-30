@@ -11,7 +11,7 @@ function el(tag, className, text) {
   return e;
 }
 
-const state = { view: "vault", project: "", hideGreen: false, editing: null, llmConfigured: false };
+const state = { view: "vault", project: "", hideGreen: false, editing: null, llmConfigured: false, scrubEnabled: false };
 
 // ---------- chrome ----------
 function initTheme() {
@@ -45,6 +45,7 @@ function initTabs() {
 async function loadConfig() {
   const c = await api("/api/config");
   state.llmConfigured = !!c.llm_configured;
+  state.scrubEnabled = !!c.scrub_enabled;
   $("#aboutVersion").textContent = c.version;
   $("#aboutCount").textContent = c.count;
   $("#vaultCount").textContent = c.count + " notas";
@@ -283,6 +284,7 @@ function renderEditor(main) {
   main.appendChild(head);
 
   const form = el("div", "editor");
+  if (state.scrubEnabled) form.appendChild(el("div", "scrub-note", "Las capturas se limpian con Anonimal (secretos/PII) antes de guardar."));
   const prev = el("div", "color-preview");
   let timer = null;
   function preview() {
