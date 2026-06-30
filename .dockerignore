@@ -1,0 +1,6 @@
+# keep the build context (and image) lean
+.git
+*.exe
+/cogo
+vault/
+README*.md

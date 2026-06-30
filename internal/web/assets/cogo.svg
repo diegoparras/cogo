@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="COGO">
+  <rect x="3" y="3" width="42" height="42" rx="12" fill="#2c313c"/>
+  <circle cx="24" cy="14" r="4.6" fill="#3fb950"/>
+  <circle cx="24" cy="24" r="4.6" fill="#d6a01a"/>
+  <circle cx="24" cy="34" r="4.6" fill="#f85149"/>
+</svg>

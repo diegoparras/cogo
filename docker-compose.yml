@@ -1,0 +1,31 @@
+# Standalone COGO — no suite required. The borrows (Lockatus, Anonimal) are off;
+# this is the "a stranger clones it and runs it" mode.
+#
+#   docker compose up -d --build
+#   MCP over HTTP at http://localhost:8095/mcp  ·  vault in the cogo-vault volume
+#
+# To use it from an LLM client over stdio instead, skip compose and run:
+#   docker run -i --rm -v cogo-vault:/vault ghcr.io/diegoparras/cogo serve
+
+name: cogo
+
+services:
+  cogo:
+    build: .
+    image: ghcr.io/diegoparras/cogo:latest
+    container_name: cogo
+    ports:
+      - "8095:8080"
+    environment:
+      COGO_VAULT: /vault
+    volumes:
+      - cogo-vault:/vault
+    healthcheck:
+      test: ["CMD", "/cogo", "search", "-vault", "/vault", "."]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  cogo-vault:

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COGO</title>
+<script>if(localStorage.getItem("cogo.theme")==="dark")document.documentElement.dataset.theme="dark"</script>
+<link rel="icon" href="/cogo.svg">
+<link rel="stylesheet" href="/escriba-ui.css">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="app-header">
+  <a class="logo-link" href="#" title="COGO">
+    <img class="logo brand" src="/cogo.svg" alt="">
+    <h1>COGO</h1>
+  </a>
+  <span class="badge" id="vaultCount">…</span>
+  <span class="sp"></span>
+  <div class="menu-wrap">
+    <button class="icon-btn" id="kebab" aria-label="Menú">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="4" r="1.7"/><circle cx="10" cy="10" r="1.7"/><circle cx="10" cy="16" r="1.7"/></svg>
+    </button>
+    <div class="menu menu-right hidden" id="menu">
+      <div class="menu-field">
+        <span class="menu-field-lbl">Proyecto</span>
+        <select id="projsel"><option value="">todos</option></select>
+      </div>
+      <div class="menu-sep"></div>
+      <label class="menu-item menu-switch">
+        <span>Tema oscuro</span>
+        <input type="checkbox" id="themeToggle"><span class="track"></span>
+      </label>
+      <a class="menu-item" id="aboutBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+        Acerca de COGO
+      </a>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-view="vault">Vault</button>
+  <button class="tab" data-view="fresh">Frescura</button>
+  <button class="tab" data-view="pack">Pack</button>
+  <button class="tab" data-view="graph">Grafo</button>
+</nav>
+
+<main id="main"></main>
+
+<div class="modal-back hidden" id="aboutModal">
+  <div class="modal-card">
+    <button class="modal-x" id="aboutClose" aria-label="Cerrar">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2 class="modal-tit">COGO</h2>
+    <div class="modal-cuerpo">
+      <p>La memoria con color computado de la Suite Escriba. Cada nota dice qué tan confiable es —y por qué— y el agente consume ese juicio en vez de re-derivarlo.</p>
+      <dl class="about-rows">
+        <dt>Versión</dt><dd id="aboutVersion">—</dd>
+        <dt>Rol en la suite</dt><dd>memoria · épica</dd>
+        <dt>Notas en el vault</dt><dd id="aboutCount">—</dd>
+      </dl>
+    </div>
+    <div class="about-foot">Diego Parras · Ecosistema Escriba</div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

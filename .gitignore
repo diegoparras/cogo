@@ -1,0 +1,4 @@
+# build output
+/cogo
+/cogo.exe
+*.exe
