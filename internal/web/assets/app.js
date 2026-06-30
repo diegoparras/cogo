@@ -435,6 +435,14 @@ function initSettings() {
 // ---------- boot ----------
 (async function () {
   initTheme(); initMenu(); initTabs(); initSettings();
+  const me = await api("/auth/me");
+  if (me.enabled && !me.authenticated) { $("#loginGate").classList.remove("hidden"); return; }
+  if (me.authenticated) {
+    $("#menuUser").textContent = me.name ? (me.name + " · " + me.email) : me.email;
+    $("#menuUser").classList.remove("hidden");
+    $("#logoutBtn").classList.remove("hidden");
+    $("#logoutSep").classList.remove("hidden");
+  }
   await loadConfig();
   render();
 })();

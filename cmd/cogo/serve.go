@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/web"
@@ -39,12 +40,21 @@ func cmdServe(args []string) error {
 	// HTTP: the long-running container service. Remote clients reach it behind a
 	// proxy with OIDC (Lockatus); locally it is loopback.
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
+	authn, err := auth.FromEnv(context.Background())
+	if err != nil {
+		return err
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	web.New(*dir, today).Mount(mux) // human face: visor at /, JSON API at /api
-	fmt.Fprintf(os.Stderr, "cogo: serving on %s — web visor at /, MCP at /mcp (vault %s)\n", *httpAddr, *dir)
-	return http.ListenAndServe(*httpAddr, mux)
+	authn.RegisterRoutes(mux)        // accessory: OIDC login (federated only)
+	mode := "standalone"
+	if authn.Enabled() {
+		mode = "federado (Lockatus)"
+	}
+	fmt.Fprintf(os.Stderr, "cogo: serving on %s [%s] — visor at /, MCP at /mcp (vault %s)\n", *httpAddr, mode, *dir)
+	return http.ListenAndServe(*httpAddr, authn.Gate(mux))
 }
 
 func newMCPServer(dir string) *mcp.Server {
