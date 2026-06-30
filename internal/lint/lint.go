@@ -16,9 +16,9 @@ import (
 
 // Issue is one finding. Kind is broken_dep | stale | contradiction.
 type Issue struct {
-	Kind string
-	IDs  []string
-	Msg  string
+	Kind string   `json:"kind"`
+	IDs  []string `json:"ids"`
+	Msg  string   `json:"msg"`
 }
 
 // Report is the result of a lint pass.

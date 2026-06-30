@@ -11,7 +11,7 @@ function el(tag, className, text) {
   return e;
 }
 
-const state = { view: "vault", project: "", hideGreen: false, editing: null };
+const state = { view: "vault", project: "", hideGreen: false, editing: null, llmConfigured: false };
 
 // ---------- chrome ----------
 function initTheme() {
@@ -28,6 +28,7 @@ function initMenu() {
   $("#kebab").addEventListener("click", e => { e.stopPropagation(); menu.classList.toggle("hidden"); });
   menu.addEventListener("click", e => e.stopPropagation());
   document.addEventListener("click", () => menu.classList.add("hidden"));
+  $("#settingsBtn").addEventListener("click", openSettings);
   $("#aboutBtn").addEventListener("click", () => { $("#aboutModal").classList.remove("hidden"); menu.classList.add("hidden"); });
   $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
   $("#aboutModal").addEventListener("click", e => { if (e.target.id === "aboutModal") $("#aboutModal").classList.add("hidden"); });
@@ -43,6 +44,7 @@ function initTabs() {
 
 async function loadConfig() {
   const c = await api("/api/config");
+  state.llmConfigured = !!c.llm_configured;
   $("#aboutVersion").textContent = c.version;
   $("#aboutCount").textContent = c.count;
   $("#vaultCount").textContent = c.count + " notas";
@@ -72,7 +74,7 @@ function render() {
   const main = $("#main");
   main.innerHTML = "";
   if (state.editing) { renderEditor(main); return; }
-  ({ vault: renderVault, fresh: renderFresh, pack: renderPack, graph: renderGraph }[state.view])(main);
+  ({ vault: renderVault, fresh: renderFresh, pack: renderPack, graph: renderGraph, lint: renderLint }[state.view])(main);
 }
 
 // ---------- vault ----------
@@ -335,9 +337,84 @@ function renderEditor(main) {
   preview();
 }
 
+// ---------- revisión (lint) + ajustes ----------
+async function renderLint(main) {
+  main.appendChild(el("p", "lint-intro", "Revisa el vault: enlaces rotos, notas vencidas y —si conectaste un modelo— contradicciones entre notas. Lo que encuentre como contradicción pinta esa nota de rojo en todo el visor."));
+
+  const bar = el("div", "viewbar");
+  const btn = el("button", null, "Revisar ahora");
+  const status = el("span", "lint-status");
+  bar.appendChild(btn); bar.appendChild(status);
+  main.appendChild(bar);
+
+  if (!state.llmConfigured) {
+    const hint = el("div", "lint-hint");
+    hint.appendChild(el("span", null, "Para detectar contradicciones, conectá un modelo en "));
+    const a = el("a", "link", "Ajustes"); a.addEventListener("click", openSettings); hint.appendChild(a);
+    hint.appendChild(el("span", null, "."));
+    main.appendChild(hint);
+  }
+
+  const out = el("div", "lint-out");
+  main.appendChild(out);
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true; status.textContent = "revisando…";
+    const r = await api("/api/lint", { method: "POST" });
+    btn.disabled = false;
+    status.textContent = r.llm_used ? ("modelo: " + r.pairs_checked + "/" + r.candidate_pairs + " pares revisados") : "checks deterministas (sin modelo)";
+    out.innerHTML = "";
+    if (!r.issues || !r.issues.length) { out.appendChild(el("div", "empty", "Todo limpio. Nada que revisar.")); return; }
+    const LABEL = { contradiction: "Contradicción", broken_dep: "Enlace roto", stale: "Vencida" };
+    r.issues.forEach(is => {
+      const row = el("div", "lint-row lint-" + is.kind);
+      row.appendChild(el("span", "lint-tag", LABEL[is.kind] || is.kind));
+      row.appendChild(el("span", "lint-msg", is.msg));
+      out.appendChild(row);
+    });
+    if (r.contradictions > 0) out.appendChild(el("div", "lint-redmsg", r.contradictions + " nota(s) quedaron en rojo por contradicción — miralas en Vault."));
+  });
+}
+
+async function openSettings() {
+  $("#menu").classList.add("hidden");
+  const s = await api("/api/settings");
+  $("#setBase").value = s.base_url || "";
+  $("#setModel").value = s.model || "";
+  $("#setKey").value = "";
+  $("#setKey").placeholder = s.has_key ? "•••• guardada — vacío = no cambiar" : "tu API key";
+  const st = $("#setStatus");
+  st.textContent = s.configured ? ("activo: " + s.name) : "apagado";
+  st.className = "set-status " + (s.configured ? "ok" : "");
+  $("#settingsModal").classList.remove("hidden");
+}
+
+async function saveSettings() {
+  const body = JSON.stringify({ base_url: $("#setBase").value.trim(), model: $("#setModel").value.trim(), api_key: $("#setKey").value });
+  const r = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+  state.llmConfigured = r.configured;
+  return r;
+}
+
+function initSettings() {
+  const m = $("#settingsModal");
+  $("#settingsClose").addEventListener("click", () => m.classList.add("hidden"));
+  m.addEventListener("click", e => { if (e.target.id === "settingsModal") m.classList.add("hidden"); });
+  const key = $("#setKey");
+  $("#setKeyToggle").addEventListener("click", () => { key.type = key.type === "password" ? "text" : "password"; });
+  $("#setTest").addEventListener("click", async () => {
+    await saveSettings();
+    const r = await api("/api/settings/test", { method: "POST" });
+    const st = $("#setStatus");
+    st.textContent = r.ok ? ("conecta" + (r.name ? " — " + r.name : "")) : ("no conecta: " + r.error);
+    st.className = "set-status " + (r.ok ? "ok" : "bad");
+  });
+  $("#setSave").addEventListener("click", async () => { await saveSettings(); m.classList.add("hidden"); render(); });
+}
+
 // ---------- boot ----------
 (async function () {
-  initTheme(); initMenu(); initTabs();
+  initTheme(); initMenu(); initTabs(); initSettings();
   await loadConfig();
   render();
 })();

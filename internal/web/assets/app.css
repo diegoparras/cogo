@@ -99,3 +99,22 @@ svg.graph .edge-wikilink { stroke: var(--hairline); stroke-width: 1; stroke-dash
 .color-preview strong { font-size: 13.5px; }
 .cp-reason { font-size: 12px; color: var(--muted); }
 .editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* ---- revisión (lint) ---- */
+.lint-intro { color: var(--muted-2); font-size: 13.5px; margin: 16px 0 0; max-width: 640px; line-height: 1.5; }
+.lint-status { font-size: 12px; color: var(--muted); }
+.lint-hint { font-size: 12.5px; color: var(--muted); margin: 4px 0 10px; }
+.lint-out { display: flex; flex-direction: column; gap: 7px; }
+.lint-row { display: flex; gap: 11px; align-items: center; padding: 10px 13px; border: 1px solid var(--border);
+  border-left: 3px solid var(--border); border-radius: var(--radius); background: var(--card-2); }
+.lint-row.lint-contradiction { border-left-color: var(--err); }
+.lint-row.lint-broken_dep, .lint-row.lint-stale { border-left-color: var(--warn); }
+.lint-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-2); flex: 0 0 auto; }
+.lint-msg { font-size: 13px; color: var(--text); font-family: var(--mono); }
+.lint-redmsg { font-size: 12.5px; color: var(--err); margin-top: 8px; }
+
+/* ---- ajustes modal ---- */
+#settingsModal .field { margin-top: 11px; }
+.set-status { font-size: 12.5px; color: var(--muted); margin-top: 12px; min-height: 16px; }
+.set-status.ok { color: var(--ok); }
+.set-status.bad { color: var(--err); }
