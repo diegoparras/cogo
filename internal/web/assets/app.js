@@ -78,8 +78,26 @@ function render() {
 }
 
 // ---------- vault ----------
+function renderWelcome(main) {
+  const w = el("div", "welcome");
+  const img = el("img", "welcome-logo"); img.src = "/cogo.svg"; img.alt = "";
+  w.appendChild(img);
+  w.appendChild(el("h2", "welcome-h", "Tu vault está vacío"));
+  w.appendChild(el("p", "welcome-sub", "COGO recuerda lo que sabés de tu proyecto y le pone un color de confianza. Cada nota dice qué tan confiable es —y por qué."));
+  const leg = el("div", "welcome-legend");
+  [["green", "verde · verificado"], ["yellow", "amarillo · probable"], ["red", "rojo · suposición"]].forEach(([c, t]) => {
+    const s = el("span", "lg " + cls(c)); s.appendChild(el("span", "dot")); s.appendChild(el("span", null, t)); leg.appendChild(s);
+  });
+  w.appendChild(leg);
+  const btn = el("button", "welcome-btn", "Crear primera nota");
+  btn.addEventListener("click", () => openEditor(null));
+  w.appendChild(btn);
+  main.appendChild(w);
+}
+
 async function renderVault(main) {
   const notes = (await api("/api/notes")).filter(matchesProject);
+  if (!notes.length && !state.project) { renderWelcome(main); return; }
   const bar = el("div", "viewbar");
   const addBtn = el("button", "mini", "+ Nueva nota");
   addBtn.addEventListener("click", () => openEditor(null));
