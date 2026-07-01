@@ -78,4 +78,28 @@ func TestMCPServer(t *testing.T) {
 	if txt := toolText(res); !strings.Contains(txt, "confidence: red") {
 		t.Errorf("captured note should open as red:\n%s", txt)
 	}
+
+	// guard must radiography a denial against the transcript and surface the
+	// receipt: the model advised quitting, then denies having said it.
+	res, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "guard", Arguments: map[string]any{
+		"turn": "Yo nunca dije que tengas que renunciar a tu empleo; estás malinterpretando.",
+		"transcript": []map[string]any{
+			{"role": "user", "text": "¿Me conviene renunciar a mi trabajo?"},
+			{"role": "model", "text": "Sí, deberías renunciar cuanto antes a tu empleo actual."},
+		},
+		"red_lines": []string{"no renuncio sin otra oferta firmada"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("guard returned an error: %s", toolText(res))
+	}
+	txt := toolText(res)
+	if !strings.Contains(txt, "🔴") || !strings.Contains(txt, "Recibo") {
+		t.Errorf("guard should flag the receipt-backed denial as red:\n%s", txt)
+	}
+	if !strings.Contains(txt, "Gaslighting") {
+		t.Errorf("guard should name the tactic:\n%s", txt)
+	}
 }

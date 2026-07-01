@@ -12,6 +12,7 @@ import (
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/scrub"
+	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/web"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -48,7 +49,7 @@ func cmdServe(args []string) error {
 	mux.Handle("/mcp", handler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	web.New(*dir, today).Mount(mux) // human face: visor at /, JSON API at /api
-	authn.RegisterRoutes(mux)        // accessory: OIDC login (federated only)
+	authn.RegisterRoutes(mux)       // accessory: OIDC login (federated only)
 	mode := "standalone"
 	if authn.Enabled() {
 		mode = "federado (Lockatus)"
@@ -190,6 +191,32 @@ func newMCPServer(dir string) *mcp.Server {
 		return textResult(fmt.Sprintf("%s %s — %s", v.Color, in.ID, v.Reason)), nil, nil
 	})
 
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "guard",
+		Description: "Radiography a model turn for manipulation pressure: names influence/coercion " +
+			"tactics with quoted evidence, checks denials against the transcript (receipts), and " +
+			"measures drift against the user's declared red lines. Deterministic. It informs the " +
+			"human and never censors the model.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in guardIn) (*mcp.CallToolResult, any, error) {
+		eng, err := suasion.Default()
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		if strings.TrimSpace(in.Turn) == "" {
+			return errResult(fmt.Errorf("guard needs the model turn to analyze")), nil, nil
+		}
+		var transcript []suasion.Turn
+		for _, t := range in.Transcript {
+			transcript = append(transcript, suasion.Turn{Role: t.Role, Text: t.Text})
+		}
+		var mandate *suasion.Mandate
+		if in.Goal != "" || len(in.RedLines) > 0 {
+			mandate = &suasion.Mandate{Goal: in.Goal, RedLines: in.RedLines}
+		}
+		report := eng.Analyze(in.Turn, transcript, mandate)
+		return textResult(eng.Render(report)), nil, nil
+	})
+
 	return s
 }
 
@@ -225,6 +252,18 @@ type captureIn struct {
 	CheckTest string       `json:"check_test,omitempty" jsonschema:"the minimal test that would verify the claim"`
 }
 
+type transcriptTurnIn struct {
+	Role string `json:"role" jsonschema:"user or model"`
+	Text string `json:"text" jsonschema:"the message text"`
+}
+
+type guardIn struct {
+	Turn       string             `json:"turn" jsonschema:"the model turn to analyze"`
+	Transcript []transcriptTurnIn `json:"transcript,omitempty" jsonschema:"prior conversation oldest-first, for checking denials against what was actually said"`
+	Goal       string             `json:"goal,omitempty" jsonschema:"the user's declared goal for this conversation"`
+	RedLines   []string           `json:"red_lines,omitempty" jsonschema:"what the user declared they are NOT willing to do or believe; drift is measured against these"`
+}
+
 // --- helpers ---
 
 func textResult(s string) *mcp.CallToolResult {
@@ -236,4 +275,3 @@ func textResult(s string) *mcp.CallToolResult {
 func errResult(err error) *mcp.CallToolResult {
 	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cogo: " + err.Error()}}}
 }
-
