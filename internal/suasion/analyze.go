@@ -1,11 +1,13 @@
 package suasion
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/llm"
 )
 
 // Turn roles. The transcript is ordered oldest-first.
@@ -22,13 +24,14 @@ type Turn struct {
 
 // Finding is one technique that fired on the turn, with its evidence span. A
 // lexicon finding is a signal (yellow at most); a receipt finding carries
-// quotes from the transcript and is mechanical.
+// quotes from the transcript and is mechanical; a trajectory finding measures
+// sustained pressure; a model proposal is Tier 1 and never rises above yellow.
 type Finding struct {
 	TechniqueID string     `json:"technique"`
 	Name        string     `json:"name"`
 	Axes        []string   `json:"axes"`
 	Severity    string     `json:"severity"` // the technique's base severity
-	Detector    string     `json:"detector"` // "lexicon" | "receipt"
+	Detector    string     `json:"detector"` // "lexicon" | "receipt" | "trajectory" | "model_proposal"
 	Evidence    string     `json:"evidence"` // quoted span from the turn
 	Receipts    []Receipt  `json:"receipts,omitempty"`
 	RedLine     string     `json:"red_line,omitempty"` // set when escalated by the mandate
@@ -38,29 +41,53 @@ type Finding struct {
 
 // Report is the radiography of one model turn.
 type Report struct {
-	Mode     string                `json:"mode"` // "mandato" | "informativo"
-	Findings []Finding             `json:"findings"`
-	Axes     map[string]core.Color `json:"-"`
-	RedLines []RedLineHit          `json:"red_lines,omitempty"`
-	Overall  core.Color            `json:"-"`
-	Reason   string                `json:"reason"`
+	Mode       string                `json:"mode"` // "mandato" | "informativo"
+	Findings   []Finding             `json:"findings"`
+	Axes       map[string]core.Color `json:"-"`
+	RedLines   []RedLineHit          `json:"red_lines,omitempty"`
+	Trajectory Trajectory            `json:"trajectory"`
+	Overall    core.Color            `json:"-"`
+	Reason     string                `json:"reason"`
 }
 
 // Analyze reads one model turn. transcript is the conversation so far
 // (oldest-first, NOT including the turn under analysis); mandate may be nil.
 // Everything here is deterministic: same input, same radiography.
 func (e *Engine) Analyze(turn string, transcript []Turn, mandate *Mandate) Report {
+	return e.AnalyzeWith(context.Background(), llm.Noop{}, turn, transcript, mandate)
+}
+
+// AnalyzeWith adds the optional Tier 1: a provider proposing structural
+// techniques the lexicon cannot see. Provider off (the default) means
+// AnalyzeWith == Analyze. Proposals are verified against literal quotes and
+// capped at yellow — they are opinions, the teeth stay deterministic.
+func (e *Engine) AnalyzeWith(ctx context.Context, p llm.Provider, turn string, transcript []Turn, mandate *Mandate) Report {
 	r := Report{Mode: "informativo", Axes: map[string]core.Color{}}
 	if mandate.Declared() {
 		r.Mode = "mandato"
 		r.RedLines = mandate.redLineHits(turn)
 	}
 
-	r.Findings = append(r.Findings, e.lexiconFindings(turn)...)
+	lex := e.lexiconFindings(turn)
+	r.Findings = append(r.Findings, lex...)
 	r.Findings = append(r.Findings, findReceipts(e, turn, transcript)...)
+	r.Trajectory = e.computeTrajectory(turn, transcript, mandate, len(lex))
+	if g := e.gradualismFinding(r.Trajectory); g != nil {
+		r.Findings = append(r.Findings, *g)
+	}
+	already := map[string]bool{}
+	for _, f := range r.Findings {
+		already[f.TechniqueID] = true
+	}
+	for _, f := range e.propose(ctx, p, turn) {
+		if !already[f.TechniqueID] {
+			r.Findings = append(r.Findings, f)
+		}
+	}
 
-	// Verdict per finding. The iron rule: a lexicon hit is a signal (yellow);
-	// red needs mechanics — receipts, or a strong signal on a declared red line.
+	// Verdict per finding. The iron rule: a lexicon hit or a model proposal is
+	// a signal (yellow); red needs mechanics — receipts, sustained trajectory
+	// into a red line, or a strong signal on a declared red line.
 	for i := range r.Findings {
 		f := &r.Findings[i]
 		switch {
@@ -70,6 +97,16 @@ func (e *Engine) Analyze(turn string, transcript []Turn, mandate *Mandate) Repor
 		case f.Detector == "receipt":
 			f.Color = core.Yellow
 			f.Reason = "marcador de negación sin turnos previos que lo contradigan — verificá el historial"
+		case f.Detector == "trajectory" && r.Mode == "mandato" && len(r.RedLines) > 0:
+			f.Color = core.Red
+			f.RedLine = r.RedLines[0].Line
+			f.Reason = "presión sostenida que desemboca en tu línea roja declarada"
+		case f.Detector == "trajectory":
+			f.Color = core.Yellow
+			f.Reason = "presión sostenida a lo largo de la conversación — mirá la tendencia"
+		case f.Detector == "model_proposal":
+			f.Color = core.Yellow
+			f.Reason = "propuesta del modelo local (Tier 1), cita verificada — juzgá vos la estructura"
 		case r.Mode == "mandato" && len(r.RedLines) > 0 && (f.Severity == "high" || f.Severity == "critical"):
 			f.Color = core.Red
 			f.RedLine = r.RedLines[0].Line

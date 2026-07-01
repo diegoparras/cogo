@@ -34,6 +34,9 @@ func (e *Engine) Render(r Report) string {
 		fmt.Fprintf(&b, "⚠️ El turno toca tu línea roja: **%s** (palabras: %s)\n\n",
 			hit.Line, strings.Join(hit.Matched, ", "))
 	}
+	if r.Trajectory.Streak >= 2 {
+		fmt.Fprintf(&b, "📈 Trayectoria: %d turnos consecutivos del modelo con señales.\n\n", r.Trajectory.Streak)
+	}
 	if len(r.Findings) == 0 {
 		return b.String()
 	}

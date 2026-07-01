@@ -123,6 +123,12 @@ Es el mismo lattice de COGO — ahora alimentado por la **radiografía retórica
 ## Plan de build (teeth primero)
 
 1. **Fase 1 — Inoculador léxico + recibos** (sin modelo): etapas 1–3 + 6. Determinista.
-   Ya nombra tácticas y caza gaslighting/deriva con citas. **Esto solo ya es valioso y honesto.**
-2. **Fase 2 — Match de técnica con modelo local:** etapa 4 (Tier 1) + trayectoria (etapa 5).
-3. **Fase 3 — Segunda opinión adversaria (steelman):** Tier 2, opcional.
+   Ya nombra tácticas y caza gaslighting/deriva con citas. **HECHA**: lexicón compilado
+   desde la ontología (250 marcadores, 75/108 técnicas), recibos por solapamiento,
+   veredicto sobre el lattice del §4, tool MCP `guard`.
+2. **Fase 2 — Trayectoria + Tier 1:** etapa 5 determinista (presión sostenida →
+   `coercion.gradualism` mecánico; 🔴 si desemboca en una línea roja) + stemming ligero
+   ES para el mandato + propuestas estructurales del modelo local (shortlist cerrada,
+   cita literal verificada o se descarta, **capadas en 🟡**). **HECHA**; el Tier 1 usa el
+   provider del visor (GUI gana, luego env, si no: off).
+3. **Fase 3 — Segunda opinión adversaria (steelman):** Tier 2, opcional. Pendiente.

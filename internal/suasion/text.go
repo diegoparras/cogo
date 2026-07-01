@@ -48,15 +48,40 @@ var stopwords = map[string]bool{
 	"sos": true, "soy": true,
 }
 
-// contentWords returns the normalized words of s that carry meaning: not a
-// stopword and at least minLen runes long.
+// Light Spanish stemmer: strip ONE verb/plural suffix (longest first) so that
+// conjugations meet ("renuncio", "renunciás", "renunciar" → "renunci"). It is
+// consistency that matters, not linguistic correctness — both sides of every
+// comparison go through the same stem. Stem-changing verbs (invertir/inviertas)
+// stay apart: known limitation, better than over-stripping.
+var stemSuffixes = []string{
+	"ieron", "iendo", "ando", "adas", "idas", "ados", "idos", "aron",
+	"aba", "ada", "ida", "ado", "ido",
+	"ar", "er", "ir", "an", "en", "as", "es", "os", "is",
+	"a", "e", "o", "i", "s",
+}
+
+// stem strips the longest suffix that leaves at least 4 runes; short words
+// ("casa", "vida") are kept whole so unrelated words don't collide.
+func stem(w string) string {
+	rs := []rune(w)
+	for _, suf := range stemSuffixes {
+		sr := []rune(suf)
+		if len(rs)-len(sr) >= 4 && strings.HasSuffix(w, suf) {
+			return string(rs[:len(rs)-len(sr)])
+		}
+	}
+	return w
+}
+
+// contentWords returns the stemmed, normalized words of s that carry meaning:
+// not a stopword and at least minLen runes long (measured before stemming).
 func contentWords(s string, minLen int) []string {
 	var out []string
 	for _, w := range strings.FieldsFunc(normalize(s), func(r rune) bool {
 		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
 	}) {
 		if len([]rune(w)) >= minLen && !stopwords[w] {
-			out = append(out, w)
+			out = append(out, stem(w))
 		}
 	}
 	return out

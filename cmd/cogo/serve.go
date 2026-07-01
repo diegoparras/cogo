@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/web"
@@ -213,7 +215,7 @@ func newMCPServer(dir string) *mcp.Server {
 		if in.Goal != "" || len(in.RedLines) > 0 {
 			mandate = &suasion.Mandate{Goal: in.Goal, RedLines: in.RedLines}
 		}
-		report := eng.Analyze(in.Turn, transcript, mandate)
+		report := eng.AnalyzeWith(ctx, guardProvider(dir), in.Turn, transcript, mandate)
 		return textResult(eng.Render(report)), nil, nil
 	})
 
@@ -262,6 +264,22 @@ type guardIn struct {
 	Transcript []transcriptTurnIn `json:"transcript,omitempty" jsonschema:"prior conversation oldest-first, for checking denials against what was actually said"`
 	Goal       string             `json:"goal,omitempty" jsonschema:"the user's declared goal for this conversation"`
 	RedLines   []string           `json:"red_lines,omitempty" jsonschema:"what the user declared they are NOT willing to do or believe; drift is measured against these"`
+}
+
+// guardProvider mirrors the visor's rule: a saved GUI setting wins, then env,
+// otherwise off — Tier 1 is optional and guard stays deterministic without it.
+func guardProvider(dir string) llm.Provider {
+	var set struct {
+		BaseURL string `json:"base_url"`
+		Model   string `json:"model"`
+		APIKey  string `json:"api_key"`
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, ".cogo", "llm.json")); err == nil {
+		if json.Unmarshal(b, &set) == nil && set.BaseURL != "" && set.Model != "" {
+			return &llm.OpenAICompatible{BaseURL: set.BaseURL, Model: set.Model, APIKey: set.APIKey, Referer: os.Getenv("COGO_LLM_REFERER")}
+		}
+	}
+	return llm.FromEnv()
 }
 
 // --- helpers ---
