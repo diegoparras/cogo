@@ -75,7 +75,9 @@ Cómo funciona:
 
 La regla de hierro: **ningún modelo dicta "te están manipulando"**. Los dientes son
 deterministas (marcadores, recibos, trayectoria); los modelos solo *proponen* — y toda
-propuesta se verifica contra el texto literal o se descarta. Con un modelo conectado se
+propuesta se verifica contra el texto literal o se descarta. El *porqué* de esta regla —el
+marco de la **alteridad arquitectónica**, común a los dos motores— está en
+[`docs/fundamento-teorico.md`](docs/fundamento-teorico.md). Con un modelo conectado se
 suman dos tiers opcionales: propuestas estructurales (el falso binario de Reid, que ningún
 diccionario ve) y el **steelman adversario** — otro modelo argumentando a propósito el lado
 que el turno no te mostró.

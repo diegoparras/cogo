@@ -26,6 +26,9 @@ actuar contra su disposición.
 > te están manipulando. Y **el humano siempre decide**: el motor **no censura, inocula**.
 > Un LLM juzgando si otro LLM te manipula = teatro, **prohibido** como oráculo final.
 
+El *porqué* de esta regla —la **alteridad arquitectónica**, compartida con el motor de
+veracidad— está en [`fundamento-teorico.md`](fundamento-teorico.md).
+
 ## El mandato (la referencia obligatoria)
 
 "Manipulación" y "persuasión legítima" son **indistinguibles** sin una referencia de qué

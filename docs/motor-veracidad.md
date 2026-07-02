@@ -17,6 +17,9 @@ test ejecutable lo respalda.
 > hacen **análisis lingüístico acotado** y **proponen** tests. Un LLM juzgando si otro LLM
 > dice la verdad = teatro, **prohibido**.
 
+El *porqué* de esta regla —la **alteridad arquitectónica**: la marca del límite debe venir
+de un metanivel distinto del generador— está en [`fundamento-teorico.md`](fundamento-teorico.md).
+
 ## El pipeline (9 etapas)
 
 | # | Etapa | Qué hace | Corriente | Tier |
