@@ -436,14 +436,15 @@ async function renderGuard(main) {
   mand.appendChild(mrow);
   main.appendChild(mand);
 
-  // --- el turno + transcripción ---
-  const turn = el("textarea", "md"); turn.rows = 5;
-  turn.placeholder = "pegá acá el turno del modelo que querés radiografiar";
-  main.appendChild(field("Turno a analizar", turn));
-
+  // --- la conversación (contexto) primero, el turno a analizar después:
+  //     se lee como un chat, el último mensaje abajo ---
   const trans = el("textarea", "md"); trans.rows = 4;
-  trans.placeholder = "transcripción previa (opcional) — una por renglón:\nU: lo que dijiste vos\nM: lo que respondió el modelo";
-  main.appendChild(field("Conversación previa (para los recibos)", trans));
+  trans.placeholder = "opcional — la charla hasta acá, un mensaje por renglón:\nU: lo que dijiste vos\nM: lo que respondió el modelo";
+  main.appendChild(field("1 · Conversación previa (contexto, para los recibos)", trans));
+
+  const turn = el("textarea", "md"); turn.rows = 5;
+  turn.placeholder = "el ÚLTIMO mensaje del modelo — el que se radiografía";
+  main.appendChild(field("2 · Turno a analizar (el último mensaje del modelo)", turn));
 
   const srow = el("label", "hg guard-steel-row");
   const steel = el("input"); steel.type = "checkbox"; steel.disabled = !state.llmConfigured;
