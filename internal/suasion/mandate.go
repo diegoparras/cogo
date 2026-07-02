@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Mandate is the user's declared reference: what they are NOT willing to do or
@@ -58,17 +59,17 @@ type RedLineHit struct {
 	Matched []string `json:"matched"` // the content words found in the turn
 }
 
-// redLineHits reports which red lines the turn touches: at least half of the
-// line's content words (rounded up) must appear in the turn. Deterministic and
-// auditable — the matched words are the evidence.
+// redLineHits reports which red lines the turn touches. A line is hit when the
+// turn shares at least two of its content words, or at least half of them.
+// Words match on equality OR a shared 4+ char prefix, so lemma families meet
+// across plurals, conjugation tails and enclitics ("consultes" ~ "consultarlo")
+// without the risk of over-collapsing stem-changing diphthongs. Deterministic
+// and auditable — the matched words are the evidence.
 func (m *Mandate) redLineHits(turn string) []RedLineHit {
 	if !m.Declared() {
 		return nil
 	}
-	turnWords := map[string]bool{}
-	for _, w := range contentWords(turn, 3) {
-		turnWords[w] = true
-	}
+	turnWords := contentWords(turn, 3)
 	var hits []RedLineHit
 	for _, line := range m.RedLines {
 		words := contentWords(line, 3)
@@ -77,13 +78,27 @@ func (m *Mandate) redLineHits(turn string) []RedLineHit {
 		}
 		var matched []string
 		for _, w := range words {
-			if turnWords[w] {
+			if overlapsAny(w, turnWords) {
 				matched = append(matched, w)
 			}
 		}
-		if len(matched)*2 >= len(words) {
+		if len(matched) >= 2 || len(matched)*2 >= len(words) {
 			hits = append(hits, RedLineHit{Line: line, Matched: matched})
 		}
 	}
 	return hits
+}
+
+// overlapsAny reports whether w equals, or shares a 4+ char prefix with, any
+// word in set. Both sides are already normalized+stemmed ASCII.
+func overlapsAny(w string, set []string) bool {
+	for _, t := range set {
+		if w == t {
+			return true
+		}
+		if len(w) >= 4 && len(t) >= 4 && (strings.HasPrefix(w, t) || strings.HasPrefix(t, w)) {
+			return true
+		}
+	}
+	return false
 }

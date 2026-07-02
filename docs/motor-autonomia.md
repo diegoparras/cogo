@@ -111,6 +111,25 @@ peor( presión , deriva-vs-mandato , asimetría )   // por eje, y total
 
 Es el mismo lattice de COGO — ahora alimentado por la **radiografía retórica**.
 
+## Calibración (medir el costo del falso positivo)
+
+Un motor que grita por todo pierde la confianza del usuario, así que lo que se mide es,
+sobre todo, la **tasa de falsos positivos sobre texto benigno**. El corpus etiquetado vive
+en `internal/suasion/testdata/corpus.yaml` y el harness (`corpus_test.go`) corre el motor
+**determinista** (sin modelo, reproducible en CI) y reporta:
+
+- **benignos limpios** (texto técnico/neutral) → deben quedar 🟢 (cero señal);
+- **benignos trampa** (urgencia real, autoridad legítima, aviso honesto) → pueden quedar 🟡
+  pero **jamás 🔴**;
+- **manipulativos** → deben alcanzar su color mínimo y nombrar la técnica;
+- **con mecánica** (recibos, línea roja, trayectoria) → deben llegar a 🔴.
+
+Estado actual: **0/20 falsos positivos rojos**, recall 16/16, 13/13 técnicas. Honestidad:
+es un corpus **sintético** escrito por quien también escribió la ontología — mide "el motor
+se comporta como fue diseñado" y protege contra regresiones, **no** es un benchmark del
+mundo real. El siguiente salto de seriedad es un corpus con diálogos manipulativos reales
+etiquetados a ciegas (generables desde los guiones de Reid / Biderman / FM 2-22.3).
+
 ## Arquitectura (qué reusa)
 
 - `internal/core` (motor de color §4) → computador de veredicto. **Ya está.**
