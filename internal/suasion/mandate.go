@@ -1,5 +1,11 @@
 package suasion
 
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+)
+
 // Mandate is the user's declared reference: what they are NOT willing to do or
 // believe. Without it, manipulation and legitimate persuasion are
 // indistinguishable — the engine then degrades to informative mode (it names
@@ -7,6 +13,38 @@ package suasion
 type Mandate struct {
 	Goal     string   `json:"goal,omitempty" yaml:"goal,omitempty"`
 	RedLines []string `json:"red_lines,omitempty" yaml:"red_lines,omitempty"`
+}
+
+// MandatePath is the canonical location of the persisted mandate inside a
+// vault — next to llm.json, private runtime state, never packed as a note.
+func MandatePath(vaultDir string) string {
+	return filepath.Join(vaultDir, ".cogo", "mandate.json")
+}
+
+// LoadMandate reads a persisted mandate; nil when missing or unreadable — the
+// callers treat that as "not declared", never as an error.
+func LoadMandate(path string) *Mandate {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var m Mandate
+	if json.Unmarshal(b, &m) != nil {
+		return nil
+	}
+	if !m.Declared() && m.Goal == "" {
+		return nil
+	}
+	return &m
+}
+
+// SaveMandate persists the mandate for future calls (web and MCP share it).
+func SaveMandate(path string, m *Mandate) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return os.WriteFile(path, b, 0o600)
 }
 
 // Declared reports whether there is anything to measure drift against.

@@ -29,8 +29,8 @@ type Provider interface {
 // Noop is the default: no model. Everything that needs one is simply skipped.
 type Noop struct{}
 
-func (Noop) Available() bool                              { return false }
-func (Noop) Name() string                                 { return "none" }
+func (Noop) Available() bool { return false }
+func (Noop) Name() string    { return "none" }
 func (Noop) Complete(context.Context, string) (string, error) {
 	return "", fmt.Errorf("no LLM provider configured")
 }
@@ -110,4 +110,16 @@ func FromEnv() Provider {
 		return Noop{}
 	}
 	return &OpenAICompatible{BaseURL: base, Model: model, APIKey: os.Getenv("COGO_LLM_API_KEY"), Referer: os.Getenv("COGO_LLM_REFERER")}
+}
+
+// StrongFromEnv builds the independent "strong" provider (COGO_LLM_STRONG_*),
+// used where a judge should not share a brain with the proposer (e.g. the
+// suasion steelman). Unset, it returns the fallback.
+func StrongFromEnv(fallback Provider) Provider {
+	base := os.Getenv("COGO_LLM_STRONG_BASE_URL")
+	model := os.Getenv("COGO_LLM_STRONG_MODEL")
+	if base == "" || model == "" {
+		return fallback
+	}
+	return &OpenAICompatible{BaseURL: base, Model: model, APIKey: os.Getenv("COGO_LLM_STRONG_API_KEY"), Referer: os.Getenv("COGO_LLM_REFERER")}
 }

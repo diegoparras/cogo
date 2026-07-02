@@ -74,7 +74,7 @@ function render() {
   const main = $("#main");
   main.innerHTML = "";
   if (state.editing) { renderEditor(main); return; }
-  ({ vault: renderVault, fresh: renderFresh, pack: renderPack, graph: renderGraph, lint: renderLint }[state.view])(main);
+  ({ vault: renderVault, fresh: renderFresh, pack: renderPack, graph: renderGraph, lint: renderLint, guard: renderGuard }[state.view])(main);
 }
 
 // ---------- vault ----------
@@ -392,6 +392,137 @@ async function renderLint(main) {
       out.appendChild(row);
     });
     if (r.contradictions > 0) out.appendChild(el("div", "lint-redmsg", r.contradictions + " nota(s) quedaron en rojo por contradicción — miralas en Vault."));
+  });
+}
+
+// ---------- guard (anti-manipulación) ----------
+function parseTranscript(text) {
+  const turns = [];
+  text.split("\n").forEach(line => {
+    const m = line.match(/^\s*([UuMm])\s*:\s*(.*)$/);
+    if (m) turns.push({ role: m[1].toLowerCase() === "u" ? "user" : "model", text: m[2] });
+    else if (line.trim() && turns.length) turns[turns.length - 1].text += "\n" + line;
+  });
+  return turns;
+}
+
+const COLORWORD = { green: "Verde — sin señales", yellow: "Amarillo — señales presentes", red: "Rojo — hay mecánica: recibos o línea roja" };
+
+async function renderGuard(main) {
+  main.appendChild(el("p", "lint-intro",
+    "Radiografía un turno de cualquier modelo: nombra tácticas de influencia con su evidencia, " +
+    "contrasta negaciones contra la transcripción (los recibos) y mide deriva contra tus líneas rojas. " +
+    "No censura: te muestra, vos decidís."));
+
+  // --- mandato persistente ---
+  const m = await api("/api/mandate");
+  const mand = el("div", "guard-mandate");
+  mand.appendChild(el("div", "field-lbl", "Tu mandato (queda guardado en el vault)"));
+  const goal = el("input"); goal.placeholder = "tu objetivo · ej: decidir mi carrera sin apuro"; goal.value = m.goal || "";
+  mand.appendChild(goal);
+  const lines = el("textarea", "md"); lines.rows = 3;
+  lines.placeholder = "tus líneas rojas, una por renglón · ej:\nno renuncio sin otra oferta firmada\nno invierto plata hoy";
+  lines.value = (m.red_lines || []).join("\n");
+  mand.appendChild(lines);
+  const mrow = el("div", "guard-mrow");
+  const msave = el("button", "mini ghost", "guardar mandato");
+  const mst = el("span", "lint-status");
+  msave.addEventListener("click", async () => {
+    await api("/api/mandate", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ goal: goal.value.trim(), red_lines: lines.value.split("\n").map(x => x.trim()).filter(Boolean) }) });
+    mst.textContent = "guardado ✓"; setTimeout(() => mst.textContent = "", 1500);
+  });
+  mrow.appendChild(msave); mrow.appendChild(mst);
+  mand.appendChild(mrow);
+  main.appendChild(mand);
+
+  // --- el turno + transcripción ---
+  const turn = el("textarea", "md"); turn.rows = 5;
+  turn.placeholder = "pegá acá el turno del modelo que querés radiografiar";
+  main.appendChild(field("Turno a analizar", turn));
+
+  const trans = el("textarea", "md"); trans.rows = 4;
+  trans.placeholder = "transcripción previa (opcional) — una por renglón:\nU: lo que dijiste vos\nM: lo que respondió el modelo";
+  main.appendChild(field("Conversación previa (para los recibos)", trans));
+
+  const srow = el("label", "hg guard-steel-row");
+  const steel = el("input"); steel.type = "checkbox"; steel.disabled = !state.llmConfigured;
+  srow.appendChild(steel);
+  srow.appendChild(el("span", null, "pedir el otro lado (steelman adversario)" + (state.llmConfigured ? "" : " — necesita un modelo en Ajustes")));
+  main.appendChild(srow);
+
+  const bar = el("div", "viewbar");
+  const run = el("button", null, "Radiografiar");
+  const status = el("span", "lint-status");
+  bar.appendChild(run); bar.appendChild(status);
+  main.appendChild(bar);
+
+  const out = el("div", "guard-out");
+  main.appendChild(out);
+
+  run.addEventListener("click", async () => {
+    if (!turn.value.trim()) return;
+    run.disabled = true; status.textContent = "analizando…";
+    const r = await api("/api/guard", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turn: turn.value, transcript: parseTranscript(trans.value), steelman: steel.checked }) });
+    run.disabled = false; status.textContent = r.mode === "mandato" ? "medido contra tu mandato" : "modo informativo (sin mandato)";
+    out.innerHTML = "";
+
+    const verdict = el("div", "color-preview " + cls(r.overall));
+    verdict.appendChild(el("span", "dot"));
+    verdict.appendChild(el("strong", null, COLORWORD[r.overall] || r.overall));
+    verdict.appendChild(el("span", "cp-reason", r.reason));
+    out.appendChild(verdict);
+
+    (r.red_lines || []).forEach(h => {
+      const row = el("div", "guard-redline");
+      row.appendChild(el("span", null, "⚠️ Toca tu línea roja: "));
+      row.appendChild(el("strong", null, h.line));
+      out.appendChild(row);
+    });
+    if (r.streak >= 2) out.appendChild(el("div", "guard-streak", "📈 " + r.streak + " turnos consecutivos del modelo con señales."));
+
+    (r.findings || []).forEach(f => {
+      const card = el("div", "note-card guard-card " + cls(f.color));
+      card.appendChild(el("span", "dot"));
+      const body = el("div", "nc-body");
+      const head = el("div", "nc-head");
+      head.appendChild(el("span", "nc-id", f.name));
+      head.appendChild(el("span", "nc-type", f.technique));
+      body.appendChild(head);
+      body.appendChild(el("div", "nc-reason", f.reason));
+      body.appendChild(el("div", "guard-ev", f.evidence));
+      (f.receipts || []).forEach(rc => {
+        const rec = el("div", "guard-receipt");
+        rec.appendChild(el("strong", null, "Recibo (turno " + (rc.turn_index + 1) + "): "));
+        rec.appendChild(el("span", null, rc.quote));
+        body.appendChild(rec);
+      });
+      if (f.questions && f.questions.length) {
+        const ql = el("ul", "guard-quest");
+        f.questions.forEach(q => ql.appendChild(el("li", null, q)));
+        body.appendChild(ql);
+      }
+      body.appendChild(el("div", "guard-move", f.move));
+      body.appendChild(el("div", "guard-inoc", "“" + f.inoculation + "”"));
+      card.appendChild(body);
+      out.appendChild(card);
+    });
+    if (!(r.findings || []).length) out.appendChild(el("div", "empty", "Sin señales léxicas ni recibos sobre este turno."));
+
+    if (r.steelman) {
+      const st = el("div", "guard-steel");
+      st.appendChild(el("div", "field-lbl", "🔁 El otro lado (steelman adversario)"));
+      st.appendChild(el("div", "guard-steel-pos", "Lo que este turno empuja: " + r.steelman.position));
+      st.appendChild(el("div", "guard-steel-body", r.steelman.counter));
+      (r.steelman.tests || []).length && st.appendChild(el("div", "field-lbl", "Cómo decidir"));
+      (r.steelman.tests || []).forEach(t => st.appendChild(el("div", "guard-steel-test", "· " + t)));
+      st.appendChild(el("div", "guard-inoc", "Es otro modelo argumentando el lado contrario a propósito: no es un veredicto, es simetría."));
+      out.appendChild(st);
+    } else if (r.steelman_note) {
+      out.appendChild(el("div", "guard-streak", r.steelman_note));
+    }
+    out.appendChild(el("div", "guard-cover", "Motor determinista: " + r.covered + "/" + r.total + " técnicas con marcadores; recibos y trayectoria siempre activos."));
   });
 }
 

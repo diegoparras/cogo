@@ -64,10 +64,16 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/lint", s.handleLint)
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/settings/test", s.handleTestLLM)
+	mux.HandleFunc("/api/guard", s.handleGuard)
+	mux.HandleFunc("/api/mandate", s.handleMandate)
 }
 
-func (s *Server) contras() map[string]bool { s.mu.RLock(); defer s.mu.RUnlock(); return s.contradictions }
-func (s *Server) prov() llm.Provider       { s.mu.RLock(); defer s.mu.RUnlock(); return s.provider }
+func (s *Server) contras() map[string]bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.contradictions
+}
+func (s *Server) prov() llm.Provider { s.mu.RLock(); defer s.mu.RUnlock(); return s.provider }
 
 func (s *Server) load(w http.ResponseWriter) (map[string]*core.Note, bool) {
 	vault, err := core.LoadVault(s.dir)

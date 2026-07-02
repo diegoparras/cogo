@@ -214,10 +214,14 @@ func newMCPServer(dir string) *mcp.Server {
 		var mandate *suasion.Mandate
 		if in.Goal != "" || len(in.RedLines) > 0 {
 			mandate = &suasion.Mandate{Goal: in.Goal, RedLines: in.RedLines}
+		} else {
+			// The call declared nothing: fall back to the mandate persisted in
+			// the vault (shared with the visor's Guard tab).
+			mandate = suasion.LoadMandate(suasion.MandatePath(dir))
 		}
 		report := eng.AnalyzeWith(ctx, in.Turn, transcript, mandate, suasion.Opts{
 			Tier1:    guardProvider(dir),
-			Tier2:    strongProvider(dir),
+			Tier2:    llm.StrongFromEnv(guardProvider(dir)),
 			Steelman: in.Steelman,
 		})
 		return textResult(eng.Render(report)), nil, nil
@@ -285,17 +289,6 @@ func guardProvider(dir string) llm.Provider {
 		}
 	}
 	return llm.FromEnv()
-}
-
-// strongProvider is the Tier-2 judge. COGO_LLM_STRONG_* lets it be a DIFFERENT
-// provider than Tier 1 (independence: the judge should not collude with the
-// proposer); unset, it falls back to the regular provider.
-func strongProvider(dir string) llm.Provider {
-	base, model := os.Getenv("COGO_LLM_STRONG_BASE_URL"), os.Getenv("COGO_LLM_STRONG_MODEL")
-	if base != "" && model != "" {
-		return &llm.OpenAICompatible{BaseURL: base, Model: model, APIKey: os.Getenv("COGO_LLM_STRONG_API_KEY"), Referer: os.Getenv("COGO_LLM_REFERER")}
-	}
-	return guardProvider(dir)
 }
 
 // --- helpers ---
