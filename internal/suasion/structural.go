@@ -64,16 +64,25 @@ func (e *Engine) propose(ctx context.Context, p llm.Provider, turn string) []Fin
 	if len(shortlist) == 0 {
 		return nil
 	}
+	// The one-shot example is load-bearing: without it, 7B-class models answer
+	// NINGUNA even on textbook false binaries (verified live against Ollama).
+	// It uses an out-of-catalog id on purpose — anything copied from it fails
+	// the closed-shortlist check instead of biasing a real technique.
 	byID := map[string]*Technique{}
 	var b strings.Builder
-	b.WriteString("Sos un analizador ACOTADO de estructura retórica. No opinás sobre verdad ni sobre manipulación; solo reconocés formas.\n\n")
-	b.WriteString("Turno a analizar:\n---\n" + turn + "\n---\n\nCatálogo cerrado:\n")
+	b.WriteString("Sos un analizador ACOTADO de estructura retórica. No opinás sobre verdad ni sobre manipulación; solo reconocés FORMAS del lenguaje.\n\n")
+	b.WriteString("Catálogo cerrado:\n")
 	for _, t := range shortlist {
 		byID[t.ID] = t
 		fmt.Fprintf(&b, "- %s — %s\n", t.ID, strings.TrimSpace(t.Definition))
 	}
-	b.WriteString("\nRespondé SOLO líneas con el formato exacto:\nid | cita literal del turno que muestra esa estructura\n")
-	b.WriteString("Máximo 3 líneas, solo ids del catálogo, la cita debe ser un fragmento LITERAL del turno. Si ninguna aplica respondé exactamente: NINGUNA\n")
+	b.WriteString("\nTarea: leé el turno y decidí si alguna forma del catálogo aparece en él.\n")
+	b.WriteString("Formato de salida (una línea por hallazgo, máximo 3):\nid | cita literal del turno\n\n")
+	b.WriteString("Ejemplo ilustrativo (con un turno DISTINTO, solo para mostrar el formato):\n")
+	b.WriteString("  turno: \"Los que saben ya se pasaron todos a este banco.\"\n")
+	b.WriteString("  salida: rhetoric.bandwagon | Los que saben ya se pasaron todos a este banco\n\n")
+	b.WriteString("Reglas: la cita debe ser un fragmento LITERAL del turno analizado; solo ids del catálogo de arriba; si de verdad ninguna aplica, respondé exactamente NINGUNA.\n\n")
+	b.WriteString("Turno a analizar:\n---\n" + turn + "\n---\n")
 
 	out, err := p.Complete(ctx, b.String())
 	if err != nil {
