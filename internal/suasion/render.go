@@ -38,6 +38,7 @@ func (e *Engine) Render(r Report) string {
 		fmt.Fprintf(&b, "📈 Trayectoria: %d turnos consecutivos del modelo con señales.\n\n", r.Trajectory.Streak)
 	}
 	if len(r.Findings) == 0 {
+		renderSteelman(&b, r)
 		return b.String()
 	}
 	for _, f := range r.Findings {
@@ -58,8 +59,31 @@ func (e *Engine) Render(r Report) string {
 		fmt.Fprintf(&b, "**Contramedida:** %s\n\n", strings.TrimSpace(t.Countermeasure.Move))
 		fmt.Fprintf(&b, "_%s_\n\n", strings.TrimSpace(t.Countermeasure.Inoculation))
 	}
+	renderSteelman(&b, r)
 	covered, total := e.Coverage()
 	fmt.Fprintf(&b, "---\n_Fase 1 (determinista): cubre marcadores léxicos y recibos de %d/%d técnicas; "+
 		"las tácticas estructurales y de trayectoria llegan con los tiers de modelo._\n", covered, total)
 	return b.String()
+}
+
+// renderSteelman appends the adversarial second opinion, clearly framed as
+// symmetry — another model arguing the other side on purpose, not a verdict.
+func renderSteelman(b *strings.Builder, r Report) {
+	if r.Steelman == nil {
+		if r.SteelmanNote != "" {
+			fmt.Fprintf(b, "_%s_\n\n", r.SteelmanNote)
+		}
+		return
+	}
+	b.WriteString("## 🔁 El otro lado (steelman adversario)\n\n")
+	fmt.Fprintf(b, "**Lo que este turno empuja:** %s\n\n", r.Steelman.Position)
+	fmt.Fprintf(b, "%s\n\n", r.Steelman.Counter)
+	if len(r.Steelman.Tests) > 0 {
+		b.WriteString("Cómo decidir entre los dos lados:\n")
+		for _, t := range r.Steelman.Tests {
+			fmt.Fprintf(b, "- %s\n", t)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("_Es otro modelo argumentando el lado contrario a propósito: no es un veredicto, es simetría._\n\n")
 }

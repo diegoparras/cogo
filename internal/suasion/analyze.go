@@ -41,27 +41,36 @@ type Finding struct {
 
 // Report is the radiography of one model turn.
 type Report struct {
-	Mode       string                `json:"mode"` // "mandato" | "informativo"
-	Findings   []Finding             `json:"findings"`
-	Axes       map[string]core.Color `json:"-"`
-	RedLines   []RedLineHit          `json:"red_lines,omitempty"`
-	Trajectory Trajectory            `json:"trajectory"`
-	Overall    core.Color            `json:"-"`
-	Reason     string                `json:"reason"`
+	Mode         string                `json:"mode"` // "mandato" | "informativo"
+	Findings     []Finding             `json:"findings"`
+	Axes         map[string]core.Color `json:"-"`
+	RedLines     []RedLineHit          `json:"red_lines,omitempty"`
+	Trajectory   Trajectory            `json:"trajectory"`
+	Steelman     *Steelman             `json:"steelman,omitempty"`
+	SteelmanNote string                `json:"steelman_note,omitempty"` // why a requested steelman is missing
+	Overall      core.Color            `json:"-"`
+	Reason       string                `json:"reason"`
+}
+
+// Opts are the optional model tiers. Zero value = fully deterministic.
+type Opts struct {
+	Tier1    llm.Provider // structural proposals; nil or unavailable = off
+	Tier2    llm.Provider // adversarial steelman; ideally a DIFFERENT provider than Tier1
+	Steelman bool         // request the second opinion (one extra model call)
 }
 
 // Analyze reads one model turn. transcript is the conversation so far
 // (oldest-first, NOT including the turn under analysis); mandate may be nil.
 // Everything here is deterministic: same input, same radiography.
 func (e *Engine) Analyze(turn string, transcript []Turn, mandate *Mandate) Report {
-	return e.AnalyzeWith(context.Background(), llm.Noop{}, turn, transcript, mandate)
+	return e.AnalyzeWith(context.Background(), turn, transcript, mandate, Opts{})
 }
 
-// AnalyzeWith adds the optional Tier 1: a provider proposing structural
-// techniques the lexicon cannot see. Provider off (the default) means
-// AnalyzeWith == Analyze. Proposals are verified against literal quotes and
-// capped at yellow — they are opinions, the teeth stay deterministic.
-func (e *Engine) AnalyzeWith(ctx context.Context, p llm.Provider, turn string, transcript []Turn, mandate *Mandate) Report {
+// AnalyzeWith adds the optional tiers. Tier 1 proposes structural techniques
+// the lexicon cannot see — quotes verified literal, capped at yellow. Tier 2
+// steelmans the opposite side on request — it informs, it NEVER moves the
+// verdict. With both providers off this equals Analyze.
+func (e *Engine) AnalyzeWith(ctx context.Context, turn string, transcript []Turn, mandate *Mandate, opts Opts) Report {
 	r := Report{Mode: "informativo", Axes: map[string]core.Color{}}
 	if mandate.Declared() {
 		r.Mode = "mandato"
@@ -79,9 +88,22 @@ func (e *Engine) AnalyzeWith(ctx context.Context, p llm.Provider, turn string, t
 	for _, f := range r.Findings {
 		already[f.TechniqueID] = true
 	}
-	for _, f := range e.propose(ctx, p, turn) {
+	for _, f := range e.propose(ctx, opts.Tier1, turn) {
 		if !already[f.TechniqueID] {
 			r.Findings = append(r.Findings, f)
+		}
+	}
+
+	// The second opinion is additive and verdict-neutral; when it was asked
+	// for and cannot be delivered, the report says so — no silent absence.
+	if opts.Steelman {
+		switch s, err := e.steelman(ctx, opts.Tier2, turn, mandate); {
+		case err != nil:
+			r.SteelmanNote = "steelman solicitado pero no disponible: " + err.Error()
+		case s == nil:
+			r.SteelmanNote = "steelman: el turno no empuja ninguna posición que contrapesar"
+		default:
+			r.Steelman = s
 		}
 	}
 

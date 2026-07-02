@@ -86,7 +86,7 @@ func TestProposalVerifiedQuoteOnly(t *testing.T) {
 	fake := fakeProvider{out: "interrogation.alternative_question | ¿Preferís renunciar hoy o esperar a quemarte del todo?\n" +
 		"interrogation.denial_blocking | esto no aparece en el turno\n" + // fabricated quote → dropped
 		"persuasion.scarcity | No hay más opciones"} // lexicon-covered → outside shortlist → dropped
-	r := e.AnalyzeWith(context.Background(), fake, turn, nil, nil)
+	r := e.AnalyzeWith(context.Background(), turn, nil, nil, Opts{Tier1: fake})
 
 	var prop []Finding
 	for _, f := range r.Findings {

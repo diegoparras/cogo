@@ -131,4 +131,10 @@ Es el mismo lattice de COGO — ahora alimentado por la **radiografía retórica
    ES para el mandato + propuestas estructurales del modelo local (shortlist cerrada,
    cita literal verificada o se descarta, **capadas en 🟡**). **HECHA**; el Tier 1 usa el
    provider del visor (GUI gana, luego env, si no: off).
-3. **Fase 3 — Segunda opinión adversaria (steelman):** Tier 2, opcional. Pendiente.
+3. **Fase 3 — Segunda opinión adversaria (steelman):** Tier 2, opcional. **HECHA**:
+   `guard(steelman: true)` pide a un provider fuerte —idealmente OTRO que el Tier 1
+   (`COGO_LLM_STRONG_*`), para que juez y proponente no coludan— el caso más fuerte del
+   lado que el turno NO muestra + los tests que decidirían entre ambos. Formato estricto
+   (POSICION/CONTRA/TEST) parseado determinista: lo que no parsea se rechaza y se dice.
+   **Nunca toca el veredicto**: no es detector, es simetría (el antídoto del
+   card-stacking). Si el turno no empuja nada, el silencio es la respuesta honesta.

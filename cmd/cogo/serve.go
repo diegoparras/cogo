@@ -215,7 +215,11 @@ func newMCPServer(dir string) *mcp.Server {
 		if in.Goal != "" || len(in.RedLines) > 0 {
 			mandate = &suasion.Mandate{Goal: in.Goal, RedLines: in.RedLines}
 		}
-		report := eng.AnalyzeWith(ctx, guardProvider(dir), in.Turn, transcript, mandate)
+		report := eng.AnalyzeWith(ctx, in.Turn, transcript, mandate, suasion.Opts{
+			Tier1:    guardProvider(dir),
+			Tier2:    strongProvider(dir),
+			Steelman: in.Steelman,
+		})
 		return textResult(eng.Render(report)), nil, nil
 	})
 
@@ -264,6 +268,7 @@ type guardIn struct {
 	Transcript []transcriptTurnIn `json:"transcript,omitempty" jsonschema:"prior conversation oldest-first, for checking denials against what was actually said"`
 	Goal       string             `json:"goal,omitempty" jsonschema:"the user's declared goal for this conversation"`
 	RedLines   []string           `json:"red_lines,omitempty" jsonschema:"what the user declared they are NOT willing to do or believe; drift is measured against these"`
+	Steelman   bool               `json:"steelman,omitempty" jsonschema:"true to add an adversarial second opinion: the strongest case for the side the turn does not show (needs a configured model; never changes the verdict)"`
 }
 
 // guardProvider mirrors the visor's rule: a saved GUI setting wins, then env,
@@ -280,6 +285,17 @@ func guardProvider(dir string) llm.Provider {
 		}
 	}
 	return llm.FromEnv()
+}
+
+// strongProvider is the Tier-2 judge. COGO_LLM_STRONG_* lets it be a DIFFERENT
+// provider than Tier 1 (independence: the judge should not collude with the
+// proposer); unset, it falls back to the regular provider.
+func strongProvider(dir string) llm.Provider {
+	base, model := os.Getenv("COGO_LLM_STRONG_BASE_URL"), os.Getenv("COGO_LLM_STRONG_MODEL")
+	if base != "" && model != "" {
+		return &llm.OpenAICompatible{BaseURL: base, Model: model, APIKey: os.Getenv("COGO_LLM_STRONG_API_KEY"), Referer: os.Getenv("COGO_LLM_REFERER")}
+	}
+	return guardProvider(dir)
 }
 
 // --- helpers ---
