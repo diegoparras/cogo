@@ -62,14 +62,23 @@ main { max-width: 940px; margin: 0 auto; padding: 18px 22px 70px; }
 .copy-row { display: flex; justify-content: flex-end; margin-top: 8px; }
 
 /* ---- graph ---- */
-.graph-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card-2); margin-top: 10px; }
-svg.graph { width: 100%; height: auto; display: block; }
-svg.graph .gnode { fill: var(--c, var(--muted)); stroke: var(--panel); stroke-width: 2; }
-svg.graph .glabel { fill: var(--muted-2); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; }
-svg.graph .edge { stroke: var(--hairline); stroke-width: 1.4; fill: none; }
-svg.graph .edge-supersedes { stroke: var(--muted-2); stroke-width: 2; }
-svg.graph .edge-caused_by { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 2 3; }
-svg.graph .edge-wikilink { stroke: var(--hairline); stroke-width: 1; stroke-dasharray: 4 4; }
+.graph-bar { align-items: center; }
+.graph-bar .gb-sp { flex: 1; }
+.seg { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 2px; gap: 2px; }
+.seg-btn { background: none; color: var(--muted-2); border: 0; border-radius: 999px; padding: 5px 15px; font-size: 12.5px; font-weight: 600; transition: background .15s, color .15s; }
+.seg-btn:hover { background: var(--card-2); }
+.seg-btn.on { background: var(--accent); color: var(--on-accent); }
+.graph-wrap { position: relative; height: clamp(360px, 66vh, 620px); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--card-2); margin-top: 12px; overflow: hidden; }
+:root[data-theme="dark"] .graph-wrap { background: radial-gradient(125% 130% at 50% 38%, #0e1420, #07090f); border-color: var(--hairline); }
+canvas.graph-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+canvas.graph-canvas:active { cursor: grabbing; }
+.graph-tip { position: absolute; z-index: 5; pointer-events: none; max-width: 260px; background: var(--panel);
+  border: 1px solid var(--hairline); border-radius: 11px; box-shadow: var(--shadow); padding: 9px 12px;
+  display: flex; flex-direction: column; gap: 3px; }
+.graph-tip .gt-id { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--text); }
+.graph-tip .gt-type { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.graph-tip .gt-claim { font-size: 12px; color: var(--muted-2); line-height: 1.42; margin-top: 2px; }
 .edge-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--muted); }
 .edge-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .edge-legend i { width: 22px; height: 0; border-top: 2px solid var(--muted-2); display: inline-block; }

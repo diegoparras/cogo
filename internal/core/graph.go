@@ -8,9 +8,11 @@ import (
 
 // GraphNode is one note painted by confidence. GraphEdge is a typed relation.
 type GraphNode struct {
-	ID    string `json:"id"`
-	Type  string `json:"type"`
-	Color string `json:"color"`
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Color   string `json:"color"`
+	Project string `json:"project,omitempty"`
+	Claim   string `json:"claim,omitempty"`
 }
 
 type GraphEdge struct {
@@ -35,7 +37,14 @@ func BuildGraph(vault map[string]*Note, contradictions map[string]bool, today Da
 
 	g := GraphData{}
 	for id, n := range vault {
-		g.Nodes = append(g.Nodes, GraphNode{ID: id, Type: n.Type, Color: verdicts[id].Color.String()})
+		claim := Claim(n)
+		if len([]rune(claim)) > 120 {
+			claim = string([]rune(claim)[:119]) + "…"
+		}
+		g.Nodes = append(g.Nodes, GraphNode{
+			ID: id, Type: n.Type, Color: verdicts[id].Color.String(),
+			Project: n.Project, Claim: claim,
+		})
 	}
 	sort.Slice(g.Nodes, func(i, j int) bool { return g.Nodes[i].ID < g.Nodes[j].ID })
 

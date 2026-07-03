@@ -20,6 +20,7 @@ function initTheme() {
   t.addEventListener("change", () => {
     if (t.checked) { document.documentElement.dataset.theme = "dark"; localStorage.setItem("cogo.theme", "dark"); }
     else { delete document.documentElement.dataset.theme; localStorage.setItem("cogo.theme", "light"); }
+    window.dispatchEvent(new Event("cogo-theme"));
   });
 }
 
@@ -205,36 +206,35 @@ async function renderPack(main) {
   run();
 }
 
-// ---------- graph ----------
-const NS = "http://www.w3.org/2000/svg";
-function svgEl(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
-
+// ---------- graph (motor Canvas: graph.js) ----------
 async function renderGraph(main) {
   const g = await api("/api/graph");
+  if (!g.nodes.length) { main.appendChild(el("div", "empty", "Sin notas para graficar.")); return; }
   const nodes = g.nodes.filter(matchesProject);
   const keep = new Set(nodes.map(n => n.id));
   const edges = g.edges.filter(e => keep.has(e.from) && keep.has(e.to));
-  if (!nodes.length) { main.appendChild(el("div", "empty", "Sin notas para graficar.")); return; }
+  if (!nodes.length) { main.appendChild(el("div", "empty", "Sin notas para este proyecto.")); return; }
 
-  const W = 760, H = 520, cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 80, N = nodes.length;
-  const pos = {};
-  nodes.forEach((n, i) => { const a = 2 * Math.PI * i / N - Math.PI / 2; pos[n.id] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) }; });
+  const bar = el("div", "viewbar graph-bar");
+  bar.appendChild(legend(nodes));
+  bar.appendChild(el("span", "gb-sp"));
+  const seg = el("div", "seg");
+  const b2 = el("button", "seg-btn", "2D"), b3 = el("button", "seg-btn", "3D");
+  seg.appendChild(b2); seg.appendChild(b3);
+  const reset = el("button", "mini ghost", "recentrar");
+  bar.appendChild(seg); bar.appendChild(reset);
+  main.appendChild(bar);
 
-  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "graph" });
-  edges.forEach(e => {
-    const a = pos[e.from], b = pos[e.to];
-    svg.appendChild(svgEl("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: "edge edge-" + e.kind }));
-  });
-  nodes.forEach(n => {
-    const p = pos[n.id];
-    svg.appendChild(svgEl("circle", { cx: p.x, cy: p.y, r: 8, class: "gnode " + cls(n.color) }));
-    const t = svgEl("text", { x: p.x, y: p.y - 13, class: "glabel" });
-    t.textContent = n.id.length > 22 ? n.id.slice(0, 21) + "…" : n.id;
-    svg.appendChild(t);
-  });
+  const wrap = el("div", "graph-wrap");
+  main.appendChild(wrap);
 
-  main.appendChild(legend(nodes));
-  const wrap = el("div", "graph-wrap"); wrap.appendChild(svg); main.appendChild(wrap);
+  const mode = window.__graphMode || "2d";
+  const setActive = m => { b2.classList.toggle("on", m === "2d"); b3.classList.toggle("on", m === "3d"); };
+  setActive(mode);
+  const gv = CogoGraph.mount(wrap, { nodes, edges }, { mode, onSelect: id => openEditor(id) });
+  b2.addEventListener("click", () => { window.__graphMode = "2d"; setActive("2d"); gv.setMode("2d"); });
+  b3.addEventListener("click", () => { window.__graphMode = "3d"; setActive("3d"); gv.setMode("3d"); });
+  reset.addEventListener("click", () => gv.resetView());
 
   const lg = el("div", "edge-legend");
   [["depends_on", "depende de"], ["supersedes", "reemplaza"], ["caused_by", "causado por"], ["wikilink", "relaciona"]].forEach(([k, label]) => {
