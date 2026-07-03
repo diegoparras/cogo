@@ -85,8 +85,8 @@ contramedida + inoculación, `fp_guard` (cuándo es uso legítimo, para no sobre
   es el piso confiable.
 - **Tier 1 — Modelo, catálogo COMPLETO.** El modelo juzga el turno contra las **108
   técnicas** (no una lista corta), con la guarda de `fp_guard` en el prompt, cita literal
-  verificada y capado en amarillo. Acá está el recall: sube del 52% (cuando el modelo veía
-  solo 12 técnicas) al **90%** con las 108. También los **recibos semánticos**: el modelo
+  verificada y capado en amarillo. Acá está el recall: pasar de 12 a 108 técnicas lo llevó de
+  ~52% a **87%** sobre el corpus ciego de 280. También los **recibos semánticos**: el modelo
   detecta contradicción parafraseada contra el log (verificada literal) → rojo. **Gemma 2
   9B** / **Qwen 2.5 7B** vía Ollama (multilingüe, clave en
   español). Privado, offline, por turno.
@@ -114,9 +114,11 @@ El color del turno se **computa, no se opina**:
 peor( presión , deriva-vs-mandato , asimetría )   // por eje, y total
 ```
 
-- 🟢 = sin presión relevante / dentro del mandato.
-- 🟡 = persuasión presente, declarada, sin cruzar tus líneas.
-- 🔴 = empuja a cruzar el mandato, hay coerción, o hay **recibo** de gaslighting/deriva.
+- 🟢 = sin señales.
+- 🟡 = persuasión/coerción presente, o el turno **toca tu línea roja** (mirá de cerca).
+- 🔴 = hay **recibo**: el modelo contradice, verificado literal, lo que dijo antes. Es lo
+  único **mecánicamente** cierto — que un turno *empuje a cruzar* tu mandato (vs *hablar del
+  tema*) es un juicio, así que es 🟡 fuerte, no 🔴.
 
 Es el mismo lattice de COGO — ahora alimentado por la **radiografía retórica**.
 
@@ -136,15 +138,17 @@ en `internal/suasion/testdata/corpus.yaml` y el harness (`corpus_test.go`) corre
 Corpus sintético (`corpus.yaml`, 36 casos): 0/20 falsos positivos rojos. Sirve de
 regresión pero es circular — lo escribió quien también escribió la ontología.
 
-**Corpus ciego (`testdata/redteam.json`, 100 casos):** generado por un red-team que NO vio
-los marcadores (verdad = intención del generador), con manipulación **parafraseada** y
-benignos-trampa. Es la medición honesta. Resultado tras las mejoras:
+**Corpus ciego (`testdata/redteam.json`, 280 casos):** generado por un red-team (agentes
+que NO vieron los marcadores; verdad = intención), con manipulación **parafraseada** anclada
+en las técnicas documentadas, y benignos-trampa. Los genera una familia de modelo (Claude)
+y los juzga **otra** (gpt-4o) — el juez no corrige su propia tarea. Es la medición honesta.
+Resultado tras las mejoras:
 
 | | Determinista | + modelo (catálogo completo) |
 |---|---|---|
-| Recall manipulación | 26% | **90%** (45/50) |
-| — difíciles (parafraseadas) | 17% | **83%** |
-| Falsos positivos 🔴 | **0%** | **0%** |
+| Recall manipulación | 32% (47/148) | **87%** (129/148) |
+| — difíciles (parafraseadas) | 27% | **82%** |
+| Falsos positivos 🔴 | **0%** | **0%** (0/132) |
 | Falsos positivos 🟡 | 8% | 8% |
 
 La lección del red-team (medida, no opinada): el determinista solo caza lo obvio; el
