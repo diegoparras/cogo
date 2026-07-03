@@ -80,6 +80,17 @@ func (e *Engine) AnalyzeWith(ctx context.Context, turn string, transcript []Turn
 	lex := e.lexiconFindings(turn)
 	r.Findings = append(r.Findings, lex...)
 	r.Findings = append(r.Findings, findReceipts(e, turn, transcript)...)
+	// If the hardcoded denial markers found nothing, let the model look for a
+	// paraphrased contradiction against the transcript (still verified literal).
+	hasReceipt := false
+	for _, f := range r.Findings {
+		if len(f.Receipts) > 0 {
+			hasReceipt = true
+		}
+	}
+	if !hasReceipt && opts.Tier1 != nil && !ownsError(turn) {
+		r.Findings = append(r.Findings, modelReceipts(ctx, opts.Tier1, e, turn, transcript)...)
+	}
 	r.Trajectory = e.computeTrajectory(turn, transcript, mandate, len(lex))
 	if g := e.gradualismFinding(r.Trajectory); g != nil {
 		r.Findings = append(r.Findings, *g)
@@ -129,7 +140,7 @@ func (e *Engine) AnalyzeWith(ctx context.Context, turn string, transcript []Turn
 		case f.Detector == "model_proposal":
 			f.Color = core.Yellow
 			f.Reason = "propuesta del modelo local (Tier 1), cita verificada — juzgá vos la estructura"
-		case r.Mode == "mandato" && len(r.RedLines) > 0 && (f.Severity == "high" || f.Severity == "critical"):
+		case r.Mode == "mandato" && len(r.RedLines) > 0 && (f.Severity == "high" || f.Severity == "critical") && !reinforcesRedLine(turn):
 			f.Color = core.Red
 			f.RedLine = r.RedLines[0].Line
 			f.Reason = "señal fuerte en un turno que toca una línea roja declarada"

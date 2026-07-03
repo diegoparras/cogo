@@ -79,10 +79,16 @@ contramedida + inoculación, `fp_guard` (cuándo es uso legítimo, para no sobre
 
 ## Los tres tiers (y qué modelo para qué)
 
-- **Tier 0 — Determinista (sin modelo).** Léxico, **recibos** (NLI), trayectoria, cómputo
-  del veredicto. **Acá están los teeth.**
-- **Tier 1 — Modelo local chico.** Clasificar el acto de habla y matchear técnicas claras
-  (tareas *narrow*). **Gemma 2 9B** / **Qwen 2.5 7B** vía Ollama (multilingüe, clave en
+- **Tier 0 — Determinista (sin modelo).** Léxico, **recibos** deterministas, trayectoria,
+  cómputo del veredicto. Es un **ancla de alta precisión / bajo recall**: caza lo obvio (el
+  red-team ciego dio 26% de recall) y **nunca** marca rojo a un benigno. No es el detector;
+  es el piso confiable.
+- **Tier 1 — Modelo, catálogo COMPLETO.** El modelo juzga el turno contra las **108
+  técnicas** (no una lista corta), con la guarda de `fp_guard` en el prompt, cita literal
+  verificada y capado en amarillo. Acá está el recall: sube del 52% (cuando el modelo veía
+  solo 12 técnicas) al **90%** con las 108. También los **recibos semánticos**: el modelo
+  detecta contradicción parafraseada contra el log (verificada literal) → rojo. **Gemma 2
+  9B** / **Qwen 2.5 7B** vía Ollama (multilingüe, clave en
   español). Privado, offline, por turno.
 - **Tier 2 — Modelo fuerte (opcional).** Lo difícil: el **steelman del opuesto** (segunda
   opinión adversaria) y el match de tácticas sutiles. **Phi-4** local o un grande por
@@ -127,11 +133,25 @@ en `internal/suasion/testdata/corpus.yaml` y el harness (`corpus_test.go`) corre
 - **manipulativos** → deben alcanzar su color mínimo y nombrar la técnica;
 - **con mecánica** (recibos, línea roja, trayectoria) → deben llegar a 🔴.
 
-Estado actual: **0/20 falsos positivos rojos**, recall 16/16, 13/13 técnicas. Honestidad:
-es un corpus **sintético** escrito por quien también escribió la ontología — mide "el motor
-se comporta como fue diseñado" y protege contra regresiones, **no** es un benchmark del
-mundo real. El siguiente salto de seriedad es un corpus con diálogos manipulativos reales
-etiquetados a ciegas (generables desde los guiones de Reid / Biderman / FM 2-22.3).
+Corpus sintético (`corpus.yaml`, 36 casos): 0/20 falsos positivos rojos. Sirve de
+regresión pero es circular — lo escribió quien también escribió la ontología.
+
+**Corpus ciego (`testdata/redteam.json`, 100 casos):** generado por un red-team que NO vio
+los marcadores (verdad = intención del generador), con manipulación **parafraseada** y
+benignos-trampa. Es la medición honesta. Resultado tras las mejoras:
+
+| | Determinista | + modelo (catálogo completo) |
+|---|---|---|
+| Recall manipulación | 26% | **90%** (45/50) |
+| — difíciles (parafraseadas) | 17% | **83%** |
+| Falsos positivos 🔴 | **0%** | **0%** |
+| Falsos positivos 🟡 | 8% | 8% |
+
+La lección del red-team (medida, no opinada): el determinista solo caza lo obvio; el
+**recall vive en el modelo mirando el catálogo completo** (12→108 técnicas fue de 52% a
+90%), y el 🔴 confiado exige mecánica auditable (recibos verificados contra el log, con
+guarda de corrección-honesta para no marcar una disculpa como gaslighting). Sigue pendiente
+el salto siguiente: un corpus etiquetado por **humano**, no por otro modelo.
 
 ## Arquitectura (qué reusa)
 

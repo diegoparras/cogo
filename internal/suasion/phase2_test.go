@@ -82,10 +82,10 @@ func (f fakeProvider) Complete(context.Context, string) (string, error) {
 
 func TestProposalVerifiedQuoteOnly(t *testing.T) {
 	e := testEngine(t)
-	turn := "¿Preferís renunciar hoy o esperar a quemarte del todo? No hay más opciones."
+	turn := "¿Preferís renunciar hoy o esperar a quemarte del todo?"
 	fake := fakeProvider{out: "interrogation.alternative_question | ¿Preferís renunciar hoy o esperar a quemarte del todo?\n" +
-		"interrogation.denial_blocking | esto no aparece en el turno\n" + // fabricated quote → dropped
-		"persuasion.scarcity | No hay más opciones"} // lexicon-covered → outside shortlist → dropped
+		"dark_psychology.gaslighting | esto no aparece literal en el turno\n" + // fabricated quote → dropped
+		"no.existe | ¿Preferís renunciar hoy o esperar a quemarte del todo?"} // out-of-catalog id → dropped
 	r := e.AnalyzeWith(context.Background(), turn, nil, nil, Opts{Tier1: fake})
 
 	var prop []Finding
@@ -95,7 +95,7 @@ func TestProposalVerifiedQuoteOnly(t *testing.T) {
 		}
 	}
 	if len(prop) != 1 {
-		t.Fatalf("got %d proposals, want exactly 1 (verified quote, shortlist only): %+v", len(prop), prop)
+		t.Fatalf("got %d proposals, want exactly 1 (only the valid id + literal quote): %+v", len(prop), prop)
 	}
 	if prop[0].TechniqueID != "interrogation.alternative_question" {
 		t.Errorf("proposal = %s, want interrogation.alternative_question", prop[0].TechniqueID)
@@ -105,26 +105,21 @@ func TestProposalVerifiedQuoteOnly(t *testing.T) {
 	}
 }
 
-func TestProposalShortlistIsClosed(t *testing.T) {
+func TestTechniqueMenuIsFullSpace(t *testing.T) {
 	e := testEngine(t)
-	list := e.proposalShortlist()
-	if len(list) == 0 || len(list) > 12 {
-		t.Fatalf("shortlist size = %d, want 1..12", len(list))
-	}
-	covered := map[string]bool{}
-	for _, m := range e.markers {
-		covered[m.technique] = true
-	}
-	for _, tech := range list {
-		if covered[tech.ID] {
-			t.Errorf("%s has lexicon coverage and must not be in the Tier-1 shortlist", tech.ID)
+	menu := e.techniqueMenu()
+	// The whole catalog is offered to the model now, not a 12-item shortlist —
+	// including techniques the lexicon already covers (paraphrase falls through
+	// the lexicon, so the model must still see them).
+	for _, id := range []string{
+		"interrogation.alternative_question", "persuasion.scarcity",
+		"dark_psychology.gaslighting", "coercion.love_bombing", "rhetoric.bullshit",
+	} {
+		if !strings.Contains(menu, id) {
+			t.Errorf("menu is missing %s — it must list the full catalog", id)
 		}
 	}
-	ids := make([]string, len(list))
-	for i, tech := range list {
-		ids[i] = tech.ID
-	}
-	if !strings.Contains(strings.Join(ids, " "), "interrogation.alternative_question") {
-		t.Errorf("shortlist should include the false binary (Reid); got %v", ids)
+	if n := strings.Count(menu, "\n- "); n < 100 {
+		t.Errorf("menu lists %d techniques, want the full ~108", n)
 	}
 }

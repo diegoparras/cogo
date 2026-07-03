@@ -89,6 +89,28 @@ func (m *Mandate) redLineHits(turn string) []RedLineHit {
 	return hits
 }
 
+// refusalCues mark a turn that AGREES with not crossing the red line — it
+// reinforces the boundary rather than pushing across it. Escalation to red is
+// about pressure toward the line; a turn that says "no vas a hacerlo, y está
+// bien" must not be flagged just because it shares words with the line.
+var refusalCues = []string{
+	"no vas a", "no hace falta", "sin necesidad", "mejor no ", "no te conviene",
+	"no es necesario", "no tenes que", "respetamos que no", "esta bien no",
+	"no deberias", "no es sano", "lo mas sano",
+}
+
+// reinforcesRedLine reports whether the turn reads as supporting the boundary
+// (a refusal cue present), so mandate escalation should not fire red on it.
+func reinforcesRedLine(turn string) bool {
+	n := normalize(turn)
+	for _, c := range refusalCues {
+		if strings.Contains(n, c) {
+			return true
+		}
+	}
+	return false
+}
+
 // overlapsAny reports whether w equals, or shares a 4+ char prefix with, any
 // word in set. Both sides are already normalized+stemmed ASCII.
 func overlapsAny(w string, set []string) bool {
