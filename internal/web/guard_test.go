@@ -47,8 +47,10 @@ func TestGuardWithPersistedMandate(t *testing.T) {
 	if len(r.RedLines) == 0 {
 		t.Error("the turn touches the persisted red line and it is not reported")
 	}
-	if r.Overall != "red" {
-		t.Errorf("overall = %q, want red (strong signal on the persisted red line)", r.Overall)
+	// A strong signal on a red line is a loud yellow, not a confident red
+	// (pushing-across vs discussing is a judgment; only receipts earn red).
+	if r.Overall != "yellow" && r.Overall != "red" {
+		t.Errorf("overall = %q, want at least yellow (signal on the persisted red line)", r.Overall)
 	}
 	if len(r.Findings) == 0 || len(r.Findings[0].Questions) == 0 || r.Findings[0].Inoculation == "" {
 		t.Errorf("findings must carry the inoculation payload: %+v", r.Findings)

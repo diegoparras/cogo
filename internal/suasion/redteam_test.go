@@ -180,6 +180,13 @@ func TestRedTeamTier1(t *testing.T) {
 	ctx := context.Background()
 	all := loadRedTeam(t)
 
+	totalManip := 0
+	for _, c := range all {
+		if c.Kind == "manip" {
+			totalManip++
+		}
+	}
+
 	// (1) recall gain: model over the deterministic misses (recomputed live).
 	missed := deterministicMisses(e, all)
 	rescued, hardResc, hardTot := 0, 0, 0
@@ -217,8 +224,8 @@ func TestRedTeamTier1(t *testing.T) {
 	}
 
 	t.Logf("====== TIER-1 (%s) ======", prov.Name())
-	detCaught := 50 - len(missed)
+	detCaught := totalManip - len(missed)
 	t.Logf("RESCATE sobre %d misses del determinista: %d rescatados (hard: %d/%d)", len(missed), rescued, hardResc, hardTot)
-	t.Logf("RECALL COMBINADO (%d determinista + %d modelo)/50 = %d/50 (%.0f%%)", detCaught, rescued, detCaught+rescued, 100*float64(detCaught+rescued)/50)
+	t.Logf("RECALL COMBINADO (%d determinista + %d modelo)/%d = %d/%d (%.0f%%)", detCaught, rescued, totalManip, detCaught+rescued, totalManip, 100*float64(detCaught+rescued)/float64(totalManip))
 	t.Logf("FP con modelo ON sobre %d benignos: verde %d · amarillo %d · ROJO %d", benTot, benGreen, benYellow, benRed)
 }

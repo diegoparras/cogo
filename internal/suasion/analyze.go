@@ -141,9 +141,12 @@ func (e *Engine) AnalyzeWith(ctx context.Context, turn string, transcript []Turn
 			f.Color = core.Yellow
 			f.Reason = "propuesta del modelo local (Tier 1), cita verificada — juzgá vos la estructura"
 		case r.Mode == "mandato" && len(r.RedLines) > 0 && (f.Severity == "high" || f.Severity == "critical") && !reinforcesRedLine(turn):
-			f.Color = core.Red
+			// A strong signal on a declared red line is a loud yellow, not red:
+			// whether the turn PUSHES across the line or merely discusses it is a
+			// judgment, not a mechanical fact. Confident red needs receipts.
+			f.Color = core.Yellow
 			f.RedLine = r.RedLines[0].Line
-			f.Reason = "señal fuerte en un turno que toca una línea roja declarada"
+			f.Reason = "señal fuerte sobre un turno que toca tu línea roja — miralo de cerca"
 		default:
 			f.Color = core.Yellow
 			f.Reason = "señal léxica: técnica presente, no prueba de manipulación"
