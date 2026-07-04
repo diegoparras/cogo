@@ -105,6 +105,7 @@ func (s *Server) handleGuard(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	covered, total := eng.Coverage()
+	s.flushUsage()
 	writeJSON(w, map[string]any{
 		"mode": rep.Mode, "overall": rep.Overall.String(), "reason": rep.Reason,
 		"red_lines": rep.RedLines, "streak": rep.Trajectory.Streak,

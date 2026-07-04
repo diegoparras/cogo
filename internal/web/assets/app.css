@@ -58,7 +58,10 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .nc-type { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .nc-claim { font-size: 13.5px; color: var(--muted-2); margin: 3px 0 0; line-height: 1.45; }
 .nc-reason { font-size: 11.5px; color: var(--muted); margin: 5px 0 0; font-style: italic; }
-.nc-stale { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.nc-stale { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); cursor: help; }
+.nc-stale.warn { color: var(--warn); }
+.nc-stale.bad { color: var(--err); }
+.menu-meta { font-size: 11.5px; color: var(--muted); padding: 7px 13px 3px; font-variant-numeric: tabular-nums; cursor: help; }
 
 /* ---- modal de confirmación (estilo Escriba, reemplaza al confirm() nativo) ---- */
 .confirm-back { opacity: 0; transition: opacity .16s ease; }

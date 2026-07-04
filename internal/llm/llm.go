@@ -88,6 +88,11 @@ func (o *OpenAICompatible) Complete(ctx context.Context, prompt string) (string,
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", err
@@ -95,7 +100,15 @@ func (o *OpenAICompatible) Complete(ctx context.Context, prompt string) (string,
 	if len(out.Choices) == 0 {
 		return "", fmt.Errorf("llm: empty response")
 	}
-	return out.Choices[0].Message.Content, nil
+	content := out.Choices[0].Message.Content
+	// Meter the spend: trust the endpoint's usage block; if it omits one (some
+	// local servers do), fall back to a chars/4 estimate so the tally still moves.
+	if out.Usage.TotalTokens > 0 || out.Usage.PromptTokens > 0 {
+		addUsage(out.Usage.PromptTokens, out.Usage.CompletionTokens, out.Usage.TotalTokens)
+	} else {
+		addUsage(len(prompt)/4, len(content)/4, 0)
+	}
+	return content, nil
 }
 
 // FromEnv builds a provider from COGO_LLM_* env. Unconfigured -> Noop (off).

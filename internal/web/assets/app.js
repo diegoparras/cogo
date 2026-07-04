@@ -74,7 +74,13 @@ function initTheme() {
 
 function initMenu() {
   const menu = $("#menu");
-  $("#kebab").addEventListener("click", e => { e.stopPropagation(); menu.classList.toggle("hidden"); });
+  $("#kebab").addEventListener("click", async e => {
+    e.stopPropagation();
+    menu.classList.toggle("hidden");
+    if (!menu.classList.contains("hidden")) {
+      try { const c = await api("/api/config"); state.tokens = c.tokens || 0; updateTokenBadge(); } catch (_) {}
+    }
+  });
   menu.addEventListener("click", e => e.stopPropagation());
   document.addEventListener("click", () => menu.classList.add("hidden"));
   $("#settingsBtn").addEventListener("click", openSettings);
@@ -92,10 +98,23 @@ function initTabs() {
   }));
 }
 
+function fmtTokens(n) {
+  n = n || 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
+function updateTokenBadge() {
+  const node = $("#menuTokens");
+  if (node) node.textContent = "≈ " + fmtTokens(state.tokens) + " tokens IA";
+}
+
 async function loadConfig() {
   const c = await api("/api/config");
   state.llmConfigured = !!c.llm_configured;
   state.scrubEnabled = !!c.scrub_enabled;
+  state.tokens = c.tokens || 0;
+  updateTokenBadge();
   $("#aboutVersion").textContent = c.version;
   $("#aboutCount").textContent = c.count;
   const sel = $("#projsel");
@@ -231,7 +250,12 @@ async function renderVault(main) {
     head.appendChild(el("span", "nc-id", n.id));
     head.appendChild(el("span", "nc-type", n.type + (n.project ? " · " + n.project : "")));
     if (n.state) head.appendChild(el("span", "nc-badge", stateLabel(n.state)));
-    if (n.stale_at) head.appendChild(el("span", "nc-stale", "↻ " + n.stale_at));
+    if (n.stale_at) {
+      const f = freshnessLabel(n.stale_at);
+      const st = el("span", "nc-stale " + f.cls, f.text);
+      st.title = "Fresca hasta " + n.stale_at + " · después conviene revalidar (pestaña Frescura).";
+      head.appendChild(st);
+    }
     body.appendChild(head);
     body.appendChild(el("div", "nc-claim", n.claim || "—"));
     body.appendChild(el("div", "nc-reason", n.reason));
@@ -262,6 +286,15 @@ async function renderVault(main) {
 function daysUntil(iso) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   return Math.round((new Date(iso + "T00:00:00") - today) / 86400000);
+}
+// freshnessLabel muestra el vencimiento de frescura en forma RELATIVA, para que
+// no se confunda con la fecha de hoy (stale_at es futuro: cuándo revalidar).
+function freshnessLabel(iso) {
+  const d = daysUntil(iso);
+  if (d > 1) return { text: "↻ vence en " + d + "d", cls: "" };
+  if (d === 1) return { text: "↻ vence mañana", cls: "warn" };
+  if (d === 0) return { text: "↻ vence hoy", cls: "warn" };
+  return { text: "↻ vencida hace " + (-d) + "d", cls: "bad" };
 }
 
 async function renderFresh(main) {

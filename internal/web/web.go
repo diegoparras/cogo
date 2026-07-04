@@ -45,7 +45,32 @@ func New(dir string, today func() core.Date) *Server {
 	s := &Server{dir: dir, today: today, contradictions: map[string]bool{}, evidenceRoot: os.Getenv("COGO_EVIDENCE_ROOT")}
 	s.provider = s.loadProvider()
 	s.scrubber = scrub.FromEnv()
+	if u, err := readUsage(dir); err == nil {
+		llm.SeedUsage(u) // resume the cumulative token tally across restarts
+	}
 	return s
+}
+
+func usagePath(dir string) string { return filepath.Join(dir, ".cogo", "usage.json") }
+
+func readUsage(dir string) (llm.TokenUsage, error) {
+	var u llm.TokenUsage
+	b, err := os.ReadFile(usagePath(dir))
+	if err != nil {
+		return u, err
+	}
+	return u, json.Unmarshal(b, &u)
+}
+
+// flushUsage persists the running token tally next to the vault (best-effort),
+// so the counter is cumulative across restarts. Called after model-using calls.
+func (s *Server) flushUsage() {
+	b, err := json.Marshal(llm.Usage())
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(filepath.Join(s.dir, ".cogo"), 0o755)
+	_ = os.WriteFile(usagePath(s.dir), b, 0o644)
 }
 
 // Mount registers the SPA and the JSON API on the given mux.
@@ -107,11 +132,13 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		projects = append(projects, p)
 	}
 	sort.Strings(projects)
+	u := llm.Usage()
 	writeJSON(w, map[string]any{
 		"version": Version, "projects": projects, "count": len(vault),
 		"llm_configured": s.prov().Available(),
 		"scrub_enabled":  s.scrubber.Enabled(),
 		"evidence_root":  s.evidenceRoot != "",
+		"tokens":         u.Total, "token_calls": u.Calls,
 	})
 }
 
@@ -425,6 +452,7 @@ func (s *Server) handleLint(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.contradictions = rep.Contradictions()
 	s.mu.Unlock()
+	s.flushUsage()
 	writeJSON(w, map[string]any{
 		"issues": rep.Issues, "llm_used": rep.LLMUsed,
 		"pairs_checked": rep.PairsChecked, "candidate_pairs": rep.CandidatePairs,
@@ -522,6 +550,7 @@ func (s *Server) handleTestLLM(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	s.flushUsage()
 	writeJSON(w, map[string]any{"ok": true, "name": p.Name()})
 }
 
