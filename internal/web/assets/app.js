@@ -144,6 +144,7 @@ function initMenu() {
   $("#auditBtn").addEventListener("click", openAudit);
   $("#evrootsBtn").addEventListener("click", openEvidenceRoots);
   $("#exportBtn").addEventListener("click", () => { $("#menu").classList.add("hidden"); window.location.href = "/api/export"; });
+  $("#agentsBtn").addEventListener("click", openAgents);
   $("#aboutBtn").addEventListener("click", () => { $("#aboutModal").classList.remove("hidden"); menu.classList.add("hidden"); });
   $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
   $("#aboutModal").addEventListener("click", e => { if (e.target.id === "aboutModal") $("#aboutModal").classList.add("hidden"); });
@@ -795,6 +796,71 @@ async function openEvidenceRoots() {
     if (r && r.ok) { msg.textContent = "Guardado ✓"; msg.className = "ev-msg ok"; render(); }
     else { msg.textContent = (r && r.error) || "Error al guardar"; msg.className = "ev-msg bad"; }
   });
+
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  const close = () => { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+}
+
+// ---------- Instrucciones para agentes (AGENTS.md / CLAUDE.md) ----------
+// Genera el archivo bootstrap que le enseña a un agente el protocolo de COGO y
+// cómo conectarse por MCP. Opcionalmente embebe una instantánea de la memoria.
+async function openAgents() {
+  $("#menu").classList.add("hidden");
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card tokens-modal agents-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", "Instrucciones para agentes"));
+  card.appendChild(el("p", "tk-intro", "El archivo que un agente (Claude Code, Cursor…) lee al arrancar: le dice que hay una memoria COGO, cómo obedecer el color y cómo conectarse por MCP. Copialo a la raíz de tu repo."));
+
+  const ctrls = el("div", "tk-form-row ag-ctrls");
+  const seg = el("div", "seg");
+  const bAgents = el("button", "seg-btn on", "AGENTS.md");
+  const bClaude = el("button", "seg-btn", "CLAUDE.md");
+  seg.appendChild(bAgents); seg.appendChild(bClaude);
+  const digWrap = el("label", "tk-check");
+  const digCb = el("input"); digCb.type = "checkbox";
+  digWrap.appendChild(digCb); digWrap.appendChild(el("span", null, "incluir instantánea de la memoria"));
+  ctrls.appendChild(seg); ctrls.appendChild(digWrap);
+  card.appendChild(ctrls);
+
+  const pre = el("pre", "ag-pre mono");
+  card.appendChild(pre);
+
+  const actions = el("div", "tk-form-row");
+  const copy = el("button", "mini", "copiar");
+  const dl = el("button", "mini ghost", "descargar");
+  actions.appendChild(copy); actions.appendChild(dl);
+  card.appendChild(actions);
+
+  let state = { tool: "", digest: false, md: "", filename: "AGENTS.md" };
+  async function refresh() {
+    pre.textContent = "generando…";
+    const q = new URLSearchParams();
+    if (state.tool) q.set("tool", state.tool);
+    if (state.digest) q.set("digest", "1");
+    const r = await api("/api/agents-md?" + q.toString()).catch(() => null);
+    if (!r) { pre.textContent = "no se pudo generar"; return; }
+    state.md = r.markdown; state.filename = r.filename;
+    pre.textContent = r.markdown;
+  }
+  bAgents.addEventListener("click", () => { state.tool = ""; bAgents.classList.add("on"); bClaude.classList.remove("on"); refresh(); });
+  bClaude.addEventListener("click", () => { state.tool = "claude"; bClaude.classList.add("on"); bAgents.classList.remove("on"); refresh(); });
+  digCb.addEventListener("change", () => { state.digest = digCb.checked; refresh(); });
+  copy.addEventListener("click", () => { navigator.clipboard.writeText(state.md); copy.textContent = "copiado ✓"; setTimeout(() => copy.textContent = "copiar", 1400); });
+  dl.addEventListener("click", () => {
+    const blob = new Blob([state.md], { type: "text/markdown" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = state.filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  refresh();
 
   back.appendChild(card);
   document.body.appendChild(back);

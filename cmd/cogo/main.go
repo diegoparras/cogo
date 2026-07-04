@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/cogo/internal/agentsmd"
+	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 )
 
@@ -39,6 +41,8 @@ func main() {
 		err = cmdLint(args)
 	case "serve":
 		err = cmdServe(args)
+	case "agents":
+		err = cmdAgents(args)
 	case "-h", "--help", "help":
 		usage()
 		return
@@ -67,6 +71,7 @@ commands:
   verify <id>          mark a note's check passed, re-date and re-color
   lint                 deterministic checks + (optional) LLM contradiction scan
   serve                run as an MCP server over stdio (any LLM connects)
+  agents               print an AGENTS.md/CLAUDE.md that teaches an agent the COGO protocol
 
 common flags:
   -vault <dir>         vault directory (default $COGO_VAULT or ./vault)
@@ -275,6 +280,63 @@ func cmdSearch(args []string) error {
 	for _, h := range hits {
 		fmt.Printf("%-9s %-28s %s\n", colorTag(h.Color), h.ID, h.Summary)
 	}
+	return nil
+}
+
+// cmdAgents emits the bootstrap file (AGENTS.md/CLAUDE.md) that teaches a coding
+// agent the COGO protocol and how to connect. --digest embeds a static snapshot
+// of the current green/yellow notes for an agent that can't speak MCP.
+func cmdAgents(args []string) error {
+	fs := flag.NewFlagSet("agents", flag.ExitOnError)
+	dir := vaultFlag(fs)
+	claude := fs.Bool("claude", false, "name it CLAUDE.md (Claude Code) instead of AGENTS.md")
+	httpURL := fs.String("http", "", "MCP-over-HTTP endpoint for the connection snippet (else a stdio snippet)")
+	digest := fs.Bool("digest", false, "embed a static snapshot of the current green/yellow notes")
+	out := fs.String("o", "", "write to this file instead of stdout")
+	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD")
+	_ = fs.Parse(args)
+
+	name := "AGENTS.md"
+	if *claude {
+		name = "CLAUDE.md"
+	}
+	opts := agentsmd.Options{Filename: name, HTTPURL: *httpURL, Vault: *dir}
+	if *httpURL == "" {
+		if exe, err := os.Executable(); err == nil {
+			opts.Binary = exe
+		}
+	}
+	if *digest {
+		t, err := resolveToday(*todayStr)
+		if err != nil {
+			return err
+		}
+		vault, err := core.LoadVault(*dir)
+		if err != nil {
+			return err
+		}
+		core.ResolveEvidence(vault, core.LoadEvidenceRoots(*dir))
+		verdicts := core.EvaluateVault(vault, contra.Open(*dir).OpenNoteSet(), t)
+		items := make([]agentsmd.DigestItem, 0, len(vault))
+		for id, n := range vault {
+			if n.Status != "" {
+				continue // skip archived/retracted — the snapshot is the live memory
+			}
+			items = append(items, agentsmd.DigestItem{Color: verdicts[id].Color.String(), ID: id, Claim: core.Claim(n)})
+		}
+		sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+		opts.Digest = agentsmd.RenderDigest(items)
+		opts.Date = t.String()
+	}
+	md := agentsmd.Generate(opts)
+	if *out != "" {
+		if err := os.WriteFile(*out, []byte(md), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "wrote %s\n", *out)
+		return nil
+	}
+	fmt.Print(md)
 	return nil
 }
 

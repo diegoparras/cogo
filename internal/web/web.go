@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/diegoparras/cogo/internal/agentsmd"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/history"
@@ -115,6 +116,45 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/audit", s.handleAudit)
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
+	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
+}
+
+// handleAgentsMD generates the bootstrap file (AGENTS.md/CLAUDE.md) that teaches
+// a coding agent the COGO protocol and how to connect over MCP. ?tool=claude
+// names it CLAUDE.md; ?digest=1 embeds a static snapshot of the green/yellow
+// notes. The connection snippet points at this server's own /mcp URL.
+func (s *Server) handleAgentsMD(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	name := "AGENTS.md"
+	if r.URL.Query().Get("tool") == "claude" {
+		name = "CLAUDE.md"
+	}
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	opts := agentsmd.Options{Filename: name, HTTPURL: scheme + "://" + r.Host + "/mcp"}
+	if r.URL.Query().Get("digest") == "1" {
+		vault, ok := s.load(w)
+		if !ok {
+			return
+		}
+		verdicts := core.EvaluateVault(vault, s.contras(), s.today())
+		items := make([]agentsmd.DigestItem, 0, len(vault))
+		for id, n := range vault {
+			if n.Status != "" {
+				continue // archived/retracted are not part of the live memory
+			}
+			items = append(items, agentsmd.DigestItem{Color: verdicts[id].Color.String(), ID: id, Claim: core.Claim(n)})
+		}
+		sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+		opts.Digest = agentsmd.RenderDigest(items)
+		opts.Date = s.today().String()
+	}
+	writeJSON(w, map[string]any{"filename": name, "markdown": agentsmd.Generate(opts)})
 }
 
 // handleExport streams the whole vault as a zip so a user can back it up or move
