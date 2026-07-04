@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/diegoparras/cogo/internal/auth"
+	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/llm"
@@ -104,6 +105,11 @@ func newMCPServer(dir string) *mcp.Server {
 		core.ResolveEvidence(v, core.LoadEvidenceRoots(dir))
 		return v, nil
 	}
+	// contradictions is the set of note ids under an OPEN contradiction, read fresh
+	// from the persisted store each call (tiny file). Feeding it to the color engine
+	// is what makes an agent over MCP see red-by-contradiction — the same paint the
+	// visor shows — instead of a color blind to the store the human curates.
+	contradictions := func() map[string]bool { return contra.Open(dir).OpenNoteSet() }
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "pack",
@@ -113,7 +119,7 @@ func newMCPServer(dir string) *mcp.Server {
 		if err != nil {
 			return errResult(err), nil, nil
 		}
-		p := core.BuildPack(vault, nil, core.PackOptions{Query: in.Query, Project: in.Project, Budget: in.Budget, Today: today()})
+		p := core.BuildPack(vault, contradictions(), core.PackOptions{Query: in.Query, Project: in.Project, Budget: in.Budget, Today: today()})
 		return textResult(p.Markdown), nil, nil
 	})
 
@@ -125,7 +131,7 @@ func newMCPServer(dir string) *mcp.Server {
 		if err != nil {
 			return errResult(err), nil, nil
 		}
-		hits := core.Search(vault, nil, in.Query, in.Project, today(), in.Limit, in.IncludeArchived)
+		hits := core.Search(vault, contradictions(), in.Query, in.Project, today(), in.Limit, in.IncludeArchived)
 		if len(hits) == 0 {
 			return textResult("no matching notes"), nil, nil
 		}
@@ -152,7 +158,7 @@ func newMCPServer(dir string) *mcp.Server {
 		if !ok {
 			return errResult(fmt.Errorf("no note with id %q", in.ID)), nil, nil
 		}
-		n.Apply(core.Evaluate(n, vault, nil, today()))
+		n.Apply(core.Evaluate(n, vault, contradictions(), today()))
 		md, err := core.MarshalNote(n)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -188,15 +194,16 @@ func newMCPServer(dir string) *mcp.Server {
 		if err != nil {
 			return errResult(err), nil, nil
 		}
+		cx := contradictions()
 		existing, had := vault[id]
 		if had {
-			if ev := core.Evaluate(existing, vault, nil, today()); ev.Color == core.Green {
+			if ev := core.Evaluate(existing, vault, cx, today()); ev.Color == core.Green {
 				return errResult(fmt.Errorf("note %q exists and is green; not overwritten — verify it or use a new id", id)), nil, nil
 			}
 		}
 		vault[id] = note
 		core.ResolveEvidence(vault, core.LoadEvidenceRoots(dir)) // resolve the new note's own refs
-		v := core.Evaluate(note, vault, nil, today())
+		v := core.Evaluate(note, vault, cx, today())
 		note.Apply(v)
 
 		path := filepath.Join(dir, id+".md")
@@ -225,7 +232,7 @@ func newMCPServer(dir string) *mcp.Server {
 		}
 		n.Check.Status = "passed"
 		n.LastVerified = today()
-		v := core.Evaluate(n, vault, nil, today())
+		v := core.Evaluate(n, vault, contradictions(), today())
 		n.Apply(v)
 
 		path := n.Path
