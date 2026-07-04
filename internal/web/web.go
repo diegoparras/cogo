@@ -20,6 +20,7 @@ import (
 
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/scrub"
@@ -91,10 +92,12 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/pack", s.handlePack)
 	mux.HandleFunc("/api/graph", s.handleGraph)
 	mux.HandleFunc("/api/note", s.handleNote)
+	mux.HandleFunc("/api/note/history", s.handleHistory)
 	mux.HandleFunc("/api/verify", s.handleVerify)
 	mux.HandleFunc("/api/archive", s.handleArchive)
 	mux.HandleFunc("/api/restore", s.handleRestore)
 	mux.HandleFunc("/api/delete", s.handleDelete)
+	mux.HandleFunc("/api/trash", s.handleTrash)
 	mux.HandleFunc("/api/preview", s.handlePreview)
 	mux.HandleFunc("/api/capture", s.handleCapture)
 	mux.HandleFunc("/api/lint", s.handleLint)
@@ -253,6 +256,43 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		"depends_on": n.DependsOn, "supersedes": n.Supersedes, "caused_by": n.CausedBy,
 		"color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(),
 	})
+}
+
+// handleTrash lists the deleted notes (GET) and restores or purges one (POST).
+func (s *Server) handleTrash(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, map[string]any{"trash": core.ListTrash(s.dir)})
+	case http.MethodPost:
+		id, action := r.URL.Query().Get("id"), r.URL.Query().Get("action")
+		var err error
+		switch action {
+		case "restore":
+			err = core.RestoreTrash(s.dir, id)
+		case "purge":
+			err = core.PurgeTrash(s.dir, id)
+		default:
+			http.Error(w, "action must be restore or purge", http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "id": id, "action": action})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleHistory returns a note's recorded versions (when/why its color changed).
+func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id required", http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]any{"versions": history.Load(s.dir, id)})
 }
 
 // handleVerify is the "revalidate" action: the check passed as of today.
@@ -470,8 +510,17 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := filepath.Join(s.dir, n.ID+".md")
-	if existing, ok := vault[n.ID]; ok && existing.Path != "" {
-		path = existing.Path
+	if existing, ok := vault[n.ID]; ok {
+		if existing.Path != "" {
+			path = existing.Path
+		}
+		// A cosmetic edit (claim, evidence and check all unchanged) keeps the
+		// verification — fixing a typo shouldn't cost the green. A material edit
+		// (the claim/evidence/check changed) resets to not_run, as before.
+		if cosmeticEdit(existing, n) {
+			n.Check.Status = existing.Check.Status
+			n.LastVerified = existing.LastVerified
+		}
 	}
 	vault[n.ID] = n
 	core.ResolveEvidence(vault, s.evidenceRoot)
@@ -482,6 +531,21 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"id": n.ID, "color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String()})
+}
+
+// cosmeticEdit reports whether the new version leaves the CLAIM, the evidence and
+// the check test unchanged — i.e. nothing that the verification was about moved,
+// so the note's passed check and last_verified date can carry over.
+func cosmeticEdit(a, b *core.Note) bool {
+	if core.Claim(a) != core.Claim(b) || a.Check.Test != b.Check.Test || len(a.Evidence) != len(b.Evidence) {
+		return false
+	}
+	for i := range a.Evidence {
+		if a.Evidence[i].Kind != b.Evidence[i].Kind || a.Evidence[i].Ref != b.Evidence[i].Ref {
+			return false
+		}
+	}
+	return true
 }
 
 // handleLint runs the maintenance pass and remembers any contradictions so they

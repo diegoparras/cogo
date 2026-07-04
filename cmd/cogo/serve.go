@@ -12,6 +12,7 @@ import (
 
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/suasion"
@@ -34,6 +35,11 @@ func cmdServe(args []string) error {
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
 		return err
 	}
+	// Record a per-note history line on every write (stdio and HTTP both go
+	// through core.WriteNoteFile). The vault dir is derived from the note path.
+	core.SetWriteHook(func(path string, n *core.Note) {
+		history.Record(filepath.Dir(path), n.ID, n.Confidence, n.ColorReason, core.Claim(n))
+	})
 	srv := newMCPServer(*dir)
 
 	// stdio: the local default, launched per session by the LLM client.

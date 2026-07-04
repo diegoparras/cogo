@@ -140,6 +140,7 @@ function initMenu() {
   document.addEventListener("click", () => menu.classList.add("hidden"));
   $("#settingsBtn").addEventListener("click", openSettings);
   $("#tokensBtn").addEventListener("click", openTokens);
+  $("#trashBtn").addEventListener("click", openTrash);
   $("#aboutBtn").addEventListener("click", () => { $("#aboutModal").classList.remove("hidden"); menu.classList.add("hidden"); });
   $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
   $("#aboutModal").addEventListener("click", e => { if (e.target.id === "aboutModal") $("#aboutModal").classList.add("hidden"); });
@@ -626,6 +627,62 @@ async function openTokens() {
   document.addEventListener("keydown", onKey);
 }
 
+// ---------- Papelera ----------
+function trashRow(t, refresh) {
+  const row = el("div", "tk-row");
+  const info = el("div", "tk-info");
+  const head = el("div", "tk-name");
+  head.appendChild(el("span", "tk-label", t.id));
+  head.appendChild(el("span", "nc-type", t.type + (t.project ? " · " + t.project : "")));
+  info.appendChild(head);
+  if (t.claim) info.appendChild(el("div", "tk-meta", t.claim));
+  row.appendChild(info);
+  const restore = el("button", "nc-act", "restaurar");
+  restore.addEventListener("click", async () => {
+    const r = await api("/api/trash?id=" + encodeURIComponent(t.id) + "&action=restore", { method: "POST" });
+    if (r && r.ok === false) { await confirmDialog({ title: "No se pudo restaurar", message: r.error, confirmText: "Entendido" }); }
+    refresh(); render();
+  });
+  const purge = el("button", "nc-act danger", "borrar def.");
+  purge.addEventListener("click", async () => {
+    const ok = await confirmDialog({ title: "Borrar para siempre", note: t.id, message: "Se elimina del disco definitivamente. Esto NO se puede deshacer.", confirmText: "Borrar", danger: true });
+    if (!ok) return;
+    await api("/api/trash?id=" + encodeURIComponent(t.id) + "&action=purge", { method: "POST" });
+    refresh();
+  });
+  row.appendChild(restore); row.appendChild(purge);
+  return row;
+}
+
+async function openTrash() {
+  $("#menu").classList.add("hidden");
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card tokens-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", "Papelera"));
+  card.appendChild(el("p", "tk-intro", "Notas borradas. Siguen en disco (.cogo/trash) — restauralas al vault o borralas para siempre."));
+  const list = el("div", "tk-list");
+  card.appendChild(list);
+  async function refresh() {
+    const r = await api("/api/trash").catch(() => null);
+    list.innerHTML = "";
+    const items = (r && r.trash) || [];
+    if (!items.length) { list.appendChild(el("div", "tk-empty", "La papelera está vacía.")); return; }
+    items.forEach(t => list.appendChild(trashRow(t, refresh)));
+  }
+  refresh();
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  const close = () => { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+}
+
 // openNoteModal: vista de solo lectura de una nota (clic en un nodo del grafo).
 // Renderiza el cuerpo como Markdown, muestra evidencia (con badges), relaciones y
 // un botón "Editar". Se monta dentro del elemento fullscreen si hay uno activo.
@@ -674,6 +731,26 @@ async function openNoteModal(id) {
       rl.appendChild(r);
     });
     card.appendChild(rl);
+  }
+
+  const hist = await api("/api/note/history?id=" + encodeURIComponent(id)).catch(() => null);
+  if (hist && hist.versions && hist.versions.length) {
+    const hb = el("div", "nm-block");
+    hb.appendChild(el("div", "nm-label", "Historia — " + hist.versions.length + " versión(es)"));
+    const tl = el("div", "nm-hist");
+    hist.versions.slice().reverse().forEach(v => {
+      const row = el("div", "nm-hist-row");
+      const dot = el("span", "dot " + cls(v.color));
+      row.appendChild(dot);
+      const info = el("div", "nm-hist-info");
+      const t = new Date(v.time);
+      info.appendChild(el("span", "nm-hist-time", isNaN(+t) ? v.time : t.toLocaleString()));
+      info.appendChild(el("span", "nm-hist-reason", colorWord(v.color) + " · " + v.reason));
+      row.appendChild(info);
+      tl.appendChild(row);
+    });
+    hb.appendChild(tl);
+    card.appendChild(hb);
   }
 
   const acc = el("div", "modal-acciones");
