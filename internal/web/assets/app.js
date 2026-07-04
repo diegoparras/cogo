@@ -890,6 +890,24 @@ async function openNoteModal(id) {
   card.appendChild(meta);
   card.appendChild(el("div", "nm-reason", n.reason));
 
+  // La traza detrás del rojo-por-contradicción: con qué nota(s) choca y por qué.
+  if (n.contradictions && n.contradictions.length) {
+    const cbx = el("div", "nm-contra");
+    cbx.appendChild(el("div", "nm-contra-tit", "⚠ Contradicciones abiertas"));
+    n.contradictions.forEach(c => {
+      const row = el("div", "nm-contra-row");
+      const head = el("div", "nm-contra-head");
+      head.appendChild(el("span", null, "contradice "));
+      const link = el("button", "nm-contra-id", c.other);
+      link.addEventListener("click", () => { close(); openNoteModal(c.other); });
+      head.appendChild(link);
+      row.appendChild(head);
+      if (c.reason) row.appendChild(el("div", "nm-contra-reason", c.reason));
+      cbx.appendChild(row);
+    });
+    card.appendChild(cbx);
+  }
+
   const body = el("div", "nm-body md-render");
   body.innerHTML = mdToHtml(n.body);
   card.appendChild(body);

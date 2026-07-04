@@ -405,11 +405,16 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := core.Evaluate(n, vault, s.contras(), s.today())
+	var conflicts []contra.Conflict
+	if s.contra != nil {
+		conflicts = s.contra.ForNote(n.ID) // the trace behind a red-by-contradiction verdict
+	}
 	writeJSON(w, map[string]any{
 		"id": n.ID, "type": n.Type, "project": n.Project, "body": n.Body,
 		"evidence": n.Evidence, "check_test": n.Check.Test,
 		"depends_on": n.DependsOn, "supersedes": n.Supersedes, "caused_by": n.CausedBy,
 		"color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(),
+		"contradictions": conflicts,
 	})
 }
 

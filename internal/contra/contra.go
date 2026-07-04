@@ -143,6 +143,35 @@ func (s *Store) Resolve(id string) bool { return s.mutate(id, true, "") }
 // never paints red and is never re-flagged by lint.
 func (s *Store) Dismiss(id string) bool { return s.mutate(id, false, StatusDismissed) }
 
+// Conflict is one open contradiction seen from a single note's side: which OTHER
+// note it clashes with, and why. It turns the bare red color into a trace — the
+// agent (or the visor) can see what to resolve instead of just "this is red".
+type Conflict struct {
+	ID     string `json:"id"`     // the contradiction's stable id
+	Other  string `json:"other"`  // the note on the other side of the clash
+	Reason string `json:"reason"` // why they contradict (from the lint pass)
+}
+
+// ForNote returns the open contradictions that touch note id, each pointing at
+// the note on the other side. Empty if the note is in no open contradiction.
+func (s *Store) ForNote(id string) []Conflict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Conflict
+	for _, c := range s.items {
+		if c.Status != StatusOpen {
+			continue
+		}
+		switch id {
+		case c.A:
+			out = append(out, Conflict{ID: c.ID, Other: c.B, Reason: c.Reason})
+		case c.B:
+			out = append(out, Conflict{ID: c.ID, Other: c.A, Reason: c.Reason})
+		}
+	}
+	return out
+}
+
 // OpenNoteSet is the set of note ids under an open contradiction — fed to
 // core.Evaluate so those notes go red.
 func (s *Store) OpenNoteSet() map[string]bool {

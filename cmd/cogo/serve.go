@@ -18,8 +18,8 @@ import (
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/tokens"
-	"github.com/diegoparras/cogo/internal/xray"
 	"github.com/diegoparras/cogo/internal/web"
+	"github.com/diegoparras/cogo/internal/xray"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -76,11 +76,11 @@ func cmdServe(args []string) error {
 	authn.RegisterRoutes(mux)              // accessory: OIDC login (federated only)
 
 	tls := os.Getenv("COOKIE_SECURE") == "1"
-	var h http.Handler = enforceReadOnly(mux)  // read-only tokens can't write
-	h = auditMiddleware(*dir)(h)               // audit trail (who called which tool)
-	h = authn.Gate(h)                          // auth (cookie or Bearer), stamps caller+scope
-	h = newIPLimiter(20, 60).middleware(h)     // per-IP rate limit
-	h = securityHeaders(h, tls)                // conservative headers
+	var h http.Handler = enforceReadOnly(mux) // read-only tokens can't write
+	h = auditMiddleware(*dir)(h)              // audit trail (who called which tool)
+	h = authn.Gate(h)                         // auth (cookie or Bearer), stamps caller+scope
+	h = newIPLimiter(20, 60).middleware(h)    // per-IP rate limit
+	h = securityHeaders(h, tls)               // conservative headers
 
 	insecure := !authn.Enabled() && !isLoopback(*httpAddr)
 	fmt.Fprintf(os.Stderr, "cogo: serving on %s [auth=%s] — visor at /, MCP at /mcp (vault %s)\n", *httpAddr, authn.Mode(), *dir)
@@ -158,12 +158,29 @@ func newMCPServer(dir string) *mcp.Server {
 		if !ok {
 			return errResult(fmt.Errorf("no note with id %q", in.ID)), nil, nil
 		}
-		n.Apply(core.Evaluate(n, vault, contradictions(), today()))
+		cstore := contra.Open(dir)
+		n.Apply(core.Evaluate(n, vault, cstore.OpenNoteSet(), today()))
 		md, err := core.MarshalNote(n)
 		if err != nil {
 			return errResult(err), nil, nil
 		}
-		return textResult(string(md)), nil, nil
+		out := string(md)
+		// The trace behind a red-by-contradiction verdict: name the clashing
+		// note(s) and why, so the agent can resolve instead of just seeing "red".
+		if cs := cstore.ForNote(in.ID); len(cs) > 0 {
+			var b strings.Builder
+			b.WriteString(out)
+			b.WriteString("\n## ⚠ Contradicciones abiertas\n\nEsta nota es roja porque choca con otra(s). Resolvé el conflicto antes de apoyarte en ella:\n\n")
+			for _, c := range cs {
+				fmt.Fprintf(&b, "- contradice `%s`", c.Other)
+				if c.Reason != "" {
+					fmt.Fprintf(&b, " — %s", c.Reason)
+				}
+				b.WriteByte('\n')
+			}
+			out = b.String()
+		}
+		return textResult(out), nil, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{

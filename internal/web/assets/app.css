@@ -204,6 +204,13 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .nm-type { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .nm-color { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
 .nm-reason { font-size: 12px; color: var(--muted); font-style: italic; margin-bottom: 10px; }
+.nm-contra { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--err) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--err) 30%, var(--border)); }
+.nm-contra-tit { font-size: 12px; font-weight: 700; color: var(--err); margin-bottom: 6px; }
+.nm-contra-row { font-size: 13px; }
+.nm-contra-row + .nm-contra-row { margin-top: 7px; padding-top: 7px; border-top: 1px solid color-mix(in srgb, var(--err) 18%, var(--border)); }
+.nm-contra-head { color: var(--muted-2); }
+.nm-contra-id { font-family: var(--mono); font-size: 12.5px; color: var(--err); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.nm-contra-reason { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .nm-body { border-top: 1px solid var(--hairline); padding-top: 12px; }
 .nm-block { margin-top: 14px; border-top: 1px solid var(--hairline); padding-top: 10px; }
 .nm-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }

@@ -51,3 +51,31 @@ func TestMergeDismissResolveAndPersist(t *testing.T) {
 		t.Error("a contradiction whose note vanished must be pruned")
 	}
 }
+
+func TestForNote(t *testing.T) {
+	dir := t.TempDir()
+	s := Open(dir)
+	s.Merge([]Found{{A: "a", B: "b", Reason: "a vs b"}, {A: "a", B: "c", Reason: "a vs c"}, {A: "d", B: "e", Reason: "d vs e"}}, "2026-07-04", all)
+
+	got := s.ForNote("a")
+	if len(got) != 2 {
+		t.Fatalf("note a is in 2 contradictions, got %d", len(got))
+	}
+	others := map[string]string{got[0].Other: got[0].Reason, got[1].Other: got[1].Reason}
+	if others["b"] != "a vs b" || others["c"] != "a vs c" {
+		t.Errorf("ForNote must name the OTHER side and its reason, got %+v", got)
+	}
+	// Seen from the other side too.
+	if bs := s.ForNote("b"); len(bs) != 1 || bs[0].Other != "a" {
+		t.Errorf("b should point back at a, got %+v", bs)
+	}
+	// A note in no contradiction gets nothing.
+	if len(s.ForNote("z")) != 0 {
+		t.Error("a note in no contradiction should return no conflicts")
+	}
+	// Dismissed contradictions drop out of the trace.
+	s.Dismiss(pairID("a", "b"))
+	if got := s.ForNote("a"); len(got) != 1 || got[0].Other != "c" {
+		t.Errorf("dismissed pair must not appear in ForNote, got %+v", got)
+	}
+}
