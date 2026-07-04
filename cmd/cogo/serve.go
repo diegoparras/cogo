@@ -145,6 +145,7 @@ func newMCPServer(dir string) *mcp.Server {
 			ID: id, Type: in.Type, Project: in.Project, Body: strings.TrimSpace(in.Body),
 			LastVerified: today(),
 			Check:        core.Check{Test: in.CheckTest, Status: "not_run"},
+			DependsOn:    in.DependsOn, Supersedes: in.Supersedes, CausedBy: in.CausedBy,
 		}
 		for _, e := range in.Evidence {
 			note.Evidence = append(note.Evidence, core.Evidence{Kind: e.Kind, Ref: e.Ref})
@@ -331,12 +332,15 @@ type evidenceIn struct {
 }
 
 type captureIn struct {
-	Type      string       `json:"type" jsonschema:"one of decision|bug|runbook|architecture|constraint|command|mistake"`
-	Body      string       `json:"body" jsonschema:"the note in markdown: a Claim, optional Refutation, and a Minimal check"`
-	Project   string       `json:"project,omitempty" jsonschema:"the project this note belongs to"`
-	ID        string       `json:"id,omitempty" jsonschema:"stable id; if omitted it is derived from the claim"`
-	Evidence  []evidenceIn `json:"evidence,omitempty" jsonschema:"supporting artifacts; each needs a kind and a ref to a real artifact"`
-	CheckTest string       `json:"check_test,omitempty" jsonschema:"the minimal test that would verify the claim"`
+	Type       string       `json:"type" jsonschema:"one of decision|bug|runbook|architecture|constraint|command|mistake"`
+	Body       string       `json:"body" jsonschema:"the note in markdown: a Claim, optional Refutation, and a Minimal check"`
+	Project    string       `json:"project,omitempty" jsonschema:"the project this note belongs to"`
+	ID         string       `json:"id,omitempty" jsonschema:"stable id; if omitted it is derived from the claim"`
+	Evidence   []evidenceIn `json:"evidence,omitempty" jsonschema:"supporting artifacts; each needs a kind and a ref to a real artifact"`
+	CheckTest  string       `json:"check_test,omitempty" jsonschema:"the minimal test that would verify the claim"`
+	DependsOn  []string     `json:"depends_on,omitempty" jsonschema:"ids of notes this one hard-depends on; a red dependency makes this note red too"`
+	Supersedes string       `json:"supersedes,omitempty" jsonschema:"id of a note this one replaces; the old note is archived (buried)"`
+	CausedBy   string       `json:"caused_by,omitempty" jsonschema:"id of the note that caused this finding"`
 }
 
 type transcriptTurnIn struct {

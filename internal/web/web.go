@@ -176,6 +176,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"id": n.ID, "type": n.Type, "project": n.Project, "body": n.Body,
 		"evidence": n.Evidence, "check_test": n.Check.Test,
+		"depends_on": n.DependsOn, "supersedes": n.Supersedes, "caused_by": n.CausedBy,
 		"color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(),
 	})
 }
@@ -300,12 +301,15 @@ func stateOrActive(st string) string {
 
 // draft is what the editor sends: a note's inputs. COGO computes the color.
 type draft struct {
-	ID        string          `json:"id"`
-	Type      string          `json:"type"`
-	Project   string          `json:"project"`
-	Body      string          `json:"body"`
-	Evidence  []core.Evidence `json:"evidence"`
-	CheckTest string          `json:"check_test"`
+	ID         string          `json:"id"`
+	Type       string          `json:"type"`
+	Project    string          `json:"project"`
+	Body       string          `json:"body"`
+	Evidence   []core.Evidence `json:"evidence"`
+	CheckTest  string          `json:"check_test"`
+	DependsOn  []string        `json:"depends_on"`
+	Supersedes string          `json:"supersedes"`
+	CausedBy   string          `json:"caused_by"`
 }
 
 func (s *Server) noteFromDraft(d draft) *core.Note {
@@ -325,7 +329,24 @@ func (s *Server) noteFromDraft(d draft) *core.Note {
 		LastVerified: s.today(),
 		Evidence:     clean,
 		Check:        core.Check{Test: d.CheckTest, Status: "not_run"},
+		DependsOn:    cleanIDs(d.DependsOn),
+		Supersedes:   strings.TrimSpace(d.Supersedes),
+		CausedBy:     strings.TrimSpace(d.CausedBy),
 	}
+}
+
+// cleanIDs drops blank entries from a relation list.
+func cleanIDs(ids []string) []string {
+	out := ids[:0]
+	for _, id := range ids {
+		if s := strings.TrimSpace(id); s != "" {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // handlePreview computes the color of a draft WITHOUT saving — the live preview.

@@ -111,6 +111,10 @@ button.danger-btn:hover { background: color-mix(in srgb, var(--err) 84%, #000); 
 .seg-btn { background: none; color: var(--muted-2); border: 0; border-radius: 999px; padding: 5px 15px; font-size: 12.5px; font-weight: 600; transition: background .15s, color .15s; }
 .seg-btn:hover { background: var(--card-2); }
 .seg-btn.on { background: var(--accent); color: var(--on-accent); }
+/* leyenda de aristas del grafo */
+.edge-legend { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 10px; padding: 0 2px; }
+.el-item { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted-2); }
+.el-swatch { flex: 0 0 auto; }
 /* El grafo es siempre una "constelación" sobre grafito profundo, en cualquier
    tema — es el momento espectacular del visor (así luce el glow y el 3D). */
 .graph-wrap { position: relative; height: clamp(360px, 66vh, 620px); border-radius: var(--radius-lg);
@@ -164,6 +168,18 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .ev-status.ok { color: var(--ok); }
 .ev-status.bad { color: var(--err); }
 .ev-status.muted { color: var(--muted); font-weight: 500; }
+
+/* ---- relaciones manuales en el editor ---- */
+.rel-wrap { display: flex; flex-direction: column; gap: 11px; }
+.rel-field { display: flex; flex-direction: column; gap: 5px; }
+.rel-lbl { font-size: 11.5px; color: var(--muted); }
+.rel-deps { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rel-chip { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 12px;
+  color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 3px 5px 3px 11px; }
+.rel-chip-x { width: 18px; height: 18px; padding: 0; font-size: 13px; line-height: 1; border-radius: 50%;
+  border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.rel-chip-x:hover { color: var(--err); background: var(--panel); }
+.rel-add, .rel-field > select { max-width: 260px; }
 .color-preview { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--border);
   border-left: 3px solid var(--c, var(--border)); border-radius: var(--radius); background: var(--card-2); }
 .color-preview strong { font-size: 13.5px; }

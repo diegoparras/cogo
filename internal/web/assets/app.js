@@ -120,6 +120,29 @@ function legend(notes) {
   return wrap;
 }
 
+// edgeLegend: muestra qué significa cada color/estilo de arista presente en el grafo.
+function edgeLegend(edges) {
+  const kinds = window.CogoGraphKinds || {};
+  const present = new Set(edges.map(e => e.kind));
+  const wrap = el("div", "edge-legend");
+  ["depends_on", "supersedes", "caused_by", "wikilink"].forEach(k => {
+    if (!present.has(k) || !kinds[k]) return;
+    const item = el("span", "el-item");
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("width", "26"); svg.setAttribute("height", "10"); svg.setAttribute("class", "el-swatch");
+    const ln = document.createElementNS(NS, "line");
+    ln.setAttribute("x1", "1"); ln.setAttribute("y1", "5"); ln.setAttribute("x2", "25"); ln.setAttribute("y2", "5");
+    ln.setAttribute("stroke", kinds[k].color); ln.setAttribute("stroke-width", "2.4"); ln.setAttribute("stroke-linecap", "round");
+    if (kinds[k].dash.length) ln.setAttribute("stroke-dasharray", kinds[k].dash.join(" "));
+    svg.appendChild(ln);
+    item.appendChild(svg);
+    item.appendChild(el("span", null, kinds[k].label));
+    wrap.appendChild(item);
+  });
+  return wrap;
+}
+
 function render() {
   const main = $("#main");
   main.innerHTML = "";
@@ -327,6 +350,8 @@ async function renderGraph(main) {
   bar.appendChild(seg); bar.appendChild(reset);
   main.appendChild(bar);
 
+  if (edges.length) main.appendChild(edgeLegend(edges));
+
   const wrap = el("div", "graph-wrap");
   main.appendChild(wrap);
 
@@ -371,6 +396,21 @@ function select(options, value, onchange) {
   return s;
 }
 
+// relField/relSelect: piezas del bloque de relaciones del editor.
+function relField(label, node) {
+  const w = el("div", "rel-field");
+  w.appendChild(el("label", "rel-lbl", label));
+  w.appendChild(node);
+  return w;
+}
+function relSelect(ids, value, onchange) {
+  const s = el("select");
+  const none = el("option", null, "— ninguna —"); none.value = ""; s.appendChild(none);
+  ids.forEach(o => { const op = el("option", null, o); op.value = o; if (o === value) op.selected = true; s.appendChild(op); });
+  s.addEventListener("change", () => onchange(s.value));
+  return s;
+}
+
 // paintEvBadge pinta el resultado del resolver de evidencia en una fila del editor.
 function paintEvBadge(node, status) {
   const map = {
@@ -385,10 +425,12 @@ function paintEvBadge(node, status) {
 }
 
 async function openEditor(id) {
-  let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "" };
+  let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "", depends_on: [], supersedes: "", caused_by: "" };
+  const all = await api("/api/notes?archived=1").catch(() => []);
+  state.editIds = (all || []).map(n => n.id);
   if (id) {
     const n = await api("/api/note?id=" + encodeURIComponent(id));
-    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status })), check_test: n.check_test || "" };
+    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "" };
   }
   state.editing = d;
   render();
@@ -466,6 +508,37 @@ function renderEditor(main) {
   const chk = el("input"); chk.value = d.check_test; chk.placeholder = "test mínimo que verificaría el claim";
   chk.addEventListener("input", () => { d.check_test = chk.value; preview(); });
   form.appendChild(field("Check mínimo", chk));
+
+  // ---- relaciones (manuales) ----
+  const others = (state.editIds || []).filter(x => x !== d.id);
+  const relWrap = el("div", "rel-wrap");
+  // depends_on: multi, con chips
+  const depBox = el("div", "rel-deps");
+  function renderDeps() {
+    depBox.innerHTML = "";
+    d.depends_on.forEach((dep, i) => {
+      const chip = el("span", "rel-chip");
+      chip.appendChild(el("span", null, dep));
+      const x = el("button", "rel-chip-x", "×");
+      x.addEventListener("click", () => { d.depends_on.splice(i, 1); renderDeps(); preview(); });
+      chip.appendChild(x);
+      depBox.appendChild(chip);
+    });
+    const avail = others.filter(o => !d.depends_on.includes(o));
+    if (avail.length) {
+      const pick = el("select", "rel-add");
+      const ph = el("option", null, "+ depende de…"); ph.value = ""; pick.appendChild(ph);
+      avail.forEach(o => { const op = el("option", null, o); op.value = o; pick.appendChild(op); });
+      pick.addEventListener("change", () => { if (pick.value) { d.depends_on.push(pick.value); renderDeps(); preview(); } });
+      depBox.appendChild(pick);
+    }
+  }
+  renderDeps();
+  relWrap.appendChild(relField("Depende de (dura: si es roja, esta cae a roja)", depBox));
+  // supersedes + caused_by: single
+  relWrap.appendChild(relField("Reemplaza a (la archiva)", relSelect(others, d.supersedes, v => { d.supersedes = v; preview(); })));
+  relWrap.appendChild(relField("Causada por", relSelect(others, d.caused_by, v => { d.caused_by = v; preview(); })));
+  form.appendChild(field("Relaciones (opcional) — o escribí [[id]] en la nota", relWrap));
 
   form.appendChild(field("Color computado (preview en vivo)", prev));
 

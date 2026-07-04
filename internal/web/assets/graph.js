@@ -37,13 +37,15 @@
     return () => { h += 0x6D2B79F5; let t = h; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
 
-  // Cuatro estilos de línea BIEN distintos: sólida · guión largo · guión · punteada.
+  // Cada relación: color PROPIO + estilo de línea distinto, para leerlas de un
+  // vistazo. Azul=dependencia dura · ámbar=reemplaza · violeta=causa · gris=wiki.
   const KIND = {
-    depends_on: { dash: [], w: 2, dir: true },
-    supersedes: { dash: [11, 6], w: 2.2, dir: true },
-    caused_by: { dash: [4, 4], w: 1.9, dir: true },
-    wikilink: { dash: [1.5, 5], w: 1.4, dir: false },
+    depends_on: { dash: [], w: 2.6, dir: true, color: "#5aa9e6", label: "depende de" },
+    supersedes: { dash: [10, 6], w: 2.6, dir: true, color: "#e0913a", label: "reemplaza a" },
+    caused_by: { dash: [4, 5], w: 2.3, dir: true, color: "#c07ad6", label: "causada por" },
+    wikilink: { dash: [1.5, 5], w: 1.7, dir: false, color: "#8b93a3", label: "se relaciona" },
   };
+  window.CogoGraphKinds = KIND; // la leyenda de aristas lo lee
 
   function mount(container, data, opts) {
     opts = opts || {};
@@ -168,10 +170,7 @@
 
     function edgeStyle(e) {
       const k = KIND[e.kind] || KIND.wikilink;
-      let stroke = T.hair, w = k.w;
-      if (e.kind === "depends_on") stroke = rgba(hexToRgb(colorFor(T, e.a.color)), .45);
-      else if (e.kind === "supersedes") stroke = rgba(hexToRgb(T.accent), .6);
-      return { stroke, w, dash: k.dash, dir: k.dir };
+      return { stroke: k.color, w: k.w, dash: k.dash, dir: k.dir };
     }
 
     function draw() {
@@ -186,7 +185,7 @@
       for (const e of edges) {
         const st = edgeStyle(e);
         const touches = e.a === hovered || e.b === hovered;
-        ctx.globalAlpha = focusSet ? (touches ? 0.95 : 0.08) : (mode === "3d" ? 0.55 : 0.8);
+        ctx.globalAlpha = focusSet ? (touches ? 1 : 0.07) : (mode === "3d" ? 0.72 : 0.92);
         ctx.strokeStyle = st.stroke; ctx.lineWidth = st.w; ctx.setLineDash(st.dash);
         const ax = e.a.sx, ay = e.a.sy, bx = e.b.sx, by = e.b.sy;
         ctx.beginPath();
@@ -253,7 +252,7 @@
     function arrow(bx, by, cx, cy, target, color) {
       const r = radius(target) + 3;
       let dx = bx - cx, dy = by - cy, L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
-      const tx = bx - dx * r, ty = by - dy * r, s = 6.5;
+      const tx = bx - dx * r, ty = by - dy * r, s = 8.5;
       ctx.setLineDash([]); ctx.fillStyle = color; ctx.globalAlpha = ctx.globalAlpha;
       ctx.beginPath();
       ctx.moveTo(tx, ty);
