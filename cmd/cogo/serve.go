@@ -47,17 +47,27 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Fail-safe: never put an unauthenticated vault + MCP on a public interface.
+	if err := checkExposure(*httpAddr, authn); err != nil {
+		return err
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	web.New(*dir, today).Mount(mux) // human face: visor at /, JSON API at /api
 	authn.RegisterRoutes(mux)       // accessory: OIDC login (federated only)
-	mode := "standalone"
-	if authn.Enabled() {
-		mode = "federado (Lockatus)"
+
+	tls := os.Getenv("COOKIE_SECURE") == "1"
+	var h http.Handler = authn.Gate(mux)   // auth (cookie or Bearer)
+	h = newIPLimiter(20, 60).middleware(h) // per-IP rate limit
+	h = securityHeaders(h, tls)            // conservative headers
+
+	insecure := !authn.Enabled() && !isLoopback(*httpAddr)
+	fmt.Fprintf(os.Stderr, "cogo: serving on %s [auth=%s] — visor at /, MCP at /mcp (vault %s)\n", *httpAddr, authn.Mode(), *dir)
+	if insecure {
+		fmt.Fprintf(os.Stderr, "  ⚠ WARNING: public interface with no auth (COGO_ALLOW_INSECURE=1). Set COGO_MCP_TOKEN for a VPS.\n")
 	}
-	fmt.Fprintf(os.Stderr, "cogo: serving on %s [%s] — visor at /, MCP at /mcp (vault %s)\n", *httpAddr, mode, *dir)
-	return http.ListenAndServe(*httpAddr, authn.Gate(mux))
+	return http.ListenAndServe(*httpAddr, h)
 }
 
 func newMCPServer(dir string) *mcp.Server {

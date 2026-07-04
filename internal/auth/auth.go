@@ -13,6 +13,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,8 @@ const sessionTTL = 12 * time.Hour
 
 type Auth struct {
 	enabled      bool
+	federated    bool   // OIDC (Lockatus) active
+	token        string // COGO_MCP_TOKEN: a shared Bearer secret for programmatic clients (MCP)
 	secret       []byte
 	cookieSecure bool
 
@@ -64,12 +67,22 @@ type session struct {
 // Disabled returns an auth that gates nothing (standalone).
 func Disabled() *Auth { return &Auth{enabled: false} }
 
-// FromEnv builds federated auth from AUTH_MODE=federado + LOCKATUS_*. Anything
-// else returns Disabled(). Discovery (and thus a reachable Lockatus) is only
-// required in federated mode.
+// FromEnv builds auth from the environment. Two independent mechanisms, either
+// of which authorizes a protected request:
+//
+//   - COGO_MCP_TOKEN: a shared Bearer token — the simple, strong way to secure
+//     the MCP + API for a programmatic client (Claude Code) on a VPS.
+//   - AUTH_MODE=federado + LOCKATUS_*: OIDC/Lockatus session cookie (the browser
+//     path). They compose: OIDC for humans, the token for machines.
+//
+// With neither set, auth is Disabled (standalone: safe only on loopback).
 func FromEnv(ctx context.Context) (*Auth, error) {
+	token := os.Getenv("COGO_MCP_TOKEN")
 	if os.Getenv("AUTH_MODE") != "federado" {
-		return Disabled(), nil
+		if token == "" {
+			return Disabled(), nil
+		}
+		return &Auth{enabled: true, token: token}, nil // token-only, no OIDC
 	}
 	issuer := os.Getenv("LOCKATUS_ISSUER")
 	clientID := os.Getenv("LOCKATUS_CLIENT_ID")
@@ -88,6 +101,8 @@ func FromEnv(ctx context.Context) (*Auth, error) {
 	}
 	return &Auth{
 		enabled:      true,
+		federated:    true,
+		token:        token,
 		secret:       secret,
 		cookieSecure: os.Getenv("COOKIE_SECURE") == "1",
 		oauth2: oauth2.Config{
@@ -116,16 +131,38 @@ func (a *Auth) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/auth/logout", a.handleLogout)
 }
 
-// Gate blocks /api/* and /mcp when federated and unauthenticated. Static assets,
-// /auth/*, /healthz and the SPA shell stay open so the login screen can render.
+// Gate blocks /api/* and /mcp when auth is on and the request is unauthenticated.
+// Static assets, /auth/*, /healthz and the SPA shell stay open so the login (or
+// token) screen can render.
 func (a *Auth) Gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.enabled && protected(r.URL.Path) && a.session(r) == nil {
+		if a.enabled && protected(r.URL.Path) && !a.authorized(r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// authorized accepts either a valid OIDC session cookie (browser) or a matching
+// Bearer token (programmatic MCP client). Either is sufficient.
+func (a *Auth) authorized(r *http.Request) bool {
+	if a.federated && a.session(r) != nil {
+		return true
+	}
+	return a.token != "" && a.bearerOK(r)
+}
+
+// bearerOK compares the Authorization: Bearer header to the configured token in
+// constant time (no early-exit timing leak).
+func (a *Auth) bearerOK(r *http.Request) bool {
+	const p = "Bearer "
+	h := r.Header.Get("Authorization")
+	if !strings.HasPrefix(h, p) {
+		return false
+	}
+	got := strings.TrimSpace(h[len(p):])
+	return subtle.ConstantTimeCompare([]byte(got), []byte(a.token)) == 1
 }
 
 func protected(path string) bool {
@@ -187,10 +224,19 @@ func (a *Auth) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
-	resp := map[string]any{"enabled": a.enabled, "authenticated": false}
-	if a.enabled {
+	mode := "off"
+	if a.federated {
+		mode = "federated"
+	} else if a.token != "" {
+		mode = "token"
+	}
+	resp := map[string]any{
+		"enabled":       a.enabled,
+		"mode":          mode,
+		"authenticated": !a.enabled || a.authorized(r),
+	}
+	if a.federated {
 		if s := a.session(r); s != nil {
-			resp["authenticated"] = true
 			resp["email"] = s.Email
 			resp["name"] = s.Name
 			resp["role"] = s.Role
@@ -198,6 +244,17 @@ func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// Mode names the active auth mechanism, for the startup banner and /auth/me.
+func (a *Auth) Mode() string {
+	if a.federated {
+		return "federated"
+	}
+	if a.token != "" {
+		return "token"
+	}
+	return "off"
 }
 
 // --- session cookie: base64url(json) "." base64url(hmac-sha256) ---

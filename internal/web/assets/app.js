@@ -2,7 +2,12 @@
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const api = (p, opt) => fetch(p, opt).then(r => r.json());
+const api = (p, opt) => {
+  opt = opt || {};
+  const tok = localStorage.getItem("cogo.token");
+  if (tok) opt.headers = Object.assign({ Authorization: "Bearer " + tok }, opt.headers);
+  return fetch(p, opt).then(r => r.json());
+};
 const cls = c => "c-" + (c || "ungraded");
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -831,16 +836,55 @@ function initSettings() {
   $("#setSave").addEventListener("click", async () => { await saveSettings(); m.classList.add("hidden"); render(); });
 }
 
+// showTokenGate: pantalla de acceso por token (COGO protegido con COGO_MCP_TOKEN,
+// sin OIDC). Guarda el token en localStorage; api() lo manda como Bearer.
+function showTokenGate() {
+  const gate = $("#loginGate");
+  const card = gate.querySelector(".login-card");
+  card.innerHTML = "";
+  const logo = el("img", "logo"); logo.src = "/cogo.svg"; logo.alt = "";
+  card.appendChild(logo);
+  card.appendChild(el("h2", null, "COGO"));
+  card.appendChild(el("p", "login-sub", "Este COGO está protegido. Ingresá tu token de acceso."));
+  const form = el("div", "token-form");
+  const inp = el("input"); inp.type = "password"; inp.placeholder = "token de acceso"; inp.autocomplete = "off";
+  const btn = el("button", "login-sso", "Entrar");
+  const err = el("div", "token-err");
+  form.appendChild(inp); form.appendChild(btn);
+  card.appendChild(form); card.appendChild(err);
+  const submit = async () => {
+    const t = inp.value.trim();
+    if (!t) return;
+    localStorage.setItem("cogo.token", t);
+    const me2 = await api("/auth/me").catch(() => ({}));
+    if (me2.authenticated) { gate.classList.add("hidden"); await loadConfig(); render(); }
+    else { localStorage.removeItem("cogo.token"); err.textContent = "Token inválido."; inp.select(); }
+  };
+  btn.addEventListener("click", submit);
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+  gate.classList.remove("hidden");
+  setTimeout(() => inp.focus(), 50);
+}
+
 // ---------- boot ----------
 (async function () {
   initTheme(); initMenu(); initTabs(); initSettings();
-  const me = await api("/auth/me");
-  if (me.enabled && !me.authenticated) { $("#loginGate").classList.remove("hidden"); return; }
-  if (me.authenticated) {
+  const me = await api("/auth/me").catch(() => ({ enabled: false, authenticated: true }));
+  if (me.enabled && !me.authenticated) {
+    if (me.mode === "token") showTokenGate();
+    else $("#loginGate").classList.remove("hidden"); // OIDC / Lockatus
+    return;
+  }
+  if (me.mode === "federated" && me.authenticated) {
     $("#menuUser").textContent = me.name ? (me.name + " · " + me.email) : me.email;
     $("#menuUser").classList.remove("hidden");
     $("#logoutBtn").classList.remove("hidden");
     $("#logoutSep").classList.remove("hidden");
+  }
+  if (me.mode === "token" && me.authenticated) {
+    const lb = $("#logoutBtn"); lb.removeAttribute("href");
+    lb.addEventListener("click", e => { e.preventDefault(); localStorage.removeItem("cogo.token"); location.reload(); });
+    lb.classList.remove("hidden"); $("#logoutSep").classList.remove("hidden");
   }
   await loadConfig();
   render();

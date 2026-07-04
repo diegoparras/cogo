@@ -63,6 +63,22 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .nc-stale.bad { color: var(--err); }
 .menu-meta { font-size: 11.5px; color: var(--muted); padding: 7px 13px 3px; font-variant-numeric: tabular-nums; cursor: help; }
 
+/* ---- pantalla de acceso (OIDC / token) ---- */
+.login-overlay { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.login-card { width: min(360px, 92vw); text-align: center; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 18px; box-shadow: var(--shadow); padding: 32px 28px; }
+.login-card .logo { width: 56px; height: 56px; margin: 0 auto 14px; display: block; border-radius: 13px; }
+.login-card h2 { margin: 0 0 6px; font-size: 22px; }
+.login-sub { color: var(--muted); font-size: 13.5px; margin: 0; line-height: 1.5; }
+.login-sso { display: inline-block; margin-top: 18px; padding: 11px 22px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 14px; text-decoration: none; cursor: pointer; border: 0; }
+.login-sso:hover { background: var(--accent-2); }
+/* gate por token */
+.token-form { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.token-form input { width: 100%; text-align: center; }
+.token-form .login-sso { margin-top: 2px; }
+.token-err { color: var(--err); font-size: 12.5px; min-height: 16px; margin-top: 10px; }
+
 /* ---- modal de confirmación (estilo Escriba, reemplaza al confirm() nativo) ---- */
 .confirm-back { opacity: 0; transition: opacity .16s ease; }
 .confirm-back.show { opacity: 1; }
