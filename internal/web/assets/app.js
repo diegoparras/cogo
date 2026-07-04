@@ -10,6 +10,14 @@ function el(tag, className, text) {
   if (text != null) e.textContent = text;
   return e;
 }
+// Cabecera de vista al estilo Escriba: eyebrow + título + bajada.
+function viewHead(main, eyebrow, title, sub) {
+  const h = el("div", "viewhead");
+  h.appendChild(el("div", "vh-eyebrow", eyebrow));
+  h.appendChild(el("h2", "vh-title", title));
+  if (sub) h.appendChild(el("div", "vh-sub", sub));
+  main.appendChild(h);
+}
 
 const state = { view: "vault", project: "", hideGreen: false, editing: null, llmConfigured: false, scrubEnabled: false };
 
@@ -99,6 +107,7 @@ function renderWelcome(main) {
 async function renderVault(main) {
   const notes = (await api("/api/notes")).filter(matchesProject);
   if (!notes.length && !state.project) { renderWelcome(main); return; }
+  viewHead(main, "Suite Escriba · Memoria", "Vault", "Todo lo que sabés del proyecto, con un color de confianza que COGO computa solo: verde confiá, amarillo ojo, rojo no.");
   const bar = el("div", "viewbar");
   const addBtn = el("button", "mini", "+ Nueva nota");
   addBtn.addEventListener("click", () => openEditor(null));
@@ -148,9 +157,7 @@ async function renderFresh(main) {
   }).filter(r => r.status !== "fresca");
   rows.sort((a, b) => a.stale_at < b.stale_at ? -1 : 1);
 
-  main.appendChild(el("div", "viewbar")).appendChild(
-    el("div", null, "Notas vencidas o que vencen en ≤30 días. Revalidá una que ya chequeaste.")
-  );
+  viewHead(main, "Suite Escriba · Memoria", "Frescura", "Las cosas caducan: acá están las notas vencidas o por vencer en ≤30 días. Revalidá una que ya chequeaste.");
   if (!rows.length) { main.appendChild(el("div", "empty", "Nada vencido ni por vencer. Todo fresco.")); return; }
 
   rows.forEach(r => {
@@ -173,6 +180,7 @@ async function renderFresh(main) {
 // ---------- pack preview ----------
 let packTimer = null;
 async function renderPack(main) {
+  viewHead(main, "Suite Escriba · Memoria", "Pack", "Armá el contexto coloreado de un tema para pasárselo a una IA. El rojo se degrada solo — la política viaja en el pack.");
   const form = el("div", "pack-form");
   const q = el("input", "q"); q.placeholder = "tema, ej: redis"; q.value = window.__packQ || "";
   const b = el("input", "b"); b.type = "number"; b.placeholder = "budget tokens"; b.value = window.__packB || "";
@@ -215,6 +223,7 @@ async function renderGraph(main) {
   const edges = g.edges.filter(e => keep.has(e.from) && keep.has(e.to));
   if (!nodes.length) { main.appendChild(el("div", "empty", "Sin notas para este proyecto.")); return; }
 
+  viewHead(main, "Suite Escriba · Memoria", "Grafo", "Cómo se relacionan tus notas, pintadas por confianza. Mirálo en 2D o entrá a la constelación 3D.");
   const bar = el("div", "viewbar graph-bar");
   bar.appendChild(legend(nodes));
   bar.appendChild(el("span", "gb-sp"));
@@ -358,7 +367,7 @@ function renderEditor(main) {
 
 // ---------- revisión (lint) + ajustes ----------
 async function renderLint(main) {
-  main.appendChild(el("p", "lint-intro", "Revisa el vault: enlaces rotos, notas vencidas y —si conectaste un modelo— contradicciones entre notas. Lo que encuentre como contradicción pinta esa nota de rojo en todo el visor."));
+  viewHead(main, "Suite Escriba · Memoria", "Revisión", "Enlaces rotos, notas vencidas y —si conectaste un modelo— contradicciones entre notas. Una contradicción pinta esa nota de rojo en todo el visor.");
 
   const bar = el("div", "viewbar");
   const btn = el("button", null, "Revisar ahora");
@@ -409,10 +418,10 @@ function parseTranscript(text) {
 const COLORWORD = { green: "Verde — sin señales", yellow: "Amarillo — señales presentes", red: "Rojo — hay mecánica: recibos o línea roja" };
 
 async function renderGuard(main) {
-  main.appendChild(el("p", "lint-intro",
-    "Radiografía un turno de cualquier modelo: nombra tácticas de influencia con su evidencia, " +
-    "contrasta negaciones contra la transcripción (los recibos) y mide deriva contra tus líneas rojas. " +
-    "No censura: te muestra, vos decidís."));
+  viewHead(main, "Suite Escriba · Autonomía", "Guard",
+    "Radiografía un turno de cualquier modelo: nombra las tácticas con su evidencia, caza las " +
+    "contradicciones contra la transcripción (los recibos) y mide deriva contra tus líneas rojas. " +
+    "No censura: te muestra, vos decidís.");
 
   // --- mandato persistente ---
   const m = await api("/api/mandate");

@@ -16,15 +16,14 @@
   const rgba = (c, a) => `rgba(${c.r},${c.g},${c.b},${a})`;
 
   function readTokens() {
-    const cs = getComputedStyle(document.documentElement);
-    const g = k => cs.getPropertyValue(k).trim();
-    const dark = document.documentElement.dataset.theme === "dark";
+    // The graph panel is always a deep-graphite constellation, so the palette is
+    // fixed to the vivid (dark-theme) semáforo regardless of the app theme —
+    // vivid nodes + light labels pop over the dark field, and the glow is additive.
     return {
-      dark,
-      green: g("--ok") || "#1a7f37", yellow: g("--warn") || "#9a6700",
-      red: g("--err") || "#cf222e", ungraded: g("--muted") || "#70707b",
-      text: g("--text") || "#16161a", muted: g("--muted") || "#70707b",
-      hair: g("--hairline") || "rgba(0,0,0,.17)", accent: g("--accent") || "#9aa4b2",
+      dark: true,
+      green: "#3fb950", yellow: "#d6a01a", red: "#f85149", ungraded: "#8b8b96",
+      text: "#c7cedb", muted: "#8b8b96",
+      hair: "rgba(255,255,255,.14)", accent: "#9aa4b2",
     };
   }
   const colorFor = (T, c) => ({ green: T.green, yellow: T.yellow, red: T.red, ungraded: T.ungraded }[c] || T.ungraded);
