@@ -99,3 +99,40 @@ func TestTokenGate(t *testing.T) {
 		t.Errorf("static asset should stay open, got %d", code)
 	}
 }
+
+func TestIssuedTokenVerifier(t *testing.T) {
+	a := &Auth{enabled: true, token: "root"}
+	a.SetVerifier(func(secret string) (bool, bool) {
+		switch secret {
+		case "rw-token":
+			return false, true // full scope
+		case "ro-token":
+			return true, true // read-only
+		}
+		return false, false
+	})
+
+	rw := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	rw.Header.Set("Authorization", "Bearer rw-token")
+	if ro, ok := a.authorize(rw); !ok || ro {
+		t.Errorf("rw-token should authorize full: ok=%v readonly=%v", ok, ro)
+	}
+
+	roReq := httptest.NewRequest(http.MethodGet, "/api/notes", nil)
+	roReq.Header.Set("Authorization", "Bearer ro-token")
+	if ro, ok := a.authorize(roReq); !ok || !ro {
+		t.Errorf("ro-token should authorize read-only: ok=%v readonly=%v", ok, ro)
+	}
+
+	root := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	root.Header.Set("Authorization", "Bearer root")
+	if _, ok := a.authorize(root); !ok {
+		t.Error("root token should authorize")
+	}
+
+	bad := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	bad.Header.Set("Authorization", "Bearer nope")
+	if _, ok := a.authorize(bad); ok {
+		t.Error("unknown token must not authorize")
+	}
+}

@@ -51,10 +51,13 @@ EasyPanel **no se lleva bien con docker-compose** — así que **no** uses el ti
 2. Ponele un nombre, p. ej. `cogo`.
 
 ### 2. De dónde sale la imagen (elegí una)
-- **Opción fácil — desde imagen** (cuando esté publicada): en **Source** elegí
-  **Docker Image** y pegá `ghcr.io/diegoparras/cogo:latest`.
-- **Opción desde el código** (siempre funciona): en **Source** elegí **GitHub**,
-  repo `diegoparras/cogo`, branch `main`, y en **Build** elegí **Dockerfile**.
+- **Opción desde el código (siempre funciona, la más simple):** en **Source**
+  elegí **GitHub**, repo `diegoparras/cogo`, branch `main`, y en **Build** elegí
+  **Dockerfile**. EasyPanel construye la imagen solo. **Usá esta si dudás.**
+- **Opción desde imagen:** en **Source** elegí **Docker Image** y pegá
+  `ghcr.io/diegoparras/cogo:latest`. Requiere que el paquete esté **público**:
+  en GitHub → el repo → pestaña **Packages** → `cogo` → **Package settings** →
+  **Change visibility → Public**. (Si está privado, EasyPanel no lo puede bajar.)
 
 ### 3. Variables de entorno
 En la pestaña **Environment**, pegá esto (cambiá `TU-TOKEN` por el tuyo):

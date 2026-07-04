@@ -15,6 +15,7 @@ import (
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/suasion"
+	"github.com/diegoparras/cogo/internal/tokens"
 	"github.com/diegoparras/cogo/internal/web"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -47,6 +48,15 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Issued-token store: multiple named Bearer tokens for MCP clients, each
+	// revocable, with optional expiry and read-only scope. Adds an authorization
+	// path to the gate; the root COGO_MCP_TOKEN / OIDC still bootstraps it.
+	store := tokens.Open(*dir)
+	authn.SetVerifier(func(secret string) (bool, bool) {
+		t, ok := store.Verify(secret, today().String())
+		return t.ReadOnly, ok
+	})
+
 	// Fail-safe: never put an unauthenticated vault + MCP on a public interface.
 	if err := checkExposure(*httpAddr, authn); err != nil {
 		return err
@@ -54,13 +64,14 @@ func cmdServe(args []string) error {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
-	web.New(*dir, today).Mount(mux) // human face: visor at /, JSON API at /api
-	authn.RegisterRoutes(mux)       // accessory: OIDC login (federated only)
+	web.New(*dir, today, store).Mount(mux) // human face: visor at /, JSON API at /api
+	authn.RegisterRoutes(mux)              // accessory: OIDC login (federated only)
 
 	tls := os.Getenv("COOKIE_SECURE") == "1"
-	var h http.Handler = authn.Gate(mux)   // auth (cookie or Bearer)
-	h = newIPLimiter(20, 60).middleware(h) // per-IP rate limit
-	h = securityHeaders(h, tls)            // conservative headers
+	var h http.Handler = enforceReadOnly(mux) // read-only tokens can't write
+	h = authn.Gate(h)                         // auth (cookie or Bearer), stamps scope
+	h = newIPLimiter(20, 60).middleware(h)    // per-IP rate limit
+	h = securityHeaders(h, tls)               // conservative headers
 
 	insecure := !authn.Enabled() && !isLoopback(*httpAddr)
 	fmt.Fprintf(os.Stderr, "cogo: serving on %s [auth=%s] — visor at /, MCP at /mcp (vault %s)\n", *httpAddr, authn.Mode(), *dir)

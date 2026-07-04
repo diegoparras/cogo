@@ -41,8 +41,31 @@ type Auth struct {
 	oauth2   oauth2.Config
 	verifier *oidc.IDTokenVerifier
 
+	// verify, if set, checks a presented Bearer secret against the issued-token
+	// store; returns whether it is read-only and whether it matched. Wired by the
+	// server so this package stays free of the store's file I/O.
+	verify func(secret string) (readOnly bool, ok bool)
+
 	mu    sync.Mutex
 	flows map[string]flow // login state -> PKCE verifier + nonce
+}
+
+// SetVerifier wires the issued-token store's check into the gate (see
+// internal/tokens). Issued tokens are an ADDITIONAL authorization path — they do
+// not turn auth on by themselves; the root COGO_MCP_TOKEN or OIDC is the
+// bootstrap credential that enables the gate and lets you manage the store.
+func (a *Auth) SetVerifier(f func(secret string) (bool, bool)) { a.verify = f }
+
+// ctxKey carries the request's granted scope to downstream middleware.
+type ctxKey int
+
+const readOnlyKey ctxKey = 0
+
+// ReadOnlyGranted reports whether the request was authorized by a read-only
+// token (so write endpoints/tools must be refused).
+func ReadOnlyGranted(r *http.Request) bool {
+	v, _ := r.Context().Value(readOnlyKey).(bool)
+	return v
 }
 
 type flow struct {
@@ -136,33 +159,51 @@ func (a *Auth) RegisterRoutes(mux *http.ServeMux) {
 // token) screen can render.
 func (a *Auth) Gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.enabled && protected(r.URL.Path) && !a.authorized(r) {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
+		if a.enabled && protected(r.URL.Path) {
+			readOnly, ok := a.authorize(r)
+			if !ok {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			r = r.WithContext(context.WithValue(r.Context(), readOnlyKey, readOnly))
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-// authorized accepts either a valid OIDC session cookie (browser) or a matching
-// Bearer token (programmatic MCP client). Either is sufficient.
-func (a *Auth) authorized(r *http.Request) bool {
+// authorize accepts a valid OIDC session cookie (browser, full scope), the root
+// env token (full scope), or a matching issued token from the store (its own
+// scope). Returns whether the grant is read-only and whether it authorized.
+func (a *Auth) authorize(r *http.Request) (readOnly bool, ok bool) {
 	if a.federated && a.session(r) != nil {
-		return true
+		return false, true
 	}
-	return a.token != "" && a.bearerOK(r)
+	bearer := a.bearer(r)
+	if bearer == "" {
+		return false, false
+	}
+	if a.token != "" && subtle.ConstantTimeCompare([]byte(bearer), []byte(a.token)) == 1 {
+		return false, true
+	}
+	if a.verify != nil {
+		if ro, matched := a.verify(bearer); matched {
+			return ro, true
+		}
+	}
+	return false, false
 }
 
-// bearerOK compares the Authorization: Bearer header to the configured token in
-// constant time (no early-exit timing leak).
-func (a *Auth) bearerOK(r *http.Request) bool {
+// authorized is the boolean form (used by /auth/me).
+func (a *Auth) authorized(r *http.Request) bool { _, ok := a.authorize(r); return ok }
+
+// bearer pulls the token from an Authorization: Bearer header ("" if absent).
+func (a *Auth) bearer(r *http.Request) string {
 	const p = "Bearer "
 	h := r.Header.Get("Authorization")
 	if !strings.HasPrefix(h, p) {
-		return false
+		return ""
 	}
-	got := strings.TrimSpace(h[len(p):])
-	return subtle.ConstantTimeCompare([]byte(got), []byte(a.token)) == 1
+	return strings.TrimSpace(h[len(p):])
 }
 
 func protected(path string) bool {
@@ -224,12 +265,7 @@ func (a *Auth) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
-	mode := "off"
-	if a.federated {
-		mode = "federated"
-	} else if a.token != "" {
-		mode = "token"
-	}
+	mode := a.Mode()
 	resp := map[string]any{
 		"enabled":       a.enabled,
 		"mode":          mode,

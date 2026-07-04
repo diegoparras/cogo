@@ -139,6 +139,7 @@ function initMenu() {
   menu.addEventListener("click", e => e.stopPropagation());
   document.addEventListener("click", () => menu.classList.add("hidden"));
   $("#settingsBtn").addEventListener("click", openSettings);
+  $("#tokensBtn").addEventListener("click", openTokens);
   $("#aboutBtn").addEventListener("click", () => { $("#aboutModal").classList.remove("hidden"); menu.classList.add("hidden"); });
   $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
   $("#aboutModal").addEventListener("click", e => { if (e.target.id === "aboutModal") $("#aboutModal").classList.add("hidden"); });
@@ -520,6 +521,99 @@ function paintEvBadge(node, status) {
   node.textContent = text;
   node.className = className;
   node.title = title;
+}
+
+// ---------- Conexiones MCP (tokens de acceso) ----------
+function tokenRow(t, refresh) {
+  const row = el("div", "tk-row");
+  const info = el("div", "tk-info");
+  const head = el("div", "tk-name");
+  head.appendChild(el("span", "tk-label", t.label));
+  if (t.readonly) head.appendChild(el("span", "tk-ro", "solo lectura"));
+  info.appendChild(head);
+  const parts = ["creado " + t.created, t.last_used ? "usado " + t.last_used : "sin usar"];
+  if (t.expires) parts.push("vence " + t.expires);
+  info.appendChild(el("div", "tk-meta", parts.join(" · ")));
+  row.appendChild(info);
+  const rev = el("button", "nc-act danger", "revocar");
+  rev.addEventListener("click", async () => {
+    const ok = await confirmDialog({
+      title: "Revocar token", note: t.label,
+      message: "La app que use este token pierde el acceso al instante. Los demás tokens siguen funcionando.",
+      confirmText: "Revocar", danger: true,
+    });
+    if (!ok) return;
+    await api("/api/tokens?id=" + encodeURIComponent(t.id), { method: "DELETE" });
+    refresh();
+  });
+  row.appendChild(rev);
+  return row;
+}
+
+async function openTokens() {
+  $("#menu").classList.add("hidden");
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card tokens-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", "Conexiones MCP"));
+  card.appendChild(el("p", "tk-intro", "Tokens que le das a cada app o agente para conectarse por MCP (Claude Code, Cursor…). Cada uno se revoca solo, sin tocar los demás. El secreto se muestra una sola vez."));
+
+  const list = el("div", "tk-list");
+  card.appendChild(list);
+  async function refresh() {
+    let r;
+    try { r = await api("/api/tokens"); } catch (e) { r = null; }
+    list.innerHTML = "";
+    const toks = (r && r.tokens) || [];
+    if (!toks.length) { list.appendChild(el("div", "tk-empty", "Todavía no emitiste ningún token.")); return; }
+    toks.forEach(t => list.appendChild(tokenRow(t, refresh)));
+  }
+
+  card.appendChild(el("div", "tk-form-lbl", "Nuevo token"));
+  const form = el("div", "tk-form");
+  const lbl = el("input"); lbl.placeholder = "etiqueta — ej: Claude Code (laptop)";
+  const frow = el("div", "tk-form-row");
+  const exp = select([["0", "no vence"], ["30", "vence en 30 días"], ["90", "vence en 90 días"], ["365", "vence en 1 año"]], "0", () => {});
+  const roWrap = el("label", "tk-check");
+  const roCb = el("input"); roCb.type = "checkbox";
+  roWrap.appendChild(roCb); roWrap.appendChild(el("span", null, "solo lectura"));
+  const create = el("button", "mini", "Emitir token");
+  frow.appendChild(exp); frow.appendChild(roWrap); frow.appendChild(create);
+  const reveal = el("div", "tk-reveal hidden");
+  form.appendChild(lbl); form.appendChild(frow); form.appendChild(reveal);
+  card.appendChild(form);
+
+  create.addEventListener("click", async () => {
+    const label = lbl.value.trim();
+    if (!label) { lbl.focus(); return; }
+    create.disabled = true;
+    const r = await api("/api/tokens", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label, expires_days: parseInt(exp.value, 10) || 0, readonly: roCb.checked }) }).catch(() => null);
+    create.disabled = false;
+    if (!r || !r.ok) { reveal.className = "tk-reveal bad"; reveal.textContent = "No se pudo emitir (" + ((r && r.error) || "error") + ")."; return; }
+    reveal.className = "tk-reveal";
+    reveal.innerHTML = "";
+    reveal.appendChild(el("div", "tk-reveal-lbl", "Copiá este token ahora — no se vuelve a mostrar:"));
+    const sr = el("div", "tk-secret-row");
+    const code = el("code", "tk-secret"); code.textContent = r.token;
+    const copy = el("button", "mini ghost", "copiar");
+    copy.addEventListener("click", () => { navigator.clipboard.writeText(r.token); copy.textContent = "copiado"; setTimeout(() => copy.textContent = "copiar", 1200); });
+    sr.appendChild(code); sr.appendChild(copy);
+    reveal.appendChild(sr);
+    lbl.value = ""; roCb.checked = false;
+    refresh();
+  });
+
+  refresh();
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  const close = () => { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
 }
 
 // openNoteModal: vista de solo lectura de una nota (clic en un nodo del grafo).

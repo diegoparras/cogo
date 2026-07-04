@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/tokens"
 )
 
 func testServer(t *testing.T) *Server {
@@ -25,7 +26,7 @@ func testServer(t *testing.T) *Server {
 	if err := core.WriteNoteFile(filepath.Join(dir, "redis.md"), seed); err != nil {
 		t.Fatal(err)
 	}
-	return New(dir, func() core.Date { return core.MustDate("2026-06-29") })
+	return New(dir, func() core.Date { return core.MustDate("2026-06-29") }, tokens.Open(dir))
 }
 
 func call(h http.HandlerFunc, method, target string, body any) *httptest.ResponseRecorder {

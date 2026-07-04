@@ -24,6 +24,21 @@ la pantalla de Lockatus ofrece además un **"o entrá con un token de acceso"**.
 El visor en modo token te pide el token una vez y lo guarda en el navegador;
 después lo manda solo en cada request.
 
+### Tokens por app (menú ⋮ → Conexiones MCP)
+
+Además del `COGO_MCP_TOKEN` raíz (bootstrap/break-glass), desde el visor emitís
+**tokens con nombre**, uno por app/agente (Claude Code, Cursor, un bot de CI…):
+
+- Cada token se **revoca solo**, sin afectar a los demás.
+- Se guardan **hasheados** (sha256) en `<vault>/.cogo/tokens.json` — el texto
+  plano se muestra **una sola vez** y nunca se persiste.
+- Opcionales por token: **vencimiento** (30/90 días, 1 año) y **solo lectura**
+  (un token read-only solo puede `pack`/`search`/`open`; `capture`/`verify`/
+  `archive`/`remove` se rechazan con 403, tanto por `/api` como por `/mcp`).
+
+Necesitás estar autenticado (root o OIDC) para administrarlos; un token de solo
+lectura no puede gestionar tokens.
+
 ## Fail-safe
 
 COGO **se niega a arrancar** en una interfaz pública (`0.0.0.0` / `:puerto`) si

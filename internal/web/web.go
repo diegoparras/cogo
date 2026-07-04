@@ -22,6 +22,7 @@ import (
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/scrub"
+	"github.com/diegoparras/cogo/internal/tokens"
 )
 
 //go:embed assets
@@ -34,6 +35,7 @@ type Server struct {
 	dir          string
 	evidenceRoot string // base dir for resolving repo-relative evidence refs (COGO_EVIDENCE_ROOT)
 	today        func() core.Date
+	tokens       *tokens.Store
 
 	mu             sync.RWMutex
 	provider       llm.Provider
@@ -41,8 +43,8 @@ type Server struct {
 	scrubber       scrub.Scrubber
 }
 
-func New(dir string, today func() core.Date) *Server {
-	s := &Server{dir: dir, today: today, contradictions: map[string]bool{}, evidenceRoot: os.Getenv("COGO_EVIDENCE_ROOT")}
+func New(dir string, today func() core.Date, store *tokens.Store) *Server {
+	s := &Server{dir: dir, today: today, tokens: store, contradictions: map[string]bool{}, evidenceRoot: os.Getenv("COGO_EVIDENCE_ROOT")}
 	s.provider = s.loadProvider()
 	s.scrubber = scrub.FromEnv()
 	if u, err := readUsage(dir); err == nil {
@@ -97,6 +99,46 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/settings/models", s.handleModels)
 	mux.HandleFunc("/api/guard", s.handleGuard)
 	mux.HandleFunc("/api/mandate", s.handleMandate)
+	mux.HandleFunc("/api/tokens", s.handleTokens)
+}
+
+// handleTokens manages the issued MCP access tokens: GET lists them (no
+// secrets), POST creates one (returns the plaintext ONCE), DELETE revokes by id.
+func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
+	if s.tokens == nil {
+		http.Error(w, "token store unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, map[string]any{"tokens": s.tokens.List()})
+	case http.MethodPost:
+		var in struct {
+			Label       string `json:"label"`
+			ExpiresDays int    `json:"expires_days"`
+			ReadOnly    bool   `json:"readonly"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		expires := ""
+		if in.ExpiresDays > 0 {
+			expires = s.today().AddDays(in.ExpiresDays).String()
+		}
+		secret, t, err := s.tokens.Create(in.Label, expires, in.ReadOnly, s.today().String())
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "token": secret, "item": t})
+	case http.MethodDelete:
+		id := r.URL.Query().Get("id")
+		if !s.tokens.Revoke(id) {
+			http.Error(w, "no such token", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "id": id})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (s *Server) contras() map[string]bool {

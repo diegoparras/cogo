@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -11,6 +14,65 @@ import (
 
 	"github.com/diegoparras/cogo/internal/auth"
 )
+
+// enforceReadOnly refuses write operations for requests authorized by a
+// read-only token. It runs AFTER the auth gate (which stamps the scope on the
+// request context). For /api it classifies by path+method; for /mcp it peeks the
+// JSON-RPC body to see which tool is being called.
+func enforceReadOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if auth.ReadOnlyGranted(r) {
+			if r.URL.Path == "/mcp" && r.Method == http.MethodPost {
+				body, _ := io.ReadAll(io.LimitReader(r.Body, 2<<20))
+				_ = r.Body.Close()
+				r.Body = io.NopCloser(bytes.NewReader(body)) // restore for the real handler
+				if isWriteMCPCall(body) {
+					forbidReadOnly(w)
+					return
+				}
+			} else if blockedForReadOnly(r.URL.Path, r.Method) {
+				forbidReadOnly(w)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func forbidReadOnly(w http.ResponseWriter) {
+	http.Error(w, "este token es de solo lectura: la operación requiere un token con permiso de escritura", http.StatusForbidden)
+}
+
+func blockedForReadOnly(path, method string) bool {
+	if path == "/api/tokens" || path == "/api/settings" {
+		return true // managing tokens or settings is admin, never a read-only agent
+	}
+	if method == http.MethodGet {
+		return false // reads are always allowed
+	}
+	switch path {
+	case "/api/capture", "/api/verify", "/api/archive", "/api/restore", "/api/delete", "/api/mandate", "/api/lint":
+		return true
+	}
+	return false
+}
+
+func isWriteMCPCall(body []byte) bool {
+	var msg struct {
+		Method string `json:"method"`
+		Params struct {
+			Name string `json:"name"`
+		} `json:"params"`
+	}
+	if json.Unmarshal(body, &msg) != nil || msg.Method != "tools/call" {
+		return false
+	}
+	switch msg.Params.Name {
+	case "capture", "verify", "archive", "restore", "remove":
+		return true
+	}
+	return false
+}
 
 // checkExposure is the fail-safe: refuse to serve on a public interface with no
 // authentication, so an unauthenticated vault + MCP can't land on the open
