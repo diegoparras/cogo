@@ -1009,7 +1009,7 @@ function initSettings() {
 
 // showTokenGate: pantalla de acceso por token (COGO protegido con COGO_MCP_TOKEN,
 // sin OIDC). Guarda el token en localStorage; api() lo manda como Bearer.
-function showTokenGate() {
+function showTokenGate(withLockatusBack) {
   const gate = $("#loginGate");
   const card = gate.querySelector(".login-card");
   card.innerHTML = "";
@@ -1023,6 +1023,11 @@ function showTokenGate() {
   const err = el("div", "token-err");
   form.appendChild(inp); form.appendChild(btn);
   card.appendChild(form); card.appendChild(err);
+  if (withLockatusBack) {
+    const back = el("a", "login-alt", "← Entrar con Lockatus");
+    back.addEventListener("click", () => location.reload());
+    card.appendChild(back);
+  }
   const submit = async () => {
     const t = inp.value.trim();
     if (!t) return;
@@ -1042,8 +1047,14 @@ function showTokenGate() {
   initTheme(); initMenu(); initTabs(); initSettings();
   const me = await api("/auth/me").catch(() => ({ enabled: false, authenticated: true }));
   if (me.enabled && !me.authenticated) {
-    if (me.mode === "token") showTokenGate();
-    else $("#loginGate").classList.remove("hidden"); // OIDC / Lockatus
+    if (me.mode === "token") {
+      showTokenGate(false);
+    } else { // OIDC / Lockatus — con la opción de entrar por token también
+      $("#loginGate").classList.remove("hidden");
+      const alt = el("a", "login-alt", "o entrá con un token de acceso");
+      alt.addEventListener("click", () => showTokenGate(true));
+      $("#loginGate .login-card").appendChild(alt);
+    }
     return;
   }
   if (me.mode === "federated" && me.authenticated) {

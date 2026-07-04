@@ -16,8 +16,13 @@ En **token** y **federado**, `/api/*` y `/mcp` exigen credencial:
 - **Bearer token** (`Authorization: Bearer <secreto>`) — para el cliente MCP.
 - **cookie de sesión OIDC** — para el navegador (modo federado).
 
-El visor (la web) en modo token te pide el token una vez y lo guarda en el
-navegador; después lo manda solo en cada request.
+**Las dos formas componen.** Poné `AUTH_MODE=federado` + `LOCKATUS_*` **y**
+`COGO_MCP_TOKEN` juntos: los humanos entran por **Lockatus** (SSO) y los agentes
+(Claude Code) por **Bearer token** — cualquiera de las dos autoriza. En el visor,
+la pantalla de Lockatus ofrece además un **"o entrá con un token de acceso"**.
+
+El visor en modo token te pide el token una vez y lo guarda en el navegador;
+después lo manda solo en cada request.
 
 ## Fail-safe
 
