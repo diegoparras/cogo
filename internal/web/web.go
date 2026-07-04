@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
@@ -36,6 +37,7 @@ type Server struct {
 	evidenceRoot string // base dir for resolving repo-relative evidence refs (COGO_EVIDENCE_ROOT)
 	today        func() core.Date
 	tokens       *tokens.Store
+	contra       *contra.Store
 
 	mu             sync.RWMutex
 	provider       llm.Provider
@@ -50,6 +52,8 @@ func New(dir string, today func() core.Date, store *tokens.Store) *Server {
 	if u, err := readUsage(dir); err == nil {
 		llm.SeedUsage(u) // resume the cumulative token tally across restarts
 	}
+	s.contra = contra.Open(dir)               // persisted contradictions
+	s.contradictions = s.contra.OpenNoteSet() // survive a restart: red from the start
 	return s
 }
 
@@ -94,6 +98,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/preview", s.handlePreview)
 	mux.HandleFunc("/api/capture", s.handleCapture)
 	mux.HandleFunc("/api/lint", s.handleLint)
+	mux.HandleFunc("/api/contradictions", s.handleContradictions)
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/settings/test", s.handleTestLLM)
 	mux.HandleFunc("/api/settings/models", s.handleModels)
@@ -491,15 +496,82 @@ func (s *Server) handleLint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rep := lint.Run(r.Context(), vault, s.today(), s.prov())
+	// Fold the fresh findings into the persisted store (new ones open, dismissed
+	// ones stay dismissed, nothing open is auto-cleared), then repaint from it.
+	var found []contra.Found
+	for _, is := range rep.Issues {
+		if is.Kind == "contradiction" && len(is.IDs) == 2 {
+			found = append(found, contra.Found{A: is.IDs[0], B: is.IDs[1], Reason: is.Msg})
+		}
+	}
+	exists := func(id string) bool { _, ok := vault[id]; return ok }
+	s.contra.Merge(found, s.today().String(), exists)
 	s.mu.Lock()
-	s.contradictions = rep.Contradictions()
+	s.contradictions = s.contra.OpenNoteSet()
 	s.mu.Unlock()
 	s.flushUsage()
 	writeJSON(w, map[string]any{
 		"issues": rep.Issues, "llm_used": rep.LLMUsed,
 		"pairs_checked": rep.PairsChecked, "candidate_pairs": rep.CandidatePairs,
-		"contradictions": len(rep.Contradictions()),
+		"contradictions": len(s.contra.OpenNoteSet()),
 	})
+}
+
+// handleContradictions lists the persisted open contradictions (with each note's
+// claim, for a side-by-side view) and lets a human resolve or dismiss one.
+func (s *Server) handleContradictions(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		vault, ok := s.load(w)
+		if !ok {
+			return
+		}
+		type view struct {
+			ID       string `json:"id"`
+			A        string `json:"a"`
+			B        string `json:"b"`
+			AClaim   string `json:"a_claim"`
+			BClaim   string `json:"b_claim"`
+			Reason   string `json:"reason"`
+			Detected string `json:"detected"`
+		}
+		out := []view{}
+		for _, c := range s.contra.List() {
+			if c.Status != contra.StatusOpen {
+				continue
+			}
+			claim := func(id string) string {
+				if n, ok := vault[id]; ok {
+					return core.Claim(n)
+				}
+				return "(nota eliminada)"
+			}
+			out = append(out, view{ID: c.ID, A: c.A, B: c.B, AClaim: claim(c.A), BClaim: claim(c.B), Reason: c.Reason, Detected: c.Detected})
+		}
+		writeJSON(w, map[string]any{"contradictions": out})
+	case http.MethodPost:
+		id, action := r.URL.Query().Get("id"), r.URL.Query().Get("action")
+		var ok bool
+		switch action {
+		case "resolve":
+			ok = s.contra.Resolve(id)
+		case "dismiss":
+			ok = s.contra.Dismiss(id)
+		default:
+			http.Error(w, "action must be resolve or dismiss", http.StatusBadRequest)
+			return
+		}
+		if !ok {
+			http.Error(w, "no such contradiction", http.StatusNotFound)
+			return
+		}
+		s.mu.Lock()
+		s.contradictions = s.contra.OpenNoteSet()
+		s.mu.Unlock()
+		writeJSON(w, map[string]any{"ok": true, "id": id, "action": action})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // ---- LLM settings (configurable from the GUI, persisted next to the vault) ----

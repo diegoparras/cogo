@@ -108,6 +108,22 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .tk-cfg-lbl { font-size: 12px; color: var(--muted-2); margin: 12px 0 6px; }
 .tk-cfg { margin: 0 0 10px; background: var(--code-bg, #1c2029); color: var(--code-ink, #d7dce6); border-radius: 9px; padding: 12px 14px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.55; }
 
+/* ---- contradicciones persistidas (pestaña Revisión) ---- */
+.contra-box { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.contra-title { font-size: 12.5px; font-weight: 600; color: var(--err); }
+.contra-card { border: 1px solid color-mix(in srgb, var(--err) 28%, var(--border)); border-left: 3px solid var(--err); border-radius: var(--radius-lg); background: var(--panel); box-shadow: var(--shadow); padding: 13px 16px; }
+.contra-head { display: flex; align-items: baseline; gap: 10px; }
+.contra-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--err); }
+.contra-when { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.contra-reason { font-size: 12.5px; color: var(--muted-2); font-style: italic; margin: 5px 0 10px; }
+.contra-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.contra-side { background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; min-width: 0; }
+.contra-id { display: block; font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--accent); cursor: pointer; text-decoration: none; word-break: break-all; }
+.contra-id:hover { text-decoration: underline; }
+.contra-claim { font-size: 12.5px; color: var(--muted-2); margin-top: 4px; line-height: 1.45; }
+.contra-acts { display: flex; gap: 8px; margin-top: 11px; }
+@media (max-width: 560px) { .contra-pair { grid-template-columns: 1fr; } }
+
 /* ---- render de Markdown (modal de nota + preview del editor) ---- */
 .md-render { font-size: 13.5px; line-height: 1.6; color: var(--text); word-wrap: break-word; }
 .md-render h1, .md-render h2, .md-render h3, .md-render h4 { margin: 14px 0 6px; line-height: 1.3; }

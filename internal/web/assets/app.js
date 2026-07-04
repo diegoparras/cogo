@@ -892,6 +892,19 @@ async function renderLint(main) {
     main.appendChild(hint);
   }
 
+  // Contradicciones persistidas (sobreviven al reinicio; se resuelven a mano).
+  const contraBox = el("div", "contra-box");
+  main.appendChild(contraBox);
+  async function loadContras() {
+    const r = await api("/api/contradictions").catch(() => null);
+    contraBox.innerHTML = "";
+    const cs = (r && r.contradictions) || [];
+    if (!cs.length) return;
+    contraBox.appendChild(el("div", "contra-title", cs.length + " contradicción(es) abierta(s) — pintan rojo hasta que las resuelvas"));
+    cs.forEach(c => contraBox.appendChild(contraCard(c, loadContras)));
+  }
+  loadContras();
+
   const out = el("div", "lint-out");
   main.appendChild(out);
 
@@ -901,16 +914,44 @@ async function renderLint(main) {
     btn.disabled = false;
     status.textContent = r.llm_used ? ("modelo: " + r.pairs_checked + "/" + r.candidate_pairs + " pares revisados") : "checks deterministas (sin modelo)";
     out.innerHTML = "";
-    if (!r.issues || !r.issues.length) { out.appendChild(el("div", "empty", "Todo limpio. Nada que revisar.")); return; }
-    const LABEL = { contradiction: "Contradicción", broken_dep: "Enlace roto", stale: "Vencida" };
-    r.issues.forEach(is => {
+    const other = (r.issues || []).filter(is => is.kind !== "contradiction");
+    if (!other.length && !r.contradictions) { out.appendChild(el("div", "empty", "Todo limpio. Nada que revisar.")); }
+    const LABEL = { broken_dep: "Enlace roto", stale: "Vencida" };
+    other.forEach(is => {
       const row = el("div", "lint-row lint-" + is.kind);
       row.appendChild(el("span", "lint-tag", LABEL[is.kind] || is.kind));
       row.appendChild(el("span", "lint-msg", is.msg));
       out.appendChild(row);
     });
-    if (r.contradictions > 0) out.appendChild(el("div", "lint-redmsg", r.contradictions + " nota(s) quedaron en rojo por contradicción — miralas en Vault."));
+    loadContras(); // las contradicciones nuevas se sumaron al store
   });
+}
+
+function contraCard(c, refresh) {
+  const card = el("div", "contra-card");
+  const head = el("div", "contra-head");
+  head.appendChild(el("span", "contra-tag", "Contradicción"));
+  if (c.detected) head.appendChild(el("span", "contra-when", "detectada " + c.detected));
+  card.appendChild(head);
+  if (c.reason) card.appendChild(el("div", "contra-reason", c.reason));
+  const pair = el("div", "contra-pair");
+  [[c.a, c.a_claim], [c.b, c.b_claim]].forEach(([id, claim]) => {
+    const side = el("div", "contra-side");
+    const idEl = el("a", "contra-id", id);
+    idEl.addEventListener("click", () => openNoteModal(id));
+    side.appendChild(idEl);
+    side.appendChild(el("div", "contra-claim", claim || "—"));
+    pair.appendChild(side);
+  });
+  card.appendChild(pair);
+  const acts = el("div", "contra-acts");
+  const resolve = el("button", "mini", "Ya lo resolví");
+  resolve.addEventListener("click", async () => { await api("/api/contradictions?id=" + encodeURIComponent(c.id) + "&action=resolve", { method: "POST" }); refresh(); });
+  const dismiss = el("button", "mini ghost", "No es contradicción");
+  dismiss.addEventListener("click", async () => { await api("/api/contradictions?id=" + encodeURIComponent(c.id) + "&action=dismiss", { method: "POST" }); refresh(); });
+  acts.appendChild(resolve); acts.appendChild(dismiss);
+  card.appendChild(acts);
+  return card;
 }
 
 // ---------- guard (anti-manipulación) ----------
