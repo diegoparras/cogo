@@ -41,9 +41,11 @@ Elegí **una** de estas dos formas:
 
 **Opción fácil (con Docker):** copiá y pegá esto en una terminal:
 ```
-docker run -p 8095:8080 -v cogo-vault:/vault ghcr.io/diegoparras/cogo
+docker run -d -p 127.0.0.1:8095:8080 -v cogo-vault:/vault -e COGO_ALLOW_INSECURE=1 ghcr.io/diegoparras/cogo
 ```
-Después abrí el navegador en **http://localhost:8095**. Listo.
+Después abrí el navegador en **http://localhost:8095**. Listo. (Para instalarlo en
+un **servidor** —EasyPanel, VPS— seguí [`instalacion.md`](instalacion.md): ahí va con
+token, que es lo seguro.)
 
 **Opción sin Docker (un solo archivo):** si tenés el programa `cogo`, escribí:
 ```

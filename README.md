@@ -100,19 +100,23 @@ COGO **recomputa el color en vivo mientras escribís** (lo ves antes de guardar)
 
 ## Arrancar (la pavada)
 
-**Con Docker** — un comando, y abrís el navegador:
+Guía completa y para principiantes (local, **EasyPanel**, VPS): **[docs/instalacion.md](docs/instalacion.md)**.
+
+**En tu compu, con Docker** — un comando, y abrís el navegador:
 
 ```bash
-docker run -p 8095:8080 -v cogo-vault:/vault ghcr.io/diegoparras/cogo
+docker run -d -p 127.0.0.1:8095:8080 -v cogo-vault:/vault \
+  -e COGO_ALLOW_INSECURE=1 ghcr.io/diegoparras/cogo
 ```
 
 → <http://localhost:8095>. Ves tu vault pintado por confianza, capturás y editás notas,
-todo desde la web. **Cero terminal.**
+todo desde la web. **Cero terminal.** (`COGO_ALLOW_INSECURE=1` está OK acá porque el puerto
+queda atado a tu máquina. Para un servidor **no** lo uses: poné `COGO_MCP_TOKEN` — ver la guía.)
 
 **Sin Docker** — un solo binario, sin runtime:
 
 ```bash
-cogo serve -http :8080 -vault ./vault
+cogo serve -http 127.0.0.1:8080 -vault ./vault
 ```
 
 **Conectarlo a tu agente (MCP)** — el mismo binario es un servidor MCP. En Claude Code,

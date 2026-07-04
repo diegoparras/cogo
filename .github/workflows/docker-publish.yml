@@ -1,0 +1,36 @@
+# Publica la imagen de COGO en GitHub Container Registry (ghcr.io) en cada push a
+# main, así `docker run ghcr.io/diegoparras/cogo` y EasyPanel-desde-imagen andan.
+# Tras la primera corrida, poné el paquete en público: repo → Packages → cogo →
+# Package settings → Change visibility → Public.
+name: docker-publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
