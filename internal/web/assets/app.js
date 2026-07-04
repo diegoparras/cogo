@@ -223,7 +223,7 @@ function render() {
   const main = $("#main");
   main.innerHTML = "";
   if (state.editing) { renderEditor(main); return; }
-  ({ vault: renderVault, fresh: renderFresh, pack: renderPack, graph: renderGraph, lint: renderLint, guard: renderGuard }[state.view])(main);
+  ({ vault: renderVault, fresh: renderFresh, pack: renderPack, graph: renderGraph, lint: renderLint, guard: renderGuard, xray: renderVeracidad }[state.view])(main);
 }
 
 // ---------- vault ----------
@@ -1029,6 +1029,43 @@ function contraCard(c, refresh) {
   acts.appendChild(resolve); acts.appendChild(dismiss);
   card.appendChild(acts);
   return card;
+}
+
+// ---------- veracidad (Motor de Veracidad · xray) ----------
+async function renderVeracidad(main) {
+  viewHead(main, "Suite Escriba · Memoria", "Veracidad", "Radiografía una respuesta de IA por afirmación: cuánto se compromete el lenguaje vs cuánto fundamento declara. Determinista, sin modelo — el gemelo del Guard. No dice “es verdad”: marca lo afirmado fuerte sin fundamento y las opiniones disfrazadas de hecho.");
+  const ta = el("textarea", "md"); ta.setAttribute("rows", "7"); ta.placeholder = "Pegá acá una respuesta de una IA…";
+  main.appendChild(field("Respuesta a radiografiar", ta));
+  const bar = el("div", "viewbar");
+  const btn = el("button", null, "Radiografiar");
+  const overall = el("span", "xr-overall");
+  bar.appendChild(btn); bar.appendChild(overall);
+  main.appendChild(bar);
+  const out = el("div", "xr-out");
+  main.appendChild(out);
+  btn.addEventListener("click", async () => {
+    if (!ta.value.trim()) return;
+    btn.disabled = true;
+    const r = await api("/api/xray", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer: ta.value }) });
+    btn.disabled = false;
+    overall.className = "xr-overall " + cls(r.overall);
+    overall.innerHTML = "";
+    overall.appendChild(el("span", "dot"));
+    overall.appendChild(el("strong", null, colorWord(r.overall)));
+    if (r.summary) overall.appendChild(el("span", "xr-summary", r.summary));
+    out.innerHTML = "";
+    (r.claims || []).forEach(c => {
+      const row = el("div", "xr-claim " + cls(c.color));
+      row.appendChild(el("span", "dot"));
+      const body = el("div", "xr-claim-body");
+      body.appendChild(el("div", "xr-claim-text", c.text));
+      body.appendChild(el("div", "xr-claim-reason", c.reason));
+      body.appendChild(el("div", "xr-claim-meta", "compromiso: " + c.commitment + " · evidencia: " + c.evidence + " · " + (c.falsifiable ? "falsable" : "no falsable")));
+      row.appendChild(body);
+      out.appendChild(row);
+    });
+    if (!r.claims || !r.claims.length) out.appendChild(el("div", "empty", "No encontré afirmaciones para radiografiar."));
+  });
 }
 
 // ---------- guard (anti-manipulación) ----------

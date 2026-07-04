@@ -25,6 +25,7 @@ import (
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/tokens"
+	"github.com/diegoparras/cogo/internal/xray"
 )
 
 //go:embed assets
@@ -106,6 +107,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/settings/test", s.handleTestLLM)
 	mux.HandleFunc("/api/settings/models", s.handleModels)
 	mux.HandleFunc("/api/guard", s.handleGuard)
+	mux.HandleFunc("/api/xray", s.handleXray)
 	mux.HandleFunc("/api/mandate", s.handleMandate)
 	mux.HandleFunc("/api/tokens", s.handleTokens)
 }
@@ -256,6 +258,22 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		"depends_on": n.DependsOn, "supersedes": n.Supersedes, "caused_by": n.CausedBy,
 		"color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(),
 	})
+}
+
+// handleXray radiographs an AI answer for veracity (deterministic gap meter).
+func (s *Server) handleXray(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		Answer string `json:"answer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, xray.Analyze(in.Answer))
 }
 
 // handleTrash lists the deleted notes (GET) and restores or purges one (POST).

@@ -17,6 +17,7 @@ import (
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/tokens"
+	"github.com/diegoparras/cogo/internal/xray"
 	"github.com/diegoparras/cogo/internal/web"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -306,10 +307,34 @@ func newMCPServer(dir string) *mcp.Server {
 		return textResult(eng.Render(report)), nil, nil
 	})
 
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "xray",
+		Description: "Radiography an answer for VERACITY (the twin of guard's manipulation check): per " +
+			"claim, expose the gap between how strongly it is asserted and how much grounding it declares. " +
+			"Deterministic — no model. Flags claims asserted hard with no basis, opinions dressed as facts, " +
+			"and un-sourced factual claims. It never says 'true'; green needs an executed test (Phase 2).",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in xrayIn) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.Answer) == "" {
+			return errResult(fmt.Errorf("xray needs the answer text to analyze")), nil, nil
+		}
+		rep := xray.Analyze(in.Answer)
+		var b strings.Builder
+		icon := map[string]string{"red": "🔴", "yellow": "🟡", "ungraded": "⚪"}
+		fmt.Fprintf(&b, "Radiografía de veracidad — %s\n%s\n\n", icon[rep.Overall]+" "+rep.Overall, rep.Summary)
+		for _, c := range rep.Claims {
+			fmt.Fprintf(&b, "%s %q\n   %s (compromiso: %s · evidencia: %s)\n", icon[c.Color], c.Text, c.Reason, c.Commitment, c.Evidence)
+		}
+		return textResult(b.String()), nil, nil
+	})
+
 	return s
 }
 
 // --- tool I/O ---
+
+type xrayIn struct {
+	Answer string `json:"answer" jsonschema:"the AI answer text to radiograph for veracity"`
+}
 
 type packIn struct {
 	Query   string `json:"query" jsonschema:"the topic to build context for"`
