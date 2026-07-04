@@ -267,7 +267,7 @@ func cmdSearch(args []string) error {
 	if err != nil {
 		return err
 	}
-	hits := core.Search(vault, nil, strings.Join(fs.Args(), " "), *project, t, *limit)
+	hits := core.Search(vault, nil, strings.Join(fs.Args(), " "), *project, t, *limit, false)
 	if len(hits) == 0 {
 		fmt.Println("no matching notes")
 		return nil

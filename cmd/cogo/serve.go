@@ -84,13 +84,17 @@ func newMCPServer(dir string) *mcp.Server {
 		if err != nil {
 			return errResult(err), nil, nil
 		}
-		hits := core.Search(vault, nil, in.Query, in.Project, today(), in.Limit)
+		hits := core.Search(vault, nil, in.Query, in.Project, today(), in.Limit, in.IncludeArchived)
 		if len(hits) == 0 {
 			return textResult("no matching notes"), nil, nil
 		}
 		var b strings.Builder
 		for _, h := range hits {
-			fmt.Fprintf(&b, "- %s `%s` — %s\n", h.Color, h.ID, h.Summary)
+			fmt.Fprintf(&b, "- %s `%s` — %s", h.Color, h.ID, h.Summary)
+			if h.State != "" {
+				fmt.Fprintf(&b, " [%s]", h.State)
+			}
+			b.WriteString("\n")
 		}
 		return textResult(b.String()), nil, nil
 	})
@@ -194,6 +198,41 @@ func newMCPServer(dir string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "archive",
+		Description: "Put a note away: keep it on disk but drop it from the graph, pack and search. For findings that are done or obsolete. Lifecycle is a separate axis from color — archiving never changes a note's confidence, and it is restorable.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in openIn) (*mcp.CallToolResult, any, error) {
+		return setNoteStatus(dir, in.ID, core.StateArchived)
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "restore",
+		Description: "Bring an archived or retracted note back to active — visible again in the graph, pack and search.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in openIn) (*mcp.CallToolResult, any, error) {
+		return setNoteStatus(dir, in.ID, "")
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "remove",
+		Description: "Delete a note from disk for good. Only for genuine garbage (wrong project, leaked secret, duplicate) — prefer archive, which keeps the record. Leaves a tombstone in the log.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in openIn) (*mcp.CallToolResult, any, error) {
+		vault, err := core.LoadVault(dir)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		n, ok := vault[in.ID]
+		if !ok {
+			return errResult(fmt.Errorf("no note with id %q", in.ID)), nil, nil
+		}
+		if _, err := core.TrashNote(dir, n); err != nil {
+			return errResult(err), nil, nil
+		}
+		delete(vault, in.ID)
+		_ = regenIndex(dir, vault)
+		_ = appendLog(dir, "delete "+in.ID)
+		return textResult(fmt.Sprintf("deleted %q (moved to .cogo/trash)", in.ID)), nil, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
 		Name: "guard",
 		Description: "Radiography a model turn for manipulation pressure: names influence/coercion " +
 			"tactics with quoted evidence, checks denials against the transcript (receipts), and " +
@@ -239,9 +278,35 @@ type packIn struct {
 }
 
 type searchIn struct {
-	Query   string `json:"query" jsonschema:"search terms"`
-	Project string `json:"project,omitempty" jsonschema:"optional project filter"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"max results; 0 means all"`
+	Query           string `json:"query" jsonschema:"search terms"`
+	Project         string `json:"project,omitempty" jsonschema:"optional project filter"`
+	Limit           int    `json:"limit,omitempty" jsonschema:"max results; 0 means all"`
+	IncludeArchived bool   `json:"include_archived,omitempty" jsonschema:"also list archived/retracted/superseded notes (hidden by default)"`
+}
+
+// setNoteStatus flips a note's lifecycle state (archive/restore) and persists it.
+// Color is untouched — lifecycle is a separate axis from confidence.
+func setNoteStatus(dir, id, status string) (*mcp.CallToolResult, any, error) {
+	vault, err := core.LoadVault(dir)
+	if err != nil {
+		return errResult(err), nil, nil
+	}
+	n, ok := vault[id]
+	if !ok {
+		return errResult(fmt.Errorf("no note with id %q", id)), nil, nil
+	}
+	n.Status = status
+	path := n.Path
+	if path == "" {
+		path = filepath.Join(dir, id+".md")
+	}
+	if err := core.WriteNoteFile(path, n); err != nil {
+		return errResult(err), nil, nil
+	}
+	_ = regenIndex(dir, vault)
+	st := core.Lifecycle(vault)[id]
+	_ = appendLog(dir, fmt.Sprintf("status %s %s", id, st))
+	return textResult(fmt.Sprintf("%s is now %s", id, st)), nil, nil
 }
 
 type openIn struct {

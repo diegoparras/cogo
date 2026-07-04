@@ -34,6 +34,7 @@ type PackOptions struct {
 // fits the token budget.
 func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts PackOptions) Pack {
 	verdicts := EvaluateVault(vault, contradictions, opts.Today)
+	hidden := Hidden(vault)
 	qterms := terms(opts.Query)
 
 	type cand struct {
@@ -45,6 +46,9 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	}
 	var cands []cand
 	for id, n := range vault {
+		if hidden[id] {
+			continue // archived/retracted/superseded never feed an agent's context
+		}
 		if opts.Project != "" && n.Project != opts.Project {
 			continue
 		}

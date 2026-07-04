@@ -8,6 +8,7 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -59,6 +60,9 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/graph", s.handleGraph)
 	mux.HandleFunc("/api/note", s.handleNote)
 	mux.HandleFunc("/api/verify", s.handleVerify)
+	mux.HandleFunc("/api/archive", s.handleArchive)
+	mux.HandleFunc("/api/restore", s.handleRestore)
+	mux.HandleFunc("/api/delete", s.handleDelete)
 	mux.HandleFunc("/api/preview", s.handlePreview)
 	mux.HandleFunc("/api/capture", s.handleCapture)
 	mux.HandleFunc("/api/lint", s.handleLint)
@@ -113,7 +117,17 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, core.Overview(vault, s.contras(), s.today()))
+	writeJSON(w, core.Overview(vault, s.contras(), s.today(), archivedParam(r)))
+}
+
+// archivedParam reads the "?archived=1" toggle used by views that can optionally
+// show the notes that are normally hidden (archived, retracted, superseded).
+func archivedParam(r *http.Request) bool {
+	switch strings.ToLower(r.URL.Query().Get("archived")) {
+	case "1", "true", "yes":
+		return true
+	}
+	return false
 }
 
 func (s *Server) handlePack(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +154,7 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, core.BuildGraph(vault, s.contras(), s.today()))
+	writeJSON(w, core.BuildGraph(vault, s.contras(), s.today(), archivedParam(r)))
 }
 
 // handleNote returns one note's editable inputs (plus its computed color), so
@@ -192,6 +206,93 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"id": id, "color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String()})
+}
+
+// setStatus is the shared body of archive/restore: it flips a note's lifecycle
+// state and rewrites it. The color is untouched — lifecycle is a separate axis.
+func (s *Server) setStatus(w http.ResponseWriter, r *http.Request, status string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	vault, ok := s.load(w)
+	if !ok {
+		return
+	}
+	id := r.URL.Query().Get("id")
+	n, found := vault[id]
+	if !found {
+		http.Error(w, "no such note", http.StatusNotFound)
+		return
+	}
+	n.Status = status
+	path := n.Path
+	if path == "" {
+		path = filepath.Join(s.dir, id+".md")
+	}
+	if err := core.WriteNoteFile(path, n); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	state := core.Lifecycle(vault)
+	writeJSON(w, map[string]any{"id": id, "state": stateOrActive(state[id])})
+}
+
+// handleArchive puts a note away (still on disk, restorable, out of the graph).
+func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
+	status := core.StateArchived
+	if q := r.URL.Query().Get("status"); q == core.StateRetracted {
+		status = core.StateRetracted // "retract" = withdrawn as wrong, vs merely obsolete
+	}
+	s.setStatus(w, r, status)
+}
+
+// handleRestore brings an archived/retracted note back to active.
+func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
+	s.setStatus(w, r, "")
+}
+
+// handleDelete removes a note from disk for good — for genuine garbage (wrong
+// project, leaked secret, duplicate). It leaves a tombstone line in log.md so
+// the deletion itself is on the record.
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	vault, ok := s.load(w)
+	if !ok {
+		return
+	}
+	id := r.URL.Query().Get("id")
+	n, found := vault[id]
+	if !found {
+		http.Error(w, "no such note", http.StatusNotFound)
+		return
+	}
+	if _, err := core.TrashNote(s.dir, n); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.tombstone(id)
+	writeJSON(w, map[string]any{"id": id, "deleted": true})
+}
+
+// tombstone appends a deletion record to the vault's log.md (best-effort).
+func (s *Server) tombstone(id string) {
+	f, err := os.OpenFile(filepath.Join(s.dir, "log.md"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "- %s delete %s\n", s.today().String(), id)
+}
+
+func stateOrActive(st string) string {
+	if st == "" {
+		return core.StateActive
+	}
+	return st
 }
 
 // draft is what the editor sends: a note's inputs. COGO computes the color.

@@ -19,7 +19,7 @@ function viewHead(main, eyebrow, title, sub) {
   main.appendChild(h);
 }
 
-const state = { view: "vault", project: "", hideGreen: false, editing: null, llmConfigured: false, scrubEnabled: false };
+const state = { view: "vault", project: "", hideGreen: false, showArchived: false, editing: null, llmConfigured: false, scrubEnabled: false };
 
 // ---------- chrome ----------
 function initTheme() {
@@ -104,9 +104,30 @@ function renderWelcome(main) {
   main.appendChild(w);
 }
 
+// stateLabel names the lifecycle state in Spanish for the badge.
+function stateLabel(s) {
+  return s === "archived" ? "archivada"
+    : s === "superseded" ? "reemplazada"
+    : s === "retracted" ? "retractada" : s;
+}
+
+async function archiveNote(id) {
+  await api("/api/archive?id=" + encodeURIComponent(id), { method: "POST" });
+  render();
+}
+async function restoreNote(id) {
+  await api("/api/restore?id=" + encodeURIComponent(id), { method: "POST" });
+  render();
+}
+async function deleteNote(id) {
+  if (!confirm("¿Borrar «" + id + "»?\n\nSale de COGO y se mueve a la papelera del vault (.cogo/trash) — recuperable a mano. Si solo querés sacarla del grafo sin perderla, usá «archivar».")) return;
+  await api("/api/delete?id=" + encodeURIComponent(id), { method: "POST" });
+  render();
+}
+
 async function renderVault(main) {
-  const notes = (await api("/api/notes")).filter(matchesProject);
-  if (!notes.length && !state.project) { renderWelcome(main); return; }
+  const notes = (await api("/api/notes" + (state.showArchived ? "?archived=1" : ""))).filter(matchesProject);
+  if (!notes.length && !state.project && !state.showArchived) { renderWelcome(main); return; }
   viewHead(main, "Suite Escriba · Memoria", "Vault", "Todo lo que sabés del proyecto, con un color de confianza que COGO computa solo: verde confiá, amarillo ojo, rojo no.");
   const bar = el("div", "viewbar");
   const addBtn = el("button", "mini", "+ Nueva nota");
@@ -118,6 +139,11 @@ async function renderVault(main) {
   cb.addEventListener("change", () => { state.hideGreen = cb.checked; render(); });
   hg.appendChild(cb); hg.appendChild(el("span", null, "ocultar verdes"));
   bar.appendChild(hg);
+  const ha = el("label", "hg");
+  const acb = el("input"); acb.type = "checkbox"; acb.checked = state.showArchived;
+  acb.addEventListener("change", () => { state.showArchived = acb.checked; render(); });
+  ha.appendChild(acb); ha.appendChild(el("span", null, "mostrar archivadas"));
+  bar.appendChild(ha);
   main.appendChild(bar);
 
   const shown = notes.filter(n => !(state.hideGreen && n.color === "green"));
@@ -125,17 +151,35 @@ async function renderVault(main) {
 
   const list = el("div", "note-list");
   shown.forEach(n => {
-    const card = el("div", "note-card " + cls(n.color));
+    const card = el("div", "note-card " + cls(n.color) + (n.state ? " archived" : ""));
     card.addEventListener("click", () => openEditor(n.id));
     card.appendChild(el("span", "dot"));
     const body = el("div", "nc-body");
     const head = el("div", "nc-head");
     head.appendChild(el("span", "nc-id", n.id));
     head.appendChild(el("span", "nc-type", n.type + (n.project ? " · " + n.project : "")));
+    if (n.state) head.appendChild(el("span", "nc-badge", stateLabel(n.state)));
     if (n.stale_at) head.appendChild(el("span", "nc-stale", "↻ " + n.stale_at));
     body.appendChild(head);
     body.appendChild(el("div", "nc-claim", n.claim || "—"));
     body.appendChild(el("div", "nc-reason", n.reason));
+
+    const acts = el("div", "nc-actions");
+    acts.addEventListener("click", e => e.stopPropagation());
+    if (n.state === "archived" || n.state === "retracted") {
+      const rb = el("button", "nc-act", "restaurar");
+      rb.addEventListener("click", () => restoreNote(n.id));
+      acts.appendChild(rb);
+    } else if (!n.state) {
+      const ab = el("button", "nc-act", "archivar");
+      ab.addEventListener("click", () => archiveNote(n.id));
+      acts.appendChild(ab);
+    }
+    const db = el("button", "nc-act danger", "borrar");
+    db.addEventListener("click", () => deleteNote(n.id));
+    acts.appendChild(db);
+    body.appendChild(acts);
+
     card.appendChild(body);
     list.appendChild(card);
   });

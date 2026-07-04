@@ -58,6 +58,7 @@ type fmInputs struct {
 	DependsOn    []string   `yaml:"depends_on,omitempty"`
 	Supersedes   string     `yaml:"supersedes,omitempty"`
 	CausedBy     string     `yaml:"caused_by,omitempty"`
+	Status       string     `yaml:"status,omitempty"`
 }
 
 type fmComputed struct {
@@ -77,6 +78,7 @@ func MarshalNote(n *Note) ([]byte, error) {
 		DependsOn:  n.DependsOn,
 		Supersedes: n.Supersedes,
 		CausedBy:   n.CausedBy,
+		Status:     n.Status,
 	}
 	if n.Check != (Check{}) {
 		c := n.Check

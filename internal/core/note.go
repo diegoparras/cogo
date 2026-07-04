@@ -55,6 +55,7 @@ type Note struct {
 	DependsOn    []string   `yaml:"depends_on"` // hard graph edges this note rests on
 	Supersedes   string     `yaml:"supersedes"`
 	CausedBy     string     `yaml:"caused_by"`
+	Status       string     `yaml:"status"` // "" (active) | archived | retracted — the lifecycle axis, orthogonal to color
 
 	// ---- computed by COGO · do not edit ----
 	Confidence  string `yaml:"confidence"`

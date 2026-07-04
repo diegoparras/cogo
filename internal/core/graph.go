@@ -13,6 +13,7 @@ type GraphNode struct {
 	Color   string `json:"color"`
 	Project string `json:"project,omitempty"`
 	Claim   string `json:"claim,omitempty"`
+	State   string `json:"state,omitempty"` // archived|retracted|superseded; empty = active
 }
 
 type GraphEdge struct {
@@ -32,18 +33,23 @@ var wikilinkRe = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
 // edges. Frontmatter gives the strong edges (depends_on, supersedes, caused_by);
 // [[wikilinks]] in the body give the weak "relates to" edges. Only edges to
 // notes that exist in the vault are kept.
-func BuildGraph(vault map[string]*Note, contradictions map[string]bool, today Date) GraphData {
+func BuildGraph(vault map[string]*Note, contradictions map[string]bool, today Date, includeArchived bool) GraphData {
 	verdicts := EvaluateVault(vault, contradictions, today)
+	state := Lifecycle(vault)
+	show := func(id string) bool { return includeArchived || state[id] == StateActive }
 
 	g := GraphData{}
 	for id, n := range vault {
+		if !show(id) {
+			continue
+		}
 		claim := Claim(n)
 		if len([]rune(claim)) > 120 {
 			claim = string([]rune(claim)[:119]) + "…"
 		}
 		g.Nodes = append(g.Nodes, GraphNode{
 			ID: id, Type: n.Type, Color: verdicts[id].Color.String(),
-			Project: n.Project, Claim: claim,
+			Project: n.Project, Claim: claim, State: stateTag(state, id),
 		})
 	}
 	sort.Slice(g.Nodes, func(i, j int) bool { return g.Nodes[i].ID < g.Nodes[j].ID })
@@ -55,6 +61,9 @@ func BuildGraph(vault map[string]*Note, contradictions map[string]bool, today Da
 		}
 		if _, ok := vault[to]; !ok {
 			return
+		}
+		if !show(from) || !show(to) {
+			return // don't draw edges to notes that aren't on screen
 		}
 		g.Edges = append(g.Edges, GraphEdge{From: from, To: to, Kind: kind})
 		seen[from+"\x00"+to] = true
