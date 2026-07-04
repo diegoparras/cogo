@@ -40,6 +40,7 @@ type Server struct {
 	today        func() core.Date
 	tokens       *tokens.Store
 	contra       *contra.Store
+	cache        *core.VaultCache // mtime-keyed vault reads (scale past a few thousand notes)
 
 	mu             sync.RWMutex
 	provider       llm.Provider
@@ -48,7 +49,7 @@ type Server struct {
 }
 
 func New(dir string, today func() core.Date, store *tokens.Store) *Server {
-	s := &Server{dir: dir, today: today, tokens: store, contradictions: map[string]bool{}, evidenceRoot: os.Getenv("COGO_EVIDENCE_ROOT")}
+	s := &Server{dir: dir, today: today, tokens: store, contradictions: map[string]bool{}, evidenceRoot: os.Getenv("COGO_EVIDENCE_ROOT"), cache: core.NewVaultCache(dir)}
 	s.provider = s.loadProvider()
 	s.scrubber = scrub.FromEnv()
 	if u, err := readUsage(dir); err == nil {
@@ -182,7 +183,7 @@ func (s *Server) contras() map[string]bool {
 func (s *Server) prov() llm.Provider { s.mu.RLock(); defer s.mu.RUnlock(); return s.provider }
 
 func (s *Server) load(w http.ResponseWriter) (map[string]*core.Note, bool) {
-	vault, err := core.LoadVault(s.dir)
+	vault, err := s.cache.Load()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return nil, false

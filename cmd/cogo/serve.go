@@ -93,10 +93,11 @@ func newMCPServer(dir string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "cogo", Version: version}, nil)
 	scrubber := scrub.FromEnv()
 	evidenceRoot := os.Getenv("COGO_EVIDENCE_ROOT")
+	cache := core.NewVaultCache(dir) // mtime-keyed reads: the MCP is a long-running server
 	// loadVault reads the vault and checks that evidence refs resolve, so the
 	// color an agent consumes reflects broken citations (see core.ResolveEvidence).
 	loadVault := func() (map[string]*core.Note, error) {
-		v, err := core.LoadVault(dir)
+		v, err := cache.Load()
 		if err != nil {
 			return nil, err
 		}
