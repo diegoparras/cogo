@@ -79,6 +79,57 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .token-form .login-sso { margin-top: 2px; }
 .token-err { color: var(--err); font-size: 12.5px; min-height: 16px; margin-top: 10px; }
 
+/* ---- render de Markdown (modal de nota + preview del editor) ---- */
+.md-render { font-size: 13.5px; line-height: 1.6; color: var(--text); word-wrap: break-word; }
+.md-render h1, .md-render h2, .md-render h3, .md-render h4 { margin: 14px 0 6px; line-height: 1.3; }
+.md-render h1 { font-size: 19px; } .md-render h2 { font-size: 16px; } .md-render h3 { font-size: 14.5px; }
+.md-render p { margin: 8px 0; }
+.md-render ul, .md-render ol { margin: 8px 0; padding-left: 22px; }
+.md-render li { margin: 3px 0; }
+.md-render code { font-family: var(--mono); font-size: .92em; background: var(--card); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+.md-render pre { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; overflow-x: auto; margin: 10px 0; }
+.md-render pre code { background: none; border: 0; padding: 0; }
+.md-render blockquote { margin: 10px 0; padding: 4px 14px; border-left: 3px solid var(--border); color: var(--muted-2); }
+.md-render a { color: var(--accent); }
+.md-render a.wikilink { cursor: pointer; text-decoration: none; border-bottom: 1px dashed var(--accent); }
+.md-render hr { border: 0; border-top: 1px solid var(--hairline); margin: 14px 0; }
+.md-render > :first-child { margin-top: 0; }
+
+/* ---- editor markdown (toolbar + preview split) ---- */
+.md-editor { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.md-tb-row { display: flex; align-items: center; gap: 2px; padding: 5px 6px; border-bottom: 1px solid var(--border); background: var(--card); }
+.md-tb { min-width: 30px; height: 28px; padding: 0 8px; font-size: 13px; font-weight: 600; border-radius: 7px; border: 0; background: transparent; color: var(--muted-2); cursor: pointer; }
+.md-tb:hover { background: var(--panel); color: var(--text); }
+.md-tb-sp { flex: 1; }
+.md-prev.on { background: var(--accent); color: var(--on-accent); }
+.md-body-row { display: flex; }
+.md-body-row textarea.md { width: 100%; border: 0; border-radius: 0; }
+.md-body-row textarea.md:focus { box-shadow: none; border: 0; background: var(--bg); }
+.md-preview { display: none; }
+.md-editor.split textarea.md { flex: 1; border-right: 1px solid var(--border); }
+.md-editor.split .md-preview { display: block; flex: 1; padding: 11px 15px; overflow-y: auto; max-height: 360px; }
+
+/* ---- modal de nota (clic en un nodo del grafo) ---- */
+.note-modal { width: min(560px, 94vw); max-height: 86vh; overflow-y: auto; }
+.nm-meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 2px 0 6px; }
+.nm-type { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.nm-color { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.nm-reason { font-size: 12px; color: var(--muted); font-style: italic; margin-bottom: 10px; }
+.nm-body { border-top: 1px solid var(--hairline); padding-top: 12px; }
+.nm-block { margin-top: 14px; border-top: 1px solid var(--hairline); padding-top: 10px; }
+.nm-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
+.nm-ev-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; margin: 3px 0; }
+.nm-ev-kind { font-family: var(--mono); color: var(--muted-2); flex: 0 0 auto; }
+.nm-ev-ref { color: var(--text); word-break: break-all; flex: 1; }
+.nm-rel-row { display: flex; gap: 8px; font-size: 12.5px; margin: 3px 0; }
+.nm-rel-k { color: var(--muted); flex: 0 0 96px; }
+.nm-rel-v { font-family: var(--mono); color: var(--text); word-break: break-all; }
+
+/* ---- grafo a pantalla completa ---- */
+.graph-view:fullscreen { background: var(--bg); padding: 16px 22px; display: flex; flex-direction: column; }
+.graph-view:fullscreen .graph-wrap { flex: 1; height: auto; margin-top: 12px; }
+.graph-view:fullscreen .edge-legend { flex: 0 0 auto; }
+
 /* ---- modal de confirmación (estilo Escriba, reemplaza al confirm() nativo) ---- */
 .confirm-back { opacity: 0; transition: opacity .16s ease; }
 .confirm-back.show { opacity: 1; }

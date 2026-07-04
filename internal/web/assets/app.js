@@ -24,6 +24,56 @@ function viewHead(main, eyebrow, title, sub) {
   main.appendChild(h);
 }
 
+// ---- Markdown mínimo y seguro (sin dependencias) ----
+function mdEscape(s) {
+  return (s || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function mdInline(s) {
+  s = mdEscape(s);
+  s = s.replace(/`([^`]+)`/g, (_, c) => "<code>" + c + "</code>");
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\[\[([^\]]+)\]\]/g, (_, id) => '<a class="wikilink" data-id="' + mdEscape(id.trim()) + '">' + mdEscape(id.trim()) + "</a>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  return s;
+}
+// mdToHtml: cubre lo que usan las notas — headings, negrita/itálica, código y
+// fences, listas, citas, links, [[wikilinks]] y hr. Escapa HTML (anti-inyección).
+function mdToHtml(src) {
+  const lines = (src || "").replace(/\r\n/g, "\n").split("\n");
+  let html = "", i = 0, list = null;
+  const closeList = () => { if (list) { html += "</" + list + ">"; list = null; } };
+  const special = /^(#{1,6}\s|```|>|\s*[-*]\s|\s*\d+\.\s|-{3,}\s*$|\*{3,}\s*$)/;
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (/^```/.test(ln)) {
+      closeList(); i++;
+      let code = "";
+      while (i < lines.length && !/^```/.test(lines[i])) { code += lines[i] + "\n"; i++; }
+      i++;
+      html += "<pre><code>" + mdEscape(code.replace(/\n$/, "")) + "</code></pre>";
+      continue;
+    }
+    const h = ln.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { closeList(); const l = h[1].length; html += "<h" + l + ">" + mdInline(h[2]) + "</h" + l + ">"; i++; continue; }
+    if (/^(-{3,}|\*{3,})\s*$/.test(ln)) { closeList(); html += "<hr>"; i++; continue; }
+    if (/^>\s?/.test(ln)) { closeList(); html += "<blockquote>" + mdInline(ln.replace(/^>\s?/, "")) + "</blockquote>"; i++; continue; }
+    const ul = ln.match(/^\s*[-*]\s+(.*)$/), ol = ln.match(/^\s*\d+\.\s+(.*)$/);
+    if (ul || ol) {
+      const t = ul ? "ul" : "ol";
+      if (list !== t) { closeList(); html += "<" + t + ">"; list = t; }
+      html += "<li>" + mdInline(ul ? ul[1] : ol[1]) + "</li>"; i++; continue;
+    }
+    if (/^\s*$/.test(ln)) { closeList(); i++; continue; }
+    closeList();
+    let para = ln; i++;
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !special.test(lines[i])) { para += " " + lines[i]; i++; }
+    html += "<p>" + mdInline(para) + "</p>";
+  }
+  closeList();
+  return html;
+}
+
 // confirmDialog: un modal de confirmación al estilo Suite Escriba (reemplaza al
 // confirm() nativo del navegador). Devuelve una Promise<boolean>.
 function confirmDialog({ title, message, note, hint, confirmText = "Aceptar", cancelText = "Cancelar", danger = false } = {}) {
@@ -378,6 +428,7 @@ async function renderGraph(main) {
   if (!nodes.length) { main.appendChild(el("div", "empty", "Sin notas para este proyecto.")); return; }
 
   viewHead(main, "Suite Escriba · Memoria", "Grafo", "Cómo se relacionan tus notas, pintadas por confianza. Mirálo en 2D o entrá a la constelación 3D.");
+  const view = el("div", "graph-view");
   const bar = el("div", "viewbar graph-bar");
   bar.appendChild(legend(nodes));
   bar.appendChild(el("span", "gb-sp"));
@@ -385,18 +436,27 @@ async function renderGraph(main) {
   const b2 = el("button", "seg-btn", "2D"), b3 = el("button", "seg-btn", "3D");
   seg.appendChild(b2); seg.appendChild(b3);
   const reset = el("button", "mini ghost", "recentrar");
-  bar.appendChild(seg); bar.appendChild(reset);
-  main.appendChild(bar);
+  const fs = el("button", "mini ghost", "⛶ pantalla completa");
+  bar.appendChild(seg); bar.appendChild(reset); bar.appendChild(fs);
+  view.appendChild(bar);
 
-  if (edges.length) main.appendChild(edgeLegend(edges));
+  if (edges.length) view.appendChild(edgeLegend(edges));
 
   const wrap = el("div", "graph-wrap");
-  main.appendChild(wrap);
+  view.appendChild(wrap);
+  main.appendChild(view);
+
+  fs.addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else view.requestFullscreen().catch(() => {});
+  });
+  const onFs = () => { fs.textContent = document.fullscreenElement ? "⛶ salir" : "⛶ pantalla completa"; };
+  document.addEventListener("fullscreenchange", onFs);
 
   const mode = window.__graphMode || "2d";
   const setActive = m => { b2.classList.toggle("on", m === "2d"); b3.classList.toggle("on", m === "3d"); };
   setActive(mode);
-  const gv = CogoGraph.mount(wrap, { nodes, edges }, { mode, onSelect: id => openEditor(id) });
+  const gv = CogoGraph.mount(wrap, { nodes, edges }, { mode, onSelect: id => openNoteModal(id) });
   b2.addEventListener("click", () => { window.__graphMode = "2d"; setActive("2d"); gv.setMode("2d"); });
   b3.addEventListener("click", () => { window.__graphMode = "3d"; setActive("3d"); gv.setMode("3d"); });
   reset.addEventListener("click", () => gv.resetView());
@@ -462,6 +522,74 @@ function paintEvBadge(node, status) {
   node.title = title;
 }
 
+// openNoteModal: vista de solo lectura de una nota (clic en un nodo del grafo).
+// Renderiza el cuerpo como Markdown, muestra evidencia (con badges), relaciones y
+// un botón "Editar". Se monta dentro del elemento fullscreen si hay uno activo.
+async function openNoteModal(id) {
+  const n = await api("/api/note?id=" + encodeURIComponent(id)).catch(() => null);
+  if (!n || !n.id) return;
+  const back = el("div", "modal-back confirm-back note-modal-back");
+  const card = el("div", "modal-card note-modal");
+  card.appendChild(el("h2", "modal-tit", n.id));
+
+  const meta = el("div", "nm-meta");
+  meta.appendChild(el("span", "nm-type", n.type + (n.project ? " · " + n.project : "")));
+  const col = el("span", "nm-color " + cls(n.color));
+  col.appendChild(el("span", "dot")); col.appendChild(el("strong", null, colorWord(n.color)));
+  meta.appendChild(col);
+  card.appendChild(meta);
+  card.appendChild(el("div", "nm-reason", n.reason));
+
+  const body = el("div", "nm-body md-render");
+  body.innerHTML = mdToHtml(n.body);
+  card.appendChild(body);
+
+  if (n.evidence && n.evidence.length) {
+    const ev = el("div", "nm-block");
+    ev.appendChild(el("div", "nm-label", "Evidencia"));
+    n.evidence.forEach(e => {
+      const row = el("div", "nm-ev-row");
+      row.appendChild(el("span", "nm-ev-kind", e.kind));
+      row.appendChild(el("span", "nm-ev-ref", e.ref));
+      if (e.status) { const b = el("span"); paintEvBadge(b, e.status); row.appendChild(b); }
+      ev.appendChild(row);
+    });
+    card.appendChild(ev);
+  }
+  const rels = [];
+  if (n.depends_on && n.depends_on.length) rels.push(["depende de", n.depends_on.join(", ")]);
+  if (n.supersedes) rels.push(["reemplaza a", n.supersedes]);
+  if (n.caused_by) rels.push(["causada por", n.caused_by]);
+  if (rels.length) {
+    const rl = el("div", "nm-block");
+    rl.appendChild(el("div", "nm-label", "Relaciones"));
+    rels.forEach(([k, v]) => {
+      const r = el("div", "nm-rel-row");
+      r.appendChild(el("span", "nm-rel-k", k));
+      r.appendChild(el("span", "nm-rel-v", v));
+      rl.appendChild(r);
+    });
+    card.appendChild(rl);
+  }
+
+  const acc = el("div", "modal-acciones");
+  const closeBtn = el("button", "ghost", "Cerrar");
+  const editBtn = el("button", null, "Editar");
+  acc.appendChild(closeBtn); acc.appendChild(editBtn);
+  card.appendChild(acc);
+  back.appendChild(card);
+  (document.fullscreenElement || document.body).appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+
+  const close = () => { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  closeBtn.addEventListener("click", close);
+  editBtn.addEventListener("click", () => { close(); if (document.fullscreenElement) document.exitFullscreen(); openEditor(id); });
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+  body.querySelectorAll(".wikilink").forEach(a => a.addEventListener("click", () => { close(); openNoteModal(a.dataset.id); }));
+}
+
 async function openEditor(id) {
   let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "", depends_on: [], supersedes: "", caused_by: "" };
   const all = await api("/api/notes?archived=1").catch(() => []);
@@ -512,9 +640,52 @@ function renderEditor(main) {
   row1.appendChild(field("Proyecto", proj));
   form.appendChild(row1);
 
-  const body = el("textarea", "md"); body.value = d.body; body.setAttribute("rows", "8");
-  body.addEventListener("input", () => { d.body = body.value; preview(); });
-  form.appendChild(field("Nota (markdown) — empezá con ## Claim", body));
+  const mdEd = el("div", "md-editor");
+  const body = el("textarea", "md"); body.value = d.body; body.setAttribute("rows", "10");
+  const previewPane = el("div", "md-render md-preview");
+  const syncPrev = () => { if (mdEd.classList.contains("split")) previewPane.innerHTML = mdToHtml(body.value); };
+  const touched = () => { d.body = body.value; preview(); syncPrev(); };
+  body.addEventListener("input", touched);
+
+  const ins = (before, after, ph) => {
+    const s = body.selectionStart, e = body.selectionEnd, sel = body.value.slice(s, e) || ph || "";
+    body.value = body.value.slice(0, s) + before + sel + after + body.value.slice(e);
+    body.focus(); body.selectionStart = s + before.length; body.selectionEnd = s + before.length + sel.length;
+    touched();
+  };
+  const linePfx = pfx => {
+    const s = body.selectionStart, ls = body.value.lastIndexOf("\n", s - 1) + 1;
+    body.value = body.value.slice(0, ls) + pfx + body.value.slice(ls);
+    body.focus(); body.selectionStart = body.selectionEnd = s + pfx.length; touched();
+  };
+  const tbRow = el("div", "md-tb-row");
+  [["B", () => ins("**", "**", "negrita"), "negrita"],
+   ["I", () => ins("*", "*", "itálica"), "itálica"],
+   ["‹›", () => ins("`", "`", "código"), "código"],
+   ["H", () => linePfx("## "), "encabezado"],
+   ["—", () => linePfx("- "), "lista"],
+   ["❝", () => linePfx("> "), "cita"],
+   ["🔗", () => ins("[", "](url)", "texto"), "link"]].forEach(([lab, fn, title]) => {
+    const btn = el("button", "md-tb", lab); btn.type = "button"; btn.title = title;
+    btn.addEventListener("click", ev => { ev.preventDefault(); fn(); });
+    tbRow.appendChild(btn);
+  });
+  tbRow.appendChild(el("span", "md-tb-sp"));
+  const prevBtn = el("button", "md-tb md-prev", "vista previa"); prevBtn.type = "button";
+  prevBtn.addEventListener("click", ev => {
+    ev.preventDefault();
+    const on = mdEd.classList.toggle("split");
+    prevBtn.classList.toggle("on", on);
+    prevBtn.textContent = on ? "ocultar preview" : "vista previa";
+    syncPrev();
+  });
+  tbRow.appendChild(prevBtn);
+
+  mdEd.appendChild(tbRow);
+  const bodyRow = el("div", "md-body-row");
+  bodyRow.appendChild(body); bodyRow.appendChild(previewPane);
+  mdEd.appendChild(bodyRow);
+  form.appendChild(field("Nota (markdown) — empezá con ## Claim", mdEd));
 
   const evWrap = el("div", "ev-wrap");
   function renderEv() {
