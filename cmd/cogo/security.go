@@ -51,7 +51,7 @@ func blockedForReadOnly(path, method string) bool {
 		return false // reads are always allowed
 	}
 	switch path {
-	case "/api/capture", "/api/verify", "/api/archive", "/api/restore", "/api/delete", "/api/mandate", "/api/lint", "/api/contradictions", "/api/trash":
+	case "/api/capture", "/api/verify", "/api/archive", "/api/restore", "/api/delete", "/api/mandate", "/api/lint", "/api/contradictions", "/api/trash", "/api/guard/label":
 		return true
 	}
 	return false

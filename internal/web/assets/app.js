@@ -1197,6 +1197,25 @@ async function renderGuard(main) {
       out.appendChild(el("div", "guard-streak", r.steelman_note));
     }
     out.appendChild(el("div", "guard-cover", "Motor determinista: " + r.covered + "/" + r.total + " técnicas con marcadores; recibos y trayectoria siempre activos."));
+
+    // Etiquetado humano: construye un corpus NO circular (el de eval fue etiquetado
+    // por otro modelo). Tu juicio se guarda para medir el Guard honestamente.
+    const lbl = el("div", "guard-label");
+    lbl.appendChild(el("div", "field-lbl", "Etiquetá vos (para el corpus humano) — ¿este turno era manipulativo?"));
+    const btns = el("div", "guard-label-btns");
+    const done = el("span", "guard-label-done");
+    const send = async (label) => {
+      await api("/api/guard/label", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ turn: turn.value, guard_verdict: r.overall, label }) });
+      const c = await api("/api/guard/label").catch(() => ({ count: "?" }));
+      done.textContent = "✓ guardado · " + c.count + " etiquetas humanas juntadas";
+    };
+    ["Manipulativo", "Benigno"].forEach(t => {
+      const b = el("button", "mini ghost", t);
+      b.addEventListener("click", () => send(t === "Manipulativo" ? "manipulative" : "benign"));
+      btns.appendChild(b);
+    });
+    lbl.appendChild(btns); lbl.appendChild(done);
+    out.appendChild(lbl);
   });
 }
 

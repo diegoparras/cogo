@@ -108,6 +108,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/settings/models", s.handleModels)
 	mux.HandleFunc("/api/guard", s.handleGuard)
 	mux.HandleFunc("/api/xray", s.handleXray)
+	mux.HandleFunc("/api/guard/label", s.handleGuardLabel)
 	mux.HandleFunc("/api/mandate", s.handleMandate)
 	mux.HandleFunc("/api/tokens", s.handleTokens)
 }
@@ -258,6 +259,49 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		"depends_on": n.DependsOn, "supersedes": n.Supersedes, "caused_by": n.CausedBy,
 		"color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(),
 	})
+}
+
+// handleGuardLabel captures a HUMAN judgment of a Guard analysis into a
+// human-labeled corpus (.cogo/guard-labels.jsonl). This is the honest answer to
+// the "circular corpus" problem: the eval corpus was model-labeled; genuine
+// human labels can only come from humans, so we collect them as a by-product of
+// use. GET returns how many have been gathered.
+func (s *Server) handleGuardLabel(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Join(s.dir, ".cogo", "guard-labels.jsonl")
+	switch r.Method {
+	case http.MethodGet:
+		n := 0
+		if b, err := os.ReadFile(path); err == nil {
+			n = strings.Count(strings.TrimRight(string(b), "\n"), "\n") + 1
+			if len(strings.TrimSpace(string(b))) == 0 {
+				n = 0
+			}
+		}
+		writeJSON(w, map[string]any{"count": n})
+	case http.MethodPost:
+		var in struct {
+			Turn         string `json:"turn"`
+			GuardVerdict string `json:"guard_verdict"`
+			Label        string `json:"label"` // manipulative | benign
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Turn) == "" || in.Label == "" {
+			http.Error(w, "turn and label are required", http.StatusBadRequest)
+			return
+		}
+		_ = os.MkdirAll(filepath.Join(s.dir, ".cogo"), 0o755)
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer f.Close()
+		rec := map[string]any{"date": s.today().String(), "turn": in.Turn, "guard_verdict": in.GuardVerdict, "human_label": in.Label}
+		b, _ := json.Marshal(rec)
+		_, _ = f.Write(append(b, '\n'))
+		writeJSON(w, map[string]any{"ok": true})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleXray radiographs an AI answer for veracity (deterministic gap meter).
