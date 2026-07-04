@@ -601,6 +601,16 @@ async function openTokens() {
     copy.addEventListener("click", () => { navigator.clipboard.writeText(r.token); copy.textContent = "copiado"; setTimeout(() => copy.textContent = "copiar", 1200); });
     sr.appendChild(code); sr.appendChild(copy);
     reveal.appendChild(sr);
+
+    // …o la config lista para el .mcp.json de Claude Code, con este token puesto.
+    const cfg = JSON.stringify({ mcpServers: { cogo: { type: "http", url: location.origin + "/mcp", headers: { Authorization: "Bearer " + r.token } } } }, null, 2);
+    reveal.appendChild(el("div", "tk-cfg-lbl", "…o pegá esto en el .mcp.json de tu Claude Code:"));
+    const pre = el("pre", "tk-cfg"); pre.textContent = cfg;
+    reveal.appendChild(pre);
+    const copyCfg = el("button", "mini", "copiar configuración");
+    copyCfg.addEventListener("click", () => { navigator.clipboard.writeText(cfg); copyCfg.textContent = "copiado ✓"; setTimeout(() => copyCfg.textContent = "copiar configuración", 1400); });
+    reveal.appendChild(copyCfg);
+
     lbl.value = ""; roCb.checked = false;
     refresh();
   });

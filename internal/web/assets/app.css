@@ -105,6 +105,8 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .tk-reveal-lbl { font-size: 12px; color: var(--ok); font-weight: 600; margin-bottom: 7px; }
 .tk-secret-row { display: flex; align-items: center; gap: 8px; }
 .tk-secret { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; background: var(--card); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; }
+.tk-cfg-lbl { font-size: 12px; color: var(--muted-2); margin: 12px 0 6px; }
+.tk-cfg { margin: 0 0 10px; background: var(--code-bg, #1c2029); color: var(--code-ink, #d7dce6); border-radius: 9px; padding: 12px 14px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.55; }
 
 /* ---- render de Markdown (modal de nota + preview del editor) ---- */
 .md-render { font-size: 13.5px; line-height: 1.6; color: var(--text); word-wrap: break-word; }
