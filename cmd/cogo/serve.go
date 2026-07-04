@@ -92,16 +92,16 @@ func cmdServe(args []string) error {
 func newMCPServer(dir string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "cogo", Version: version}, nil)
 	scrubber := scrub.FromEnv()
-	evidenceRoot := os.Getenv("COGO_EVIDENCE_ROOT")
 	cache := core.NewVaultCache(dir) // mtime-keyed reads: the MCP is a long-running server
 	// loadVault reads the vault and checks that evidence refs resolve, so the
 	// color an agent consumes reflects broken citations (see core.ResolveEvidence).
+	// Evidence roots are re-read each call (tiny file) so UI edits take effect live.
 	loadVault := func() (map[string]*core.Note, error) {
 		v, err := cache.Load()
 		if err != nil {
 			return nil, err
 		}
-		core.ResolveEvidence(v, evidenceRoot)
+		core.ResolveEvidence(v, core.LoadEvidenceRoots(dir))
 		return v, nil
 	}
 
@@ -195,7 +195,7 @@ func newMCPServer(dir string) *mcp.Server {
 			}
 		}
 		vault[id] = note
-		core.ResolveEvidence(vault, evidenceRoot) // resolve the new note's own refs
+		core.ResolveEvidence(vault, core.LoadEvidenceRoots(dir)) // resolve the new note's own refs
 		v := core.Evaluate(note, vault, nil, today())
 		note.Apply(v)
 

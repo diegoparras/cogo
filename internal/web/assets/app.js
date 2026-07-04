@@ -142,6 +142,8 @@ function initMenu() {
   $("#tokensBtn").addEventListener("click", openTokens);
   $("#trashBtn").addEventListener("click", openTrash);
   $("#auditBtn").addEventListener("click", openAudit);
+  $("#evrootsBtn").addEventListener("click", openEvidenceRoots);
+  $("#exportBtn").addEventListener("click", () => { $("#menu").classList.add("hidden"); window.location.href = "/api/export"; });
   $("#aboutBtn").addEventListener("click", () => { $("#aboutModal").classList.remove("hidden"); menu.classList.add("hidden"); });
   $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
   $("#aboutModal").addEventListener("click", e => { if (e.target.id === "aboutModal") $("#aboutModal").classList.add("hidden"); });
@@ -738,6 +740,70 @@ function auditRow(e) {
   mid.appendChild(when);
   row.appendChild(mid);
   return row;
+}
+
+// ---------- Raíces de evidencia (por proyecto) ----------
+// COGO resuelve refs de evidencia relativas ("cmd/main.go") contra una carpeta
+// base. Como cada proyecto vive en un repo distinto, la base es por proyecto,
+// con un default global de reserva.
+async function openEvidenceRoots() {
+  $("#menu").classList.add("hidden");
+  const data = await api("/api/evidence-roots").catch(() => null);
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card tokens-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", "Raíces de evidencia"));
+  card.appendChild(el("p", "tk-intro", "Cada proyecto vive en su propio repo. COGO resuelve las refs de evidencia relativas (p. ej. `cmd/main.go`) contra la raíz del proyecto correspondiente; si un proyecto no tiene raíz, usa el default global. Una ref que no resuelve deja de contar para el color."));
+
+  card.appendChild(el("div", "tk-form-lbl", "Default global"));
+  const defInput = el("input"); defInput.type = "text"; defInput.placeholder = "p. ej. E:/repos (o vacío)";
+  defInput.value = (data && data.default) || "";
+  card.appendChild(defInput);
+
+  card.appendChild(el("div", "tk-form-lbl", "Por proyecto"));
+  const rows = el("div", "tk-list");
+  card.appendChild(rows);
+  const known = (data && data.known_projects) || [];
+  const current = (data && data.projects) || {};
+  // Fila por proyecto: los ya configurados, más los conocidos del vault sin raíz.
+  const projects = Array.from(new Set([...Object.keys(current), ...known])).sort();
+  function evRow(proj, val) {
+    const row = el("div", "tk-row ev-row");
+    row.appendChild(el("span", "tk-label ev-proj", proj));
+    const inp = el("input"); inp.type = "text"; inp.placeholder = "carpeta raíz del repo"; inp.value = val || "";
+    inp.dataset.proj = proj;
+    row.appendChild(inp);
+    return row;
+  }
+  if (!projects.length) rows.appendChild(el("div", "tk-empty", "Todavía no hay proyectos en el vault."));
+  else projects.forEach(p => rows.appendChild(evRow(p, current[p])));
+
+  const actions = el("div", "tk-form-row");
+  const save = el("button", "mini", "Guardar");
+  const msg = el("span", "ev-msg");
+  actions.appendChild(save); actions.appendChild(msg);
+  card.appendChild(actions);
+  save.addEventListener("click", async () => {
+    const projMap = {};
+    rows.querySelectorAll("input[data-proj]").forEach(inp => {
+      const v = inp.value.trim();
+      if (v) projMap[inp.dataset.proj] = v;
+    });
+    const r = await api("/api/evidence-roots", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ default: defInput.value.trim(), projects: projMap }) }).catch(() => null);
+    if (r && r.ok) { msg.textContent = "Guardado ✓"; msg.className = "ev-msg ok"; render(); }
+    else { msg.textContent = (r && r.error) || "Error al guardar"; msg.className = "ev-msg bad"; }
+  });
+
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  const close = () => { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
 }
 
 // openNoteModal: vista de solo lectura de una nota (clic en un nodo del grafo).

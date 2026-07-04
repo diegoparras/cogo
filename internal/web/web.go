@@ -6,6 +6,7 @@
 package web
 
 import (
+	"archive/zip"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -35,12 +36,11 @@ var assetsFS embed.FS
 const Version = "0.1.0"
 
 type Server struct {
-	dir          string
-	evidenceRoot string // base dir for resolving repo-relative evidence refs (COGO_EVIDENCE_ROOT)
-	today        func() core.Date
-	tokens       *tokens.Store
-	contra       *contra.Store
-	cache        *core.VaultCache // mtime-keyed vault reads (scale past a few thousand notes)
+	dir    string
+	today  func() core.Date
+	tokens *tokens.Store
+	contra *contra.Store
+	cache  *core.VaultCache // mtime-keyed vault reads (scale past a few thousand notes)
 
 	mu             sync.RWMutex
 	provider       llm.Provider
@@ -49,7 +49,7 @@ type Server struct {
 }
 
 func New(dir string, today func() core.Date, store *tokens.Store) *Server {
-	s := &Server{dir: dir, today: today, tokens: store, contradictions: map[string]bool{}, evidenceRoot: os.Getenv("COGO_EVIDENCE_ROOT"), cache: core.NewVaultCache(dir)}
+	s := &Server{dir: dir, today: today, tokens: store, contradictions: map[string]bool{}, cache: core.NewVaultCache(dir)}
 	s.provider = s.loadProvider()
 	s.scrubber = scrub.FromEnv()
 	if u, err := readUsage(dir); err == nil {
@@ -113,6 +113,91 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mandate", s.handleMandate)
 	mux.HandleFunc("/api/tokens", s.handleTokens)
 	mux.HandleFunc("/api/audit", s.handleAudit)
+	mux.HandleFunc("/api/export", s.handleExport)
+	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
+}
+
+// handleExport streams the whole vault as a zip so a user can back it up or move
+// it to another machine. Every note plus the human catalog (index.md, log.md) is
+// included; .cogo (local state — usage counters, hashed token secrets, history)
+// is deliberately excluded, so the archive is portable and carries no secrets.
+func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	name := "cogo-vault-" + s.today().String() + ".zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	zw := zip.NewWriter(w)
+	defer func() { _ = zw.Close() }()
+	_ = filepath.WalkDir(s.dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if d.Name() == ".cogo" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		rel, err := filepath.Rel(s.dir, path)
+		if err != nil {
+			return err
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		fw, err := zw.Create(filepath.ToSlash(rel))
+		if err != nil {
+			return err
+		}
+		_, err = fw.Write(b)
+		return err
+	})
+}
+
+// handleEvidenceRoots reads or updates the per-project evidence roots. GET also
+// returns the distinct project names present in the vault, so the UI can offer
+// them without the user retyping. Admin-only (blocked for read-only tokens).
+func (s *Server) handleEvidenceRoots(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		roots := s.evRoots()
+		vault, ok := s.load(w)
+		if !ok {
+			return
+		}
+		set := map[string]bool{}
+		for _, n := range vault {
+			if n.Project != "" {
+				set[n.Project] = true
+			}
+		}
+		known := make([]string, 0, len(set))
+		for p := range set {
+			known = append(known, p)
+		}
+		sort.Strings(known)
+		writeJSON(w, map[string]any{"default": roots.Default(), "projects": roots.Projects(), "known_projects": known})
+	case http.MethodPost:
+		var in struct {
+			Default  string            `json:"default"`
+			Projects map[string]string `json:"projects"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := core.SaveEvidenceRoots(s.dir, in.Default, in.Projects); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	default:
+		http.Error(w, "GET or POST", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleAudit returns the most recent MCP/API audit entries (who called what).
@@ -188,9 +273,13 @@ func (s *Server) load(w http.ResponseWriter) (map[string]*core.Note, bool) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return nil, false
 	}
-	core.ResolveEvidence(vault, s.evidenceRoot) // the teeth: check that evidence refs resolve
+	core.ResolveEvidence(vault, s.evRoots()) // the teeth: check that evidence refs resolve
 	return vault, true
 }
+
+// evRoots reads the per-project evidence roots fresh each call (tiny file), so a
+// change made in the UI takes effect on the next request without a restart.
+func (s *Server) evRoots() core.EvidenceRoots { return core.LoadEvidenceRoots(s.dir) }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	vault, ok := s.load(w)
@@ -213,7 +302,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"version": Version, "projects": projects, "count": len(vault),
 		"llm_configured": s.prov().Available(),
 		"scrub_enabled":  s.scrubber.Enabled(),
-		"evidence_root":  s.evidenceRoot != "",
+		"evidence_root":  s.evRoots().Configured(),
 		"tokens":         u.Total, "token_calls": u.Calls,
 	})
 }
@@ -565,7 +654,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	n := s.noteFromDraft(d)
 	vault[n.ID] = n
-	core.ResolveEvidence(vault, s.evidenceRoot) // resolve the draft's own refs so the preview is honest
+	core.ResolveEvidence(vault, s.evRoots()) // resolve the draft's own refs so the preview is honest
 	v := core.Evaluate(n, vault, s.contras(), s.today())
 	writeJSON(w, map[string]any{"id": n.ID, "color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(), "evidence": n.Evidence})
 }
@@ -608,7 +697,7 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	vault[n.ID] = n
-	core.ResolveEvidence(vault, s.evidenceRoot)
+	core.ResolveEvidence(vault, s.evRoots())
 	v := core.Evaluate(n, vault, s.contras(), s.today())
 	n.Apply(v)
 	if err := core.WriteNoteFile(path, n); err != nil {

@@ -48,7 +48,7 @@ func TestBrokenEvidenceSinksGreen(t *testing.T) {
 		t.Fatalf("pre-resolve want green, got %s", c)
 	}
 	// After resolving, the broken file ref no longer holds up the color.
-	ResolveEvidence(vault, "")
+	ResolveEvidence(vault, EvidenceRoots{})
 	v := Evaluate(vault["n"], vault, nil, MustDate("2026-06-29"))
 	if v.Color != Red {
 		t.Errorf("broken evidence should sink to red, got %s", v.Color)

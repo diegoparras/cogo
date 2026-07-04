@@ -33,12 +33,13 @@ var (
 )
 
 // ResolveEvidence annotates every evidence item in the vault with a runtime
-// Status (see the constants). root is the base directory repo-relative refs are
-// resolved against ("" disables relative checking). It mutates the notes in
-// place; call it after LoadVault and before evaluating color if you want the
-// teeth on.
-func ResolveEvidence(vault map[string]*Note, root string) {
+// Status (see the constants). roots supplies the base directory repo-relative
+// refs resolve against, per project (empty roots disables relative checking). It
+// mutates the notes in place; call it after LoadVault and before evaluating color
+// if you want the teeth on.
+func ResolveEvidence(vault map[string]*Note, roots EvidenceRoots) {
 	for _, n := range vault {
+		root := roots.Root(n.Project)
 		for i := range n.Evidence {
 			n.Evidence[i].Status = resolveRef(n.Evidence[i].Ref, root)
 		}

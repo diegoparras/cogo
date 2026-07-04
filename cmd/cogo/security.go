@@ -45,8 +45,9 @@ func forbidReadOnly(w http.ResponseWriter) {
 }
 
 func blockedForReadOnly(path, method string) bool {
-	if path == "/api/tokens" || path == "/api/settings" || path == "/api/audit" {
-		return true // tokens, settings and the audit trail are admin, never a read-only agent
+	switch path {
+	case "/api/tokens", "/api/settings", "/api/audit", "/api/export", "/api/evidence-roots":
+		return true // tokens, settings, audit, full-vault export and evidence roots are admin
 	}
 	if method == http.MethodGet {
 		return false // reads are always allowed
