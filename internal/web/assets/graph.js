@@ -14,6 +14,8 @@
     return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
   }
   const rgba = (c, a) => `rgba(${c.r},${c.g},${c.b},${a})`;
+  const mix = (a, b, t) => ({ r: Math.round(a.r + (b.r - a.r) * t), g: Math.round(a.g + (b.g - a.g) * t), b: Math.round(a.b + (b.b - a.b) * t) });
+  const WHITE = { r: 255, g: 255, b: 255 }, BLACK = { r: 0, g: 0, b: 0 };
 
   function readTokens() {
     // The graph panel is always a deep-graphite constellation, so the palette is
@@ -35,11 +37,12 @@
     return () => { h += 0x6D2B79F5; let t = h; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
 
+  // Cuatro estilos de línea BIEN distintos: sólida · guión largo · guión · punteada.
   const KIND = {
-    depends_on: { dash: [], w: 1.7, dir: true },
-    supersedes: { dash: [], w: 2.4, dir: true },
-    caused_by: { dash: [3, 4], w: 1.6, dir: true },
-    wikilink: { dash: [1.5, 5], w: 1.2, dir: false },
+    depends_on: { dash: [], w: 2, dir: true },
+    supersedes: { dash: [11, 6], w: 2.2, dir: true },
+    caused_by: { dash: [4, 4], w: 1.9, dir: true },
+    wikilink: { dash: [1.5, 5], w: 1.4, dir: false },
   };
 
   function mount(container, data, opts) {
@@ -213,11 +216,21 @@
         const hs = rr * (additive ? 5.5 : 4.2);
         ctx.drawImage(g, n.sx - hs / 2, n.sy - hs / 2, hs, hs);
         ctx.globalCompositeOperation = "source-over";
-        // core
+        // core — disco plano en 2D, ESFERA sombreada en 3D
         ctx.globalAlpha = dim ? 0.25 : 1;
-        ctx.beginPath(); ctx.arc(n.sx, n.sy, rr, 0, TAU);
-        ctx.fillStyle = colorFor(T, n.color); ctx.fill();
-        ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(hexToRgb(T.dark ? "#0a0a0c" : "#ffffff"), .85); ctx.stroke();
+        const rgb = hexToRgb(colorFor(T, n.color));
+        if (mode === "3d") {
+          const gx = n.sx - rr * 0.34, gy = n.sy - rr * 0.4;
+          const grd = ctx.createRadialGradient(gx, gy, rr * 0.08, n.sx, n.sy, rr * 1.08);
+          grd.addColorStop(0, rgba(mix(rgb, WHITE, 0.62), 1));
+          grd.addColorStop(0.42, rgba(rgb, 1));
+          grd.addColorStop(1, rgba(mix(rgb, BLACK, 0.5), 1));
+          ctx.beginPath(); ctx.arc(n.sx, n.sy, rr, 0, TAU); ctx.fillStyle = grd; ctx.fill();
+          ctx.lineWidth = 1; ctx.strokeStyle = rgba(BLACK, 0.32); ctx.stroke();
+        } else {
+          ctx.beginPath(); ctx.arc(n.sx, n.sy, rr, 0, TAU); ctx.fillStyle = rgba(rgb, 1); ctx.fill();
+          ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(BLACK, .55); ctx.stroke();
+        }
         if (n === hovered) { ctx.beginPath(); ctx.arc(n.sx, n.sy, rr + 5, 0, TAU); ctx.strokeStyle = colorFor(T, n.color); ctx.globalAlpha = .8; ctx.lineWidth = 2; ctx.stroke(); }
       }
       ctx.globalAlpha = 1;

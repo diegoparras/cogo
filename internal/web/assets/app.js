@@ -245,9 +245,15 @@ async function renderGraph(main) {
   b3.addEventListener("click", () => { window.__graphMode = "3d"; setActive("3d"); gv.setMode("3d"); });
   reset.addEventListener("click", () => gv.resetView());
 
+  // Muestras SVG con el mismo estilo de línea que el grafo, para que se distingan.
+  const EDGE_DASH = { depends_on: "", supersedes: "11 6", caused_by: "4 4", wikilink: "1.5 5" };
+  const EDGE_W = { depends_on: 2, supersedes: 2.2, caused_by: 2, wikilink: 1.6 };
   const lg = el("div", "edge-legend");
   [["depends_on", "depende de"], ["supersedes", "reemplaza"], ["caused_by", "causado por"], ["wikilink", "relaciona"]].forEach(([k, label]) => {
-    const s = el("span"); const i = el("i", k === "wikilink" ? "wiki" : null); s.appendChild(i); s.appendChild(el("span", null, label)); lg.appendChild(s);
+    const s = el("span");
+    s.innerHTML = `<svg width="32" height="10" viewBox="0 0 32 10" aria-hidden="true"><line x1="1" y1="5" x2="31" y2="5" stroke="currentColor" stroke-width="${EDGE_W[k]}" stroke-dasharray="${EDGE_DASH[k]}" stroke-linecap="round"/></svg>`;
+    s.appendChild(el("span", null, label));
+    lg.appendChild(s);
   });
   main.appendChild(lg);
 }

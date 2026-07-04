@@ -19,8 +19,11 @@
 .viewhead .vh-sub { color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 640px; }
 
 /* color por confianza, vía una custom prop local que cada elemento usa */
+/* El amarillo del semáforo debe leerse AMARILLO/ámbar, no marrón: el --warn
+   canónico en claro (#9a6700) tira a marrón, así que la confianza usa un ámbar
+   vivo propio (el mismo del grafo). */
 .c-green   { --c: var(--ok); }
-.c-yellow  { --c: var(--warn); }
+.c-yellow  { --c: #d6a01a; }
 .c-red     { --c: var(--err); }
 .c-ungraded{ --c: var(--muted); }
 
