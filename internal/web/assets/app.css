@@ -60,6 +60,19 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .nc-reason { font-size: 11.5px; color: var(--muted); margin: 5px 0 0; font-style: italic; }
 .nc-stale { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 
+/* ---- modal de confirmación (estilo Escriba, reemplaza al confirm() nativo) ---- */
+.confirm-back { opacity: 0; transition: opacity .16s ease; }
+.confirm-back.show { opacity: 1; }
+.confirm-card { width: min(420px, 94vw); }
+.confirm-note { display: inline-block; font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+  color: var(--text); background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 10px; margin-bottom: 10px; word-break: break-all; }
+.confirm-msg { margin: 0 0 10px; }
+.confirm-hint { font-size: 12.5px; color: var(--muted); background: var(--card);
+  border-left: 3px solid var(--warn); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+button.danger-btn { background: var(--err); border-color: var(--err); color: #fff; }
+button.danger-btn:hover { background: color-mix(in srgb, var(--err) 84%, #000); border-color: color-mix(in srgb, var(--err) 84%, #000); }
+
 /* ---- lifecycle: estado (archivar/reemplazar) + acciones por nota ---- */
 .nc-badge { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
   color: var(--muted); background: var(--card); border: 1px solid var(--border);

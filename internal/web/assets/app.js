@@ -19,6 +19,46 @@ function viewHead(main, eyebrow, title, sub) {
   main.appendChild(h);
 }
 
+// confirmDialog: un modal de confirmación al estilo Suite Escriba (reemplaza al
+// confirm() nativo del navegador). Devuelve una Promise<boolean>.
+function confirmDialog({ title, message, note, hint, confirmText = "Aceptar", cancelText = "Cancelar", danger = false } = {}) {
+  return new Promise(resolve => {
+    const back = el("div", "modal-back confirm-back");
+    const card = el("div", "modal-card confirm-card");
+    card.appendChild(el("h2", "modal-tit", title));
+    const cuerpo = el("div", "modal-cuerpo");
+    if (note) cuerpo.appendChild(el("div", "confirm-note", note));
+    if (message) cuerpo.appendChild(el("p", "confirm-msg", message));
+    if (hint) cuerpo.appendChild(el("div", "confirm-hint", hint));
+    card.appendChild(cuerpo);
+    const acc = el("div", "modal-acciones");
+    const cancel = el("button", "ghost", cancelText);
+    const ok = el("button", danger ? "danger-btn" : "", confirmText);
+    acc.appendChild(cancel);
+    acc.appendChild(ok);
+    card.appendChild(acc);
+    back.appendChild(card);
+    document.body.appendChild(back);
+    requestAnimationFrame(() => back.classList.add("show"));
+
+    const close = val => {
+      document.removeEventListener("keydown", onKey);
+      back.classList.remove("show");
+      setTimeout(() => back.remove(), 160);
+      resolve(val);
+    };
+    const onKey = e => {
+      if (e.key === "Escape") close(false);
+      else if (e.key === "Enter") close(true);
+    };
+    cancel.addEventListener("click", () => close(false));
+    ok.addEventListener("click", () => close(true));
+    back.addEventListener("click", e => { if (e.target === back) close(false); });
+    document.addEventListener("keydown", onKey);
+    setTimeout(() => ok.focus(), 40);
+  });
+}
+
 const state = { view: "vault", project: "", hideGreen: false, showArchived: false, editing: null, llmConfigured: false, scrubEnabled: false };
 
 // ---------- chrome ----------
@@ -45,6 +85,7 @@ function initMenu() {
 
 function initTabs() {
   $$(".tab").forEach(b => b.addEventListener("click", () => {
+    state.editing = null; // salir a una pestaña siempre cierra el editor abierto
     state.view = b.dataset.view;
     $$(".tab").forEach(x => x.classList.toggle("active", x === b));
     render();
@@ -59,7 +100,7 @@ async function loadConfig() {
   $("#aboutCount").textContent = c.count;
   const sel = $("#projsel");
   (c.projects || []).forEach(p => { const o = el("option", null, p); o.value = p; sel.appendChild(o); });
-  sel.addEventListener("change", () => { state.project = sel.value; render(); });
+  sel.addEventListener("change", () => { state.editing = null; state.project = sel.value; render(); });
 }
 
 // ---------- shared ----------
@@ -120,7 +161,15 @@ async function restoreNote(id) {
   render();
 }
 async function deleteNote(id) {
-  if (!confirm("¿Borrar «" + id + "»?\n\nSale de COGO y se mueve a la papelera del vault (.cogo/trash) — recuperable a mano. Si solo querés sacarla del grafo sin perderla, usá «archivar».")) return;
+  const ok = await confirmDialog({
+    title: "Borrar nota",
+    note: id,
+    message: "Sale de COGO y se mueve a la papelera del vault (.cogo/trash). Es recuperable a mano, pero deja de aparecer en la app.",
+    hint: "¿Solo querés sacarla del grafo sin perderla? Usá archivar.",
+    confirmText: "Borrar",
+    danger: true,
+  });
+  if (!ok) return;
   await api("/api/delete?id=" + encodeURIComponent(id), { method: "POST" });
   render();
 }
