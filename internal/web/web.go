@@ -31,8 +31,9 @@ var assetsFS embed.FS
 const Version = "0.1.0"
 
 type Server struct {
-	dir   string
-	today func() core.Date
+	dir          string
+	evidenceRoot string // base dir for resolving repo-relative evidence refs (COGO_EVIDENCE_ROOT)
+	today        func() core.Date
 
 	mu             sync.RWMutex
 	provider       llm.Provider
@@ -41,7 +42,7 @@ type Server struct {
 }
 
 func New(dir string, today func() core.Date) *Server {
-	s := &Server{dir: dir, today: today, contradictions: map[string]bool{}}
+	s := &Server{dir: dir, today: today, contradictions: map[string]bool{}, evidenceRoot: os.Getenv("COGO_EVIDENCE_ROOT")}
 	s.provider = s.loadProvider()
 	s.scrubber = scrub.FromEnv()
 	return s
@@ -86,6 +87,7 @@ func (s *Server) load(w http.ResponseWriter) (map[string]*core.Note, bool) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return nil, false
 	}
+	core.ResolveEvidence(vault, s.evidenceRoot) // the teeth: check that evidence refs resolve
 	return vault, true
 }
 
@@ -109,6 +111,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"version": Version, "projects": projects, "count": len(vault),
 		"llm_configured": s.prov().Available(),
 		"scrub_enabled":  s.scrubber.Enabled(),
+		"evidence_root":  s.evidenceRoot != "",
 	})
 }
 
@@ -342,8 +345,9 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	n := s.noteFromDraft(d)
 	vault[n.ID] = n
+	core.ResolveEvidence(vault, s.evidenceRoot) // resolve the draft's own refs so the preview is honest
 	v := core.Evaluate(n, vault, s.contras(), s.today())
-	writeJSON(w, map[string]any{"id": n.ID, "color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String()})
+	writeJSON(w, map[string]any{"id": n.ID, "color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(), "evidence": n.Evidence})
 }
 
 // handleCapture validates a draft, colors it and writes it to the vault.
@@ -375,6 +379,7 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		path = existing.Path
 	}
 	vault[n.ID] = n
+	core.ResolveEvidence(vault, s.evidenceRoot)
 	v := core.Evaluate(n, vault, s.contras(), s.today())
 	n.Apply(v)
 	if err := core.WriteNoteFile(path, n); err != nil {

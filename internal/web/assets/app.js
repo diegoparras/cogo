@@ -371,11 +371,24 @@ function select(options, value, onchange) {
   return s;
 }
 
+// paintEvBadge pinta el resultado del resolver de evidencia en una fila del editor.
+function paintEvBadge(node, status) {
+  const map = {
+    resolved: ["✓ resuelve", "ev-status ok", "El archivo citado existe."],
+    broken: ["✗ no resuelve", "ev-status bad", "El archivo citado no existe → esta evidencia NO cuenta para el color."],
+    unchecked: ["— sin chequear", "ev-status muted", "COGO no puede verificar esta ref sin conexión (log, comando, URL o ruta sin raíz)."],
+  };
+  const [text, className, title] = map[status] || ["", "ev-status", ""];
+  node.textContent = text;
+  node.className = className;
+  node.title = title;
+}
+
 async function openEditor(id) {
   let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "" };
   if (id) {
     const n = await api("/api/note?id=" + encodeURIComponent(id));
-    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref })), check_test: n.check_test || "" };
+    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status })), check_test: n.check_test || "" };
   }
   state.editing = d;
   render();
@@ -393,6 +406,7 @@ function renderEditor(main) {
   const form = el("div", "editor");
   if (state.scrubEnabled) form.appendChild(el("div", "scrub-note", "Las capturas se limpian con Anonimal (secretos/PII) antes de guardar."));
   const prev = el("div", "color-preview");
+  const evBadges = []; // uno por fila de evidencia, refrescado por preview()
   let timer = null;
   function preview() {
     clearTimeout(timer);
@@ -403,6 +417,11 @@ function renderEditor(main) {
       prev.appendChild(el("span", "dot"));
       prev.appendChild(el("strong", null, colorWord(p.color)));
       prev.appendChild(el("span", "cp-reason", p.reason));
+      // reflejar el resultado del resolver de evidencia en las badges
+      (p.evidence || []).forEach((e, i) => {
+        if (d.evidence[i]) d.evidence[i].status = e.status;
+        if (evBadges[i]) paintEvBadge(evBadges[i], e.status);
+      });
     }, 300);
   }
 
@@ -420,13 +439,18 @@ function renderEditor(main) {
   const evWrap = el("div", "ev-wrap");
   function renderEv() {
     evWrap.innerHTML = "";
+    evBadges.length = 0;
     if (!d.evidence.length) evWrap.appendChild(el("div", "ev-empty", "Sin evidencia → la nota nace roja (suposición)."));
     d.evidence.forEach((e, i) => {
       const row = el("div", "ev-row");
       row.appendChild(select(KINDS, e.kind, v => { d.evidence[i].kind = v; preview(); }));
-      const ref = el("input"); ref.value = e.ref; ref.placeholder = "ref real: commit+línea, log+hora, url+fecha";
+      const ref = el("input"); ref.value = e.ref; ref.placeholder = "ref real: archivo:línea, commit, log+hora, url";
       ref.addEventListener("input", () => { d.evidence[i].ref = ref.value; preview(); });
       row.appendChild(ref);
+      const badge = el("span", "ev-status");
+      paintEvBadge(badge, e.status);
+      evBadges[i] = badge;
+      row.appendChild(badge);
       const rm = el("button", "icon-btn ev-x"); rm.textContent = "×";
       rm.addEventListener("click", () => { d.evidence.splice(i, 1); renderEv(); preview(); });
       row.appendChild(rm);

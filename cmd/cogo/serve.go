@@ -63,12 +63,23 @@ func cmdServe(args []string) error {
 func newMCPServer(dir string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "cogo", Version: version}, nil)
 	scrubber := scrub.FromEnv()
+	evidenceRoot := os.Getenv("COGO_EVIDENCE_ROOT")
+	// loadVault reads the vault and checks that evidence refs resolve, so the
+	// color an agent consumes reflects broken citations (see core.ResolveEvidence).
+	loadVault := func() (map[string]*core.Note, error) {
+		v, err := core.LoadVault(dir)
+		if err != nil {
+			return nil, err
+		}
+		core.ResolveEvidence(v, evidenceRoot)
+		return v, nil
+	}
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "pack",
 		Description: "Get colored context for a topic before acting. Green=verified, yellow=probable; red is quarantined as do-not-rely.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in packIn) (*mcp.CallToolResult, any, error) {
-		vault, err := core.LoadVault(dir)
+		vault, err := loadVault()
 		if err != nil {
 			return errResult(err), nil, nil
 		}
@@ -80,7 +91,7 @@ func newMCPServer(dir string) *mcp.Server {
 		Name:        "search",
 		Description: "List notes matching a query: id, color and a one-line summary (no bodies).",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, any, error) {
-		vault, err := core.LoadVault(dir)
+		vault, err := loadVault()
 		if err != nil {
 			return errResult(err), nil, nil
 		}
@@ -103,7 +114,7 @@ func newMCPServer(dir string) *mcp.Server {
 		Name:        "open",
 		Description: "Return one note by id, with its freshly computed color.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in openIn) (*mcp.CallToolResult, any, error) {
-		vault, err := core.LoadVault(dir)
+		vault, err := loadVault()
 		if err != nil {
 			return errResult(err), nil, nil
 		}
@@ -142,7 +153,7 @@ func newMCPServer(dir string) *mcp.Server {
 			return errResult(fmt.Errorf("scrub failed: %w", err)), nil, nil
 		}
 
-		vault, err := core.LoadVault(dir)
+		vault, err := loadVault()
 		if err != nil {
 			return errResult(err), nil, nil
 		}
@@ -153,6 +164,7 @@ func newMCPServer(dir string) *mcp.Server {
 			}
 		}
 		vault[id] = note
+		core.ResolveEvidence(vault, evidenceRoot) // resolve the new note's own refs
 		v := core.Evaluate(note, vault, nil, today())
 		note.Apply(v)
 
@@ -172,7 +184,7 @@ func newMCPServer(dir string) *mcp.Server {
 		Name:        "verify",
 		Description: "Mark a note's check as passed as of today and re-color it.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in openIn) (*mcp.CallToolResult, any, error) {
-		vault, err := core.LoadVault(dir)
+		vault, err := loadVault()
 		if err != nil {
 			return errResult(err), nil, nil
 		}

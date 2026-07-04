@@ -34,6 +34,11 @@ func (c Color) String() string {
 type Evidence struct {
 	Kind string `yaml:"kind" json:"kind"`
 	Ref  string `yaml:"ref" json:"ref"`
+	// Status is computed at runtime by ResolveEvidence (not persisted): whether
+	// the ref actually points at something real. A "broken" item stops counting
+	// toward the note's color — that is the difference between an honest green
+	// and a claimed one.
+	Status string `yaml:"-" json:"status,omitempty"` // resolved | broken | unchecked
 }
 
 // Check is the minimal test that would verify the claim.

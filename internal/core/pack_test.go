@@ -15,7 +15,7 @@ func packVault() map[string]*Note {
 		},
 		"yellow-worker": {
 			ID: "yellow-worker", Type: "bug", Project: "fisherboy",
-			LastVerified: MustDate("2026-06-20"), Evidence: []Evidence{{"doc", "README#worker"}},
+			LastVerified: MustDate("2026-06-20"), Evidence: []Evidence{{Kind: "doc", Ref: "README#worker"}},
 			Body: "## Claim\nThe worker reads its config at boot.",
 		},
 		"red-guess": {

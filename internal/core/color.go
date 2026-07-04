@@ -34,14 +34,25 @@ var kindTier = map[string]Tier{
 func evidenceTier(ev []Evidence) Tier {
 	best := TierNone
 	for _, e := range ev {
-		if strings.TrimSpace(e.Ref) == "" {
-			continue
+		if strings.TrimSpace(e.Ref) == "" || e.Status == EvBroken {
+			continue // no ref, or a ref that provably does not resolve, carries no weight
 		}
 		if t, ok := kindTier[e.Kind]; ok && t > best {
 			best = t
 		}
 	}
 	return best
+}
+
+// hasBrokenEvidence reports whether any evidence item was checked and did not
+// resolve — used to explain a red note as "broken ref" rather than "no evidence".
+func hasBrokenEvidence(ev []Evidence) bool {
+	for _, e := range ev {
+		if e.Status == EvBroken {
+			return true
+		}
+	}
+	return false
 }
 
 // windowDays returns the freshness window per type (in days). One window per
@@ -164,6 +175,9 @@ func (e *evaluator) compute(n *Note) Verdict {
 	case depRed != "":
 		return Verdict{Red, fmt.Sprintf("depends on red note %q", depRed), staleAt}
 	case tier == TierNone:
+		if hasBrokenEvidence(n.Evidence) {
+			return Verdict{Red, "referenced evidence does not resolve (broken ref)", staleAt}
+		}
 		return Verdict{Red, "no referenced observed/reported evidence", staleAt}
 	case e.today.After(expiry):
 		return Verdict{Red, "expired: today > last_verified + 2×window", staleAt}
