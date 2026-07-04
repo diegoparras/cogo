@@ -64,6 +64,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/lint", s.handleLint)
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/settings/test", s.handleTestLLM)
+	mux.HandleFunc("/api/settings/models", s.handleModels)
 	mux.HandleFunc("/api/guard", s.handleGuard)
 	mux.HandleFunc("/api/mandate", s.handleMandate)
 }
@@ -395,6 +396,79 @@ func (s *Server) handleTestLLM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true, "name": p.Name()})
+}
+
+// handleModels lists the models an endpoint exposes and flags which are a good
+// fit for COGO's jobs (contradiction detection, Guard's structural analysis,
+// the steelman) — i.e. capable instruct/chat models, not embeddings or audio.
+// base_url + api_key come from the request (so it works before saving); a blank
+// key reuses the saved one for the same server.
+func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var in llmSettings
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	base, key := strings.TrimSpace(in.BaseURL), in.APIKey
+	if saved, err := s.readSettings(); err == nil {
+		if base == "" {
+			base = saved.BaseURL
+		}
+		if key == "" && base == saved.BaseURL {
+			key = saved.APIKey
+		}
+	}
+	if base == "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "falta el servidor (base URL)"})
+		return
+	}
+	p := &llm.OpenAICompatible{BaseURL: base, Model: "-", APIKey: key, Referer: os.Getenv("COGO_LLM_REFERER")}
+	ids, err := p.Models(r.Context())
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	sort.Strings(ids)
+	type m struct {
+		ID          string `json:"id"`
+		Recommended bool   `json:"recommended"`
+	}
+	out := make([]m, 0, len(ids))
+	rec := 0
+	for _, id := range ids {
+		ok := recommendModel(id)
+		if ok {
+			rec++
+		}
+		out = append(out, m{ID: id, Recommended: ok})
+	}
+	writeJSON(w, map[string]any{"ok": true, "models": out, "count": len(ids), "recommended": rec})
+}
+
+// recommendModel is a heuristic: a capable instruct/chat model from a strong
+// family, sized 7B+ for local ones — and NOT an embedding/audio/image/rerank
+// model, which cannot do COGO's judgment tasks.
+func recommendModel(id string) bool {
+	s := strings.ToLower(id)
+	for _, bad := range []string{"embed", "whisper", "tts", "audio", "moderation", "rerank", "dall-e", "stable-diffusion", "flux", "clip", "bge", "e5-", "guard", "llava", "vl:", "-vl", "-v:", "vision"} {
+		if strings.Contains(s, bad) {
+			return false
+		}
+	}
+	for _, k := range []string{"claude", "gpt-4", "gpt-4o", "o1-", "o3-", "o4-", "deepseek", "qwen2.5", "qwen-2.5", "qwen2", "qwen3", "qwen-3", "llama-3", "llama3", "gemma2", "gemma-2", "mistral-large", "mixtral", "command-r", "grok", "gemini-1.5", "gemini-2", "phi-4"} {
+		if strings.Contains(s, k) {
+			return true
+		}
+	}
+	if strings.Contains(s, "instruct") || strings.Contains(s, "chat") {
+		for _, sz := range []string{"70b", "72b", "32b", "27b", "14b", "9b", "8b", "7b"} {
+			if strings.Contains(s, sz) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

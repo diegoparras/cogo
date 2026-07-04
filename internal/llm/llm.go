@@ -123,3 +123,48 @@ func StrongFromEnv(fallback Provider) Provider {
 	}
 	return &OpenAICompatible{BaseURL: base, Model: model, APIKey: os.Getenv("COGO_LLM_STRONG_API_KEY"), Referer: os.Getenv("COGO_LLM_REFERER")}
 }
+
+// Models lists the model ids the endpoint exposes (OpenAI-compatible GET
+// /models). Works for Ollama, OpenRouter, DeepSeek, OpenAI and anything that
+// speaks the same shape. Model is not required for this call.
+func (o *OpenAICompatible) Models(ctx context.Context) ([]string, error) {
+	url := strings.TrimRight(o.BaseURL, "/") + "/models"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if o.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+o.APIKey)
+	}
+	req.Header.Set("X-Title", "COGO")
+	if o.Referer != "" {
+		req.Header.Set("HTTP-Referer", o.Referer)
+	}
+	client := o.Client
+	if client == nil {
+		client = &http.Client{Timeout: 20 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http %d", resp.StatusCode)
+	}
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(out.Data))
+	for _, m := range out.Data {
+		if m.ID != "" {
+			ids = append(ids, m.ID)
+		}
+	}
+	return ids, nil
+}

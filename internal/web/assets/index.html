@@ -96,7 +96,15 @@
     <div class="modal-cuerpo">
       <p>Opcional. Conectá un modelo y COGO detecta <strong>contradicciones</strong> entre notas. Local (Ollama) o remoto (OpenRouter, DeepSeek…). Sin esto, COGO anda igual — solo sin esa detección.</p>
       <div class="field"><label class="field-lbl">Servidor (base URL)</label><input id="setBase" placeholder="https://openrouter.ai/api/v1"></div>
-      <div class="field"><label class="field-lbl">Modelo</label><input id="setModel" placeholder="deepseek/deepseek-chat"></div>
+      <div class="field">
+        <label class="field-lbl">Modelo</label>
+        <div class="model-row">
+          <input id="setModel" placeholder="ej: deepseek/deepseek-chat">
+          <button class="mini ghost" id="setLoadModels" type="button">cargar modelos</button>
+        </div>
+        <select id="setModelSelect" class="hidden"><option value="">— elegí un modelo —</option></select>
+        <div class="model-hint" id="setModelHint"></div>
+      </div>
       <div class="field"><label class="field-lbl">API key</label>
         <div class="pass-wrap">
           <input id="setKey" type="password" placeholder="tu API key">

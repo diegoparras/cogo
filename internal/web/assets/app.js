@@ -562,12 +562,42 @@ async function saveSettings() {
   return r;
 }
 
+// Pregunta al proveedor (endpoint /models) qué modelos ofrece y recomienda cuáles
+// sirven para COGO. Funciona con cualquier proveedor OpenAI-compatible.
+async function loadModels() {
+  const hint = $("#setModelHint"), sel = $("#setModelSelect"), btn = $("#setLoadModels");
+  const base = $("#setBase").value.trim(), key = $("#setKey").value;
+  if (!base) { hint.textContent = "Primero poné el servidor (base URL)."; hint.className = "model-hint bad"; return; }
+  btn.disabled = true; hint.textContent = "buscando modelos…"; hint.className = "model-hint";
+  let r;
+  try { r = await api("/api/settings/models", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base_url: base, api_key: key }) }); }
+  catch (e) { btn.disabled = false; hint.textContent = "error de red: " + e.message; hint.className = "model-hint bad"; return; }
+  btn.disabled = false;
+  if (!r.ok) { hint.textContent = "No pude listar modelos (" + (r.error || "?") + "). Escribí el nombre a mano."; hint.className = "model-hint bad"; sel.classList.add("hidden"); return; }
+  sel.innerHTML = "";
+  const ph = el("option", null, "— elegí un modelo —"); ph.value = ""; sel.appendChild(ph);
+  const group = (label, arr) => {
+    if (!arr.length) return;
+    const g = document.createElement("optgroup"); g.label = label;
+    arr.forEach(m => { const o = el("option", null, m.id); o.value = m.id; g.appendChild(o); });
+    sel.appendChild(g);
+  };
+  const rec = r.models.filter(m => m.recommended), rest = r.models.filter(m => !m.recommended);
+  group("★ Recomendados para COGO", rec);
+  group("Todos los modelos", rest);
+  sel.classList.remove("hidden");
+  hint.className = "model-hint ok";
+  hint.textContent = r.count + " modelos disponibles" + (rec.length ? " · recomendados: " + rec.slice(0, 3).map(m => m.id).join(", ") : " · sin recomendaciones automáticas");
+}
+
 function initSettings() {
   const m = $("#settingsModal");
   $("#settingsClose").addEventListener("click", () => m.classList.add("hidden"));
   m.addEventListener("click", e => { if (e.target.id === "settingsModal") m.classList.add("hidden"); });
   const key = $("#setKey");
   $("#setKeyToggle").addEventListener("click", () => { key.type = key.type === "password" ? "text" : "password"; });
+  $("#setLoadModels").addEventListener("click", loadModels);
+  $("#setModelSelect").addEventListener("change", e => { if (e.target.value) $("#setModel").value = e.target.value; });
   $("#setTest").addEventListener("click", async () => {
     await saveSettings();
     const r = await api("/api/settings/test", { method: "POST" });
