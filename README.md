@@ -88,6 +88,17 @@ Se usa desde la pestaña **Guard** del visor, o desde cualquier agente vía el t
 [`docs/motor-autonomia.md`](docs/motor-autonomia.md) (su gemelo epistémico:
 [`docs/motor-veracidad.md`](docs/motor-veracidad.md)).
 
+### Veracidad: ¿esto es sólido o es humo?
+
+El gemelo del Guard. Donde el Guard pregunta *"¿me está empujando?"*, la pestaña
+**Veracidad** (tool MCP `xray`) pregunta *"¿esta respuesta se sostiene?"*. Pegás la
+respuesta de un modelo y COGO la **radiografía frase por frase**, sin modelo, de
+forma determinista: mide el **compromiso** (¿hedged o afirmado con fuerza?), la
+**evidencia** (¿observada, reportada, o ninguna?) y si es **falsable** (una opinión
+disfrazada de hecho). Una afirmación fuerte y sin fundamento sale 🔴; una sólida con
+evidencia observada, mejor. Es la Fase 1 (el piso determinista) del *motor de
+veracidad* — [`docs/motor-veracidad.md`](docs/motor-veracidad.md).
+
 ## Editar una nota cambia el color (es el punto)
 
 El semáforo refleja el estado actual de la nota, **siempre**. En el visor editás una nota y
@@ -100,7 +111,9 @@ COGO **recomputa el color en vivo mientras escribís** (lo ves antes de guardar)
 
 ## Arrancar (la pavada)
 
-Guía completa y para principiantes (local, **EasyPanel**, VPS): **[docs/instalacion.md](docs/instalacion.md)**.
+Primeros pasos para principiantes: **[docs/instalacion.md](docs/instalacion.md)**.
+Guía de despliegue completa (todos los modos, cada variable, respaldo,
+actualización, problemas comunes): **[docs/deploy.md](docs/deploy.md)**.
 
 **En tu compu, con Docker** — un comando, y abrís el navegador:
 
@@ -147,11 +160,25 @@ La **frescura** decae por tipo (un comando dura 30 días; una decisión de arqui
 
 | Cara | Para quién | Cómo |
 |------|------------|------|
-| **Visor web** | todos | `cogo serve -http :8080` → navegador (Vault · Frescura · Pack · Grafo · Revisión · **Guard**) |
-| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — 6 tools: `pack` `search` `open` `capture` `verify` `guard` |
-| **CLI** | power users | `cogo add · pack · search · stale · verify · lint` |
+| **Visor web** | todos | `cogo serve -http :8080` → navegador (Vault · Frescura · Pack · Grafo · Revisión · **Guard** · **Veracidad**) |
+| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — tools: `pack` `search` `open` `capture` `verify` `archive` `restore` `remove` `guard` `xray` |
+| **CLI** | power users | `cogo add · pack · search · stale · verify · lint · agents` |
 
 Es un **solo binario Go** (imagen Docker `scratch` de ~12 MB) que es las tres cosas a la vez.
+
+### Todo se maneja desde el visor (menú ⋮)
+
+Para el que no quiere tocar la terminal, cada cosa operativa vive en el menú:
+
+| | |
+|---|---|
+| **Conexiones MCP** | emitir/revocar tokens por app (con vencimiento y modo *solo lectura*) |
+| **Papelera** | notas borradas — restaurar o borrar para siempre |
+| **Auditoría MCP** | quién llamó a qué herramienta, cuándo y desde qué IP |
+| **Raíces de evidencia** | contra qué carpeta se resuelve la evidencia de cada proyecto |
+| **Exportar (backup)** | bajar todo el vault como zip (sin secretos) |
+| **Instrucciones para agentes** | generar el `AGENTS.md`/`CLAUDE.md` que le enseña el protocolo a tu agente |
+| **Ajustes · Modelo IA** | conectar un modelo (OpenRouter/Ollama) para contradicciones y Guard |
 
 ## Accesorios opcionales (apagados por default)
 
@@ -183,6 +210,7 @@ cogo search "worker"      # lista: color · id · resumen (sin cuerpos)
 cogo stale                # qué está vencido o por vencer
 cogo verify <id>          # "ya lo chequeé": revalida y re-colorea
 cogo lint                 # enlaces rotos, vencidas, y contradicciones (si hay modelo)
+cogo agents --claude      # genera el CLAUDE.md/AGENTS.md que le enseña el protocolo a un agente
 cogo serve -http :8080    # visor web + servidor MCP por HTTP
 cogo serve                # servidor MCP por stdio
 ```
