@@ -92,6 +92,19 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .tk-label { font-weight: 600; font-size: 13.5px; color: var(--text); }
 .tk-ro { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--warn); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
 .tk-meta { font-size: 11.5px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+/* Auditoría MCP */
+.au-list { max-height: 62vh; overflow-y: auto; }
+.au-row { display: flex; align-items: flex-start; gap: 11px; padding: 9px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+.au-who { flex: 0 0 auto; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; border-radius: 999px; padding: 3px 9px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-token { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.au-user { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--border)); }
+.au-root { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 32%, var(--border)); }
+.au-anon { color: var(--err); background: color-mix(in srgb, var(--err) 10%, var(--panel)); border: 1px solid color-mix(in srgb, var(--err) 28%, var(--border)); }
+.au-mid { flex: 1; min-width: 0; }
+.au-act { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--mono); }
+.au-when { display: flex; gap: 10px; align-items: center; font-size: 11px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.au-ip { color: var(--muted-2); }
+
 .tk-form-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 20px 0 8px; }
 .tk-form { display: flex; flex-direction: column; gap: 9px; }
 .tk-form input[type=text], .tk-form > input { width: 100%; }

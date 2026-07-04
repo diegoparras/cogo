@@ -42,9 +42,9 @@ type Auth struct {
 	verifier *oidc.IDTokenVerifier
 
 	// verify, if set, checks a presented Bearer secret against the issued-token
-	// store; returns whether it is read-only and whether it matched. Wired by the
-	// server so this package stays free of the store's file I/O.
-	verify func(secret string) (readOnly bool, ok bool)
+	// store; returns the token's label, whether it is read-only, and whether it
+	// matched. Wired by the server so this package stays free of the store's I/O.
+	verify func(secret string) (label string, readOnly bool, ok bool)
 
 	mu    sync.Mutex
 	flows map[string]flow // login state -> PKCE verifier + nonce
@@ -54,17 +54,27 @@ type Auth struct {
 // internal/tokens). Issued tokens are an ADDITIONAL authorization path — they do
 // not turn auth on by themselves; the root COGO_MCP_TOKEN or OIDC is the
 // bootstrap credential that enables the gate and lets you manage the store.
-func (a *Auth) SetVerifier(f func(secret string) (bool, bool)) { a.verify = f }
+func (a *Auth) SetVerifier(f func(secret string) (string, bool, bool)) { a.verify = f }
 
-// ctxKey carries the request's granted scope to downstream middleware.
+// ctxKey carries per-request auth facts (scope, caller) to downstream middleware.
 type ctxKey int
 
-const readOnlyKey ctxKey = 0
+const (
+	readOnlyKey ctxKey = iota
+	callerKey
+)
 
 // ReadOnlyGranted reports whether the request was authorized by a read-only
 // token (so write endpoints/tools must be refused).
 func ReadOnlyGranted(r *http.Request) bool {
 	v, _ := r.Context().Value(readOnlyKey).(bool)
+	return v
+}
+
+// Caller identifies who authorized the request ("root", "user:<email>",
+// "token:<label>", or "" when auth is off) — for the audit log.
+func Caller(r *http.Request) string {
+	v, _ := r.Context().Value(callerKey).(string)
 	return v
 }
 
@@ -160,12 +170,14 @@ func (a *Auth) RegisterRoutes(mux *http.ServeMux) {
 func (a *Auth) Gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if a.enabled && protected(r.URL.Path) {
-			readOnly, ok := a.authorize(r)
+			caller, readOnly, ok := a.authorize(r)
 			if !ok {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-			r = r.WithContext(context.WithValue(r.Context(), readOnlyKey, readOnly))
+			ctx := context.WithValue(r.Context(), readOnlyKey, readOnly)
+			ctx = context.WithValue(ctx, callerKey, caller)
+			r = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -173,28 +185,30 @@ func (a *Auth) Gate(next http.Handler) http.Handler {
 
 // authorize accepts a valid OIDC session cookie (browser, full scope), the root
 // env token (full scope), or a matching issued token from the store (its own
-// scope). Returns whether the grant is read-only and whether it authorized.
-func (a *Auth) authorize(r *http.Request) (readOnly bool, ok bool) {
-	if a.federated && a.session(r) != nil {
-		return false, true
+// scope). Returns who the caller is, whether the grant is read-only, and ok.
+func (a *Auth) authorize(r *http.Request) (caller string, readOnly bool, ok bool) {
+	if a.federated {
+		if s := a.session(r); s != nil {
+			return "user:" + s.Email, false, true
+		}
 	}
 	bearer := a.bearer(r)
 	if bearer == "" {
-		return false, false
+		return "", false, false
 	}
 	if a.token != "" && subtle.ConstantTimeCompare([]byte(bearer), []byte(a.token)) == 1 {
-		return false, true
+		return "root", false, true
 	}
 	if a.verify != nil {
-		if ro, matched := a.verify(bearer); matched {
-			return ro, true
+		if label, ro, matched := a.verify(bearer); matched {
+			return "token:" + label, ro, true
 		}
 	}
-	return false, false
+	return "", false, false
 }
 
 // authorized is the boolean form (used by /auth/me).
-func (a *Auth) authorized(r *http.Request) bool { _, ok := a.authorize(r); return ok }
+func (a *Auth) authorized(r *http.Request) bool { _, _, ok := a.authorize(r); return ok }
 
 // bearer pulls the token from an Authorization: Bearer header ("" if absent).
 func (a *Auth) bearer(r *http.Request) string {

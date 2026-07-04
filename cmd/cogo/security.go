@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -44,8 +45,8 @@ func forbidReadOnly(w http.ResponseWriter) {
 }
 
 func blockedForReadOnly(path, method string) bool {
-	if path == "/api/tokens" || path == "/api/settings" {
-		return true // managing tokens or settings is admin, never a read-only agent
+	if path == "/api/tokens" || path == "/api/settings" || path == "/api/audit" {
+		return true // tokens, settings and the audit trail are admin, never a read-only agent
 	}
 	if method == http.MethodGet {
 		return false // reads are always allowed
@@ -57,7 +58,8 @@ func blockedForReadOnly(path, method string) bool {
 	return false
 }
 
-func isWriteMCPCall(body []byte) bool {
+// mcpToolName pulls params.name from a JSON-RPC tools/call body ("" otherwise).
+func mcpToolName(body []byte) string {
 	var msg struct {
 		Method string `json:"method"`
 		Params struct {
@@ -65,13 +67,65 @@ func isWriteMCPCall(body []byte) bool {
 		} `json:"params"`
 	}
 	if json.Unmarshal(body, &msg) != nil || msg.Method != "tools/call" {
-		return false
+		return ""
 	}
-	switch msg.Params.Name {
+	return msg.Params.Name
+}
+
+func isWriteMCPCall(body []byte) bool {
+	switch mcpToolName(body) {
 	case "capture", "verify", "archive", "restore", "remove":
 		return true
 	}
 	return false
+}
+
+// --- audit log: who (which token/user) called which MCP tool, and when --------
+
+type auditEntry struct {
+	Time   string `json:"time"`
+	Caller string `json:"caller"`
+	Tool   string `json:"tool,omitempty"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	IP     string `json:"ip"`
+}
+
+// auditMiddleware records MCP tool calls and API writes to .cogo/audit.jsonl. It
+// runs after the auth gate, so auth.Caller(r) identifies who did it.
+func auditMiddleware(dir string) func(http.Handler) http.Handler {
+	var mu sync.Mutex
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var tool string
+			record := false
+			if r.URL.Path == "/mcp" && r.Method == http.MethodPost {
+				body, _ := io.ReadAll(io.LimitReader(r.Body, 2<<20))
+				_ = r.Body.Close()
+				r.Body = io.NopCloser(bytes.NewReader(body)) // restore for downstream
+				if tool = mcpToolName(body); tool != "" {
+					record = true
+				}
+			} else if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != http.MethodGet {
+				record = true
+			}
+			if record {
+				caller := auth.Caller(r)
+				if caller == "" {
+					caller = "anon"
+				}
+				e := auditEntry{Time: time.Now().UTC().Format(time.RFC3339), Caller: caller, Tool: tool, Method: r.Method, Path: r.URL.Path, IP: clientIP(r)}
+				mu.Lock()
+				if f, err := os.OpenFile(filepath.Join(dir, ".cogo", "audit.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+					b, _ := json.Marshal(e)
+					_, _ = f.Write(append(b, '\n'))
+					_ = f.Close()
+				}
+				mu.Unlock()
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // checkExposure is the fail-safe: refuse to serve on a public interface with no

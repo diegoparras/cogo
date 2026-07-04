@@ -59,9 +59,9 @@ func cmdServe(args []string) error {
 	// revocable, with optional expiry and read-only scope. Adds an authorization
 	// path to the gate; the root COGO_MCP_TOKEN / OIDC still bootstraps it.
 	store := tokens.Open(*dir)
-	authn.SetVerifier(func(secret string) (bool, bool) {
+	authn.SetVerifier(func(secret string) (string, bool, bool) {
 		t, ok := store.Verify(secret, today().String())
-		return t.ReadOnly, ok
+		return t.Label, t.ReadOnly, ok
 	})
 
 	// Fail-safe: never put an unauthenticated vault + MCP on a public interface.
@@ -75,10 +75,11 @@ func cmdServe(args []string) error {
 	authn.RegisterRoutes(mux)              // accessory: OIDC login (federated only)
 
 	tls := os.Getenv("COOKIE_SECURE") == "1"
-	var h http.Handler = enforceReadOnly(mux) // read-only tokens can't write
-	h = authn.Gate(h)                         // auth (cookie or Bearer), stamps scope
-	h = newIPLimiter(20, 60).middleware(h)    // per-IP rate limit
-	h = securityHeaders(h, tls)               // conservative headers
+	var h http.Handler = enforceReadOnly(mux)  // read-only tokens can't write
+	h = auditMiddleware(*dir)(h)               // audit trail (who called which tool)
+	h = authn.Gate(h)                          // auth (cookie or Bearer), stamps caller+scope
+	h = newIPLimiter(20, 60).middleware(h)     // per-IP rate limit
+	h = securityHeaders(h, tls)                // conservative headers
 
 	insecure := !authn.Enabled() && !isLoopback(*httpAddr)
 	fmt.Fprintf(os.Stderr, "cogo: serving on %s [auth=%s] — visor at /, MCP at /mcp (vault %s)\n", *httpAddr, authn.Mode(), *dir)

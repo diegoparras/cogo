@@ -141,6 +141,7 @@ function initMenu() {
   $("#settingsBtn").addEventListener("click", openSettings);
   $("#tokensBtn").addEventListener("click", openTokens);
   $("#trashBtn").addEventListener("click", openTrash);
+  $("#auditBtn").addEventListener("click", openAudit);
   $("#aboutBtn").addEventListener("click", () => { $("#aboutModal").classList.remove("hidden"); menu.classList.add("hidden"); });
   $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
   $("#aboutModal").addEventListener("click", e => { if (e.target.id === "aboutModal") $("#aboutModal").classList.add("hidden"); });
@@ -681,6 +682,62 @@ async function openTrash() {
   x.addEventListener("click", close);
   back.addEventListener("click", e => { if (e.target === back) close(); });
   document.addEventListener("keydown", onKey);
+}
+
+// ---------- Auditoría MCP ----------
+// Traza append-only de quién (token / usuario federado / root) llamó a qué
+// herramienta MCP y a qué endpoint de escritura, con hora e IP.
+async function openAudit() {
+  $("#menu").classList.add("hidden");
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card tokens-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", "Auditoría MCP"));
+  card.appendChild(el("p", "tk-intro", "Registro append-only de cada llamada MCP y cada escritura por API: quién, qué herramienta, cuándo y desde qué IP. Se guarda en .cogo/audit.jsonl."));
+  const list = el("div", "tk-list au-list");
+  card.appendChild(list);
+  const r = await api("/api/audit").catch(() => null);
+  const items = (r && r.entries) || [];
+  if (!items.length) list.appendChild(el("div", "tk-empty", "Todavía no hay actividad registrada."));
+  else items.forEach(e => list.appendChild(auditRow(e)));
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  const close = () => { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+}
+
+// callerKind mapea el prefijo del caller ("token:…"/"user:…"/"root"/"anon") a una
+// etiqueta corta y una clase de color para el badge.
+function callerKind(c) {
+  if (c === "root") return ["root", "au-root"];
+  if (c === "anon" || !c) return ["sin auth", "au-anon"];
+  if (c.startsWith("token:")) return [c.slice(6), "au-token"];
+  if (c.startsWith("user:")) return [c.slice(5), "au-user"];
+  return [c, "au-token"];
+}
+
+function auditRow(e) {
+  const row = el("div", "au-row");
+  const [who, kls] = callerKind(e.caller);
+  const badge = el("span", "au-who " + kls, who);
+  row.appendChild(badge);
+  const mid = el("div", "au-mid");
+  const act = e.tool ? ("mcp · " + e.tool) : (e.method + " " + (e.path || "").replace(/^\/api\//, ""));
+  mid.appendChild(el("div", "au-act", act));
+  const when = el("div", "au-when");
+  let t = e.time || "";
+  try { t = new Date(e.time).toLocaleString(); } catch (_) {}
+  when.appendChild(el("span", null, t));
+  if (e.ip) when.appendChild(el("span", "au-ip", e.ip));
+  mid.appendChild(when);
+  row.appendChild(mid);
+  return row;
 }
 
 // openNoteModal: vista de solo lectura de una nota (clic en un nodo del grafo).

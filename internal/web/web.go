@@ -111,6 +111,28 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/guard/label", s.handleGuardLabel)
 	mux.HandleFunc("/api/mandate", s.handleMandate)
 	mux.HandleFunc("/api/tokens", s.handleTokens)
+	mux.HandleFunc("/api/audit", s.handleAudit)
+}
+
+// handleAudit returns the most recent MCP/API audit entries (who called what).
+func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(s.dir, ".cogo", "audit.jsonl"))
+	if err != nil {
+		writeJSON(w, map[string]any{"entries": []any{}})
+		return
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	entries := []json.RawMessage{}
+	for i := len(lines) - 1; i >= 0 && len(entries) < 300; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			entries = append(entries, json.RawMessage(lines[i]))
+		}
+	}
+	writeJSON(w, map[string]any{"entries": entries})
 }
 
 // handleTokens manages the issued MCP access tokens: GET lists them (no
