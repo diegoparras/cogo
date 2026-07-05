@@ -293,7 +293,15 @@ carpeta resolverlas. Como cada proyecto vive en su repo, la raíz es **por proye
 
 ## 10. Conectar tus agentes (MCP)
 
-**Local (stdio)** — sin red, cada sesión levanta su COGO:
+**Lo más rápido — `cogo install`** cablea el `.mcp.json` por vos (mergea sin pisar
+otros servers):
+
+```bash
+cogo install                                   # stdio local (este binario + ./vault)
+cogo install --http https://tu-dominio/mcp --token TU-TOKEN --claude   # remoto + CLAUDE.md
+```
+
+**Local (stdio), a mano** — sin red, cada sesión levanta su COGO:
 
 ```json
 { "mcpServers": { "cogo": { "command": "cogo", "args": ["serve", "-vault", "./vault"] } } }
@@ -377,3 +385,33 @@ o proxy TLS), token o SSO siempre, `SECRET_KEY` fija, disco cifrado, y el scrub
 (`ANONIMAL_URL`) prendido para que no queden secretos en las notas. Ya vienen de
 fábrica: rate-limit por IP, security headers, y comparación de token en tiempo
 constante.
+
+---
+
+## 16. Verificar autenticidad (cadena de suministro)
+
+Cada imagen publicada lleva **procedencia SLSA** + una **firma keyless de Sigstore
+(cosign)**, así que podés probar que salió del CI de este repo y no de otro lado.
+
+**La imagen** (firma + procedencia):
+```bash
+IMG=ghcr.io/diegoparras/cogo
+cosign verify "$IMG" \
+  --certificate-identity-regexp "https://github.com/diegoparras/cogo/.github/workflows/.+" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify oci://$IMG --repo diegoparras/cogo   # procedencia SLSA
+```
+
+**Los binarios** (en las releases por tag): cada release trae `SHA256SUMS` +
+`SHA256SUMS.sig` + `SHA256SUMS.pem`. Verificás el checksum firmado y después el
+binario:
+```bash
+cosign verify-blob --signature SHA256SUMS.sig --certificate SHA256SUMS.pem \
+  --certificate-identity-regexp "https://github.com/diegoparras/cogo/.+" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+sha256sum -c SHA256SUMS
+```
+
+> Esto es la respuesta honesta al falso positivo de antivirus: el binario no está
+> firmado con un cert de Windows/Apple (cuesta plata), pero **sí** con Sigstore,
+> que es verificable por cualquiera y prueba el origen.

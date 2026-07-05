@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -43,6 +44,8 @@ func main() {
 		err = cmdServe(args)
 	case "agents":
 		err = cmdAgents(args)
+	case "install":
+		err = cmdInstall(args)
 	case "-h", "--help", "help":
 		usage()
 		return
@@ -72,6 +75,7 @@ commands:
   lint                 deterministic checks + (optional) LLM contradiction scan
   serve                run as an MCP server over stdio (any LLM connects)
   agents               print an AGENTS.md/CLAUDE.md that teaches an agent the COGO protocol
+  install              wire COGO into an agent's .mcp.json (stdio by default, or --http)
 
 common flags:
   -vault <dir>         vault directory (default $COGO_VAULT or ./vault)
@@ -337,6 +341,68 @@ func cmdAgents(args []string) error {
 		return nil
 	}
 	fmt.Print(md)
+	return nil
+}
+
+// cmdInstall wires COGO into an agent's .mcp.json — stdio (this binary + vault)
+// by default, or a remote HTTP endpoint with --http (+ optional --token). It
+// MERGES into an existing .mcp.json, preserving any other servers already there.
+func cmdInstall(args []string) error {
+	fs := flag.NewFlagSet("install", flag.ExitOnError)
+	dir := vaultFlag(fs)
+	httpURL := fs.String("http", "", "remote MCP endpoint (HTTP); default = local stdio using this binary")
+	token := fs.String("token", "", "Bearer token for the HTTP endpoint (optional)")
+	name := fs.String("name", "cogo", "server key under mcpServers")
+	out := fs.String("o", ".mcp.json", "path to the .mcp.json to write/merge")
+	claude := fs.Bool("claude", false, "also drop a CLAUDE.md with the COGO protocol next to it")
+	_ = fs.Parse(args)
+
+	bin, err := os.Executable()
+	if err != nil {
+		bin = "cogo"
+	}
+	vabs, _ := filepath.Abs(*dir)
+
+	server := map[string]any{"command": bin, "args": []any{"serve", "-vault", vabs}}
+	mode := "stdio"
+	if *httpURL != "" {
+		mode = "http"
+		server = map[string]any{"type": "http", "url": *httpURL}
+		if *token != "" {
+			server["headers"] = map[string]any{"Authorization": "Bearer " + *token}
+		}
+	}
+
+	// Merge into an existing .mcp.json, preserving any other servers.
+	root := map[string]any{}
+	if b, err := os.ReadFile(*out); err == nil {
+		_ = json.Unmarshal(b, &root)
+	}
+	servers, _ := root["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	servers[*name] = server
+	root["mcpServers"] = servers
+
+	b, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(*out, append(b, '\n'), 0o644); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "cogo: wired %q → mcpServers.%s (%s)\n", *out, *name, mode)
+
+	if *claude {
+		p := filepath.Join(filepath.Dir(*out), "CLAUDE.md")
+		md := agentsmd.Generate(agentsmd.Options{Filename: "CLAUDE.md", HTTPURL: *httpURL, Binary: bin, Vault: vabs})
+		if err := os.WriteFile(p, []byte(md), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "cogo: wrote %s\n", p)
+	}
+	fmt.Fprintln(os.Stderr, "  reiniciá tu agente para que tome la config.")
 	return nil
 }
 

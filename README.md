@@ -211,6 +211,7 @@ cogo stale                # qué está vencido o por vencer
 cogo verify <id>          # "ya lo chequeé": revalida y re-colorea
 cogo lint                 # enlaces rotos, vencidas, y contradicciones (si hay modelo)
 cogo agents --claude      # genera el CLAUDE.md/AGENTS.md que le enseña el protocolo a un agente
+cogo install              # cablea COGO en el .mcp.json del agente (stdio; --http para remoto)
 cogo serve -http :8080    # visor web + servidor MCP por HTTP
 cogo serve                # servidor MCP por stdio
 ```
