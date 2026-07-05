@@ -453,7 +453,8 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .gbox { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 14px 16px;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); border-left-width: 3px; box-shadow: var(--shadow); }
 .gbox-lbl { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-2); }
-.gbox textarea, .gbox input { width: 100%; background: var(--fieldbg, var(--card-2)); border-color: var(--border); }
+.gbox textarea, .gbox input { width: 100%; max-width: 100%; box-sizing: border-box; background: var(--fieldbg, var(--card-2)); border-color: var(--border); }
+.gbox textarea { resize: vertical; } /* se estira para abajo, nunca a los costados (rompía la caja) */
 .gbox textarea:focus, .gbox input:focus { background: var(--fieldbg, var(--bg-2)); }
 .gbox-mandate { --fieldbg: color-mix(in srgb, var(--accent) 8%, var(--panel)); border-left-color: var(--accent); }
 .gbox-context { --fieldbg: color-mix(in srgb, #5b8def 11%, var(--panel)); border-left-color: color-mix(in srgb, #5b8def 60%, var(--border)); }
