@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+	"hash/fnv"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -24,6 +26,7 @@ const (
 	EvResolved  = "resolved"
 	EvBroken    = "broken"
 	EvUnchecked = "unchecked"
+	EvDrifted   = "drifted" // resolves, but the file changed since the note was verified
 )
 
 // a trailing :line, :line-line, #Lnn or "line 33-41" locator, stripped before stat.
@@ -41,52 +44,94 @@ func ResolveEvidence(vault map[string]*Note, roots EvidenceRoots) {
 	for _, n := range vault {
 		root := roots.Root(n.Project)
 		for i := range n.Evidence {
-			n.Evidence[i].Status = resolveRef(n.Evidence[i].Ref, root)
+			status, path := resolveRefPath(n.Evidence[i].Ref, root)
+			// Drift: a resolvable file that changed since the stamped baseline no
+			// longer supports the note the way it did when verified.
+			if status == EvResolved && n.Evidence[i].Hash != "" && path != "" {
+				if cur := fileHash(path); cur != "" && cur != n.Evidence[i].Hash {
+					status = EvDrifted
+				}
+			}
+			n.Evidence[i].Status = status
 		}
 	}
 }
 
-func resolveRef(ref, root string) string {
+// StampEvidenceHashes records the current content hash of each resolvable file
+// citation as the drift baseline. Call it when a note is (re)verified — that is
+// the moment "this is the evidence I confirmed against". Non-file evidence is
+// left untouched (empty hash = never drifts).
+func StampEvidenceHashes(n *Note, roots EvidenceRoots) {
+	root := roots.Root(n.Project)
+	for i := range n.Evidence {
+		if status, path := resolveRefPath(n.Evidence[i].Ref, root); status == EvResolved && path != "" {
+			if h := fileHash(path); h != "" {
+				n.Evidence[i].Hash = h
+			}
+		}
+	}
+}
+
+// fileHash is a fast, NON-cryptographic content hash (FNV-64a) — enough to detect
+// that a file changed. Deliberately not sha256: keeps the core package free of
+// crypto imports (and of the antivirus false positives that dogged the crypto ones).
+func fileHash(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	h := fnv.New64a()
+	_, _ = h.Write(b)
+	return fmt.Sprintf("%016x", h.Sum64())
+}
+
+func resolveRef(ref, root string) string { s, _ := resolveRefPath(ref, root); return s }
+
+// resolveRefPath classifies a ref and, for a checkable file, also returns the
+// resolved filesystem path (so callers can hash it for drift). path is "" for
+// anything not locatable as a local file.
+func resolveRefPath(ref, root string) (status, path string) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return EvUnchecked
+		return EvUnchecked, ""
 	}
 
 	// Take the locator token: everything before a prose separator, then the first
 	// whitespace-delimited field. "docker-compose.yml:164 — REDIS_URL: ..." -> "docker-compose.yml:164".
-	path := ref
+	p := ref
 	for _, sep := range []string{" — ", " – ", " - ", " (", ", "} {
-		if i := strings.Index(path, sep); i >= 0 {
-			path = path[:i]
+		if i := strings.Index(p, sep); i >= 0 {
+			p = p[:i]
 		}
 	}
-	if fields := strings.Fields(path); len(fields) > 0 {
-		path = fields[0]
+	if fields := strings.Fields(p); len(fields) > 0 {
+		p = fields[0]
 	}
 	// Strip a trailing line locator so the path can be stat'd.
-	path = lineWordRe.ReplaceAllString(path, "")
-	path = lineSuffixRe.ReplaceAllString(path, "")
+	p = lineWordRe.ReplaceAllString(p, "")
+	p = lineSuffixRe.ReplaceAllString(p, "")
 
 	// An elided path ("file://.../x", "src/.../y") is not something COGO can locate.
-	if strings.Contains(path, "...") {
-		return EvUnchecked
+	if strings.Contains(p, "...") {
+		return EvUnchecked, ""
 	}
 
-	low := strings.ToLower(path)
+	low := strings.ToLower(p)
 	switch {
 	case strings.HasPrefix(low, "http://"), strings.HasPrefix(low, "https://"):
-		return EvUnchecked // a URL needs the network; COGO stays offline by default
+		return EvUnchecked, "" // a URL needs the network; COGO stays offline by default
 	case strings.HasPrefix(low, "file://"):
-		if fp := fileURIPath(path); fp != "" {
-			return existsStatus(fp)
+		if fp := fileURIPath(p); fp != "" {
+			return existsStatus(fp), fp
 		}
-		return EvUnchecked
-	case filepath.IsAbs(path):
-		return existsStatus(path)
-	case looksLikePath(path) && root != "":
-		return existsStatus(filepath.Join(root, filepath.FromSlash(path)))
+		return EvUnchecked, ""
+	case filepath.IsAbs(p):
+		return existsStatus(p), p
+	case looksLikePath(p) && root != "":
+		fp := filepath.Join(root, filepath.FromSlash(p))
+		return existsStatus(fp), fp
 	default:
-		return EvUnchecked
+		return EvUnchecked, ""
 	}
 }
 

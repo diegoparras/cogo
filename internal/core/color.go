@@ -55,6 +55,17 @@ func hasBrokenEvidence(ev []Evidence) bool {
 	return false
 }
 
+// hasDriftedEvidence reports whether any cited file changed since the note was
+// verified — the evidence moved under it, so it can no longer be green.
+func hasDriftedEvidence(ev []Evidence) bool {
+	for _, e := range ev {
+		if e.Status == EvDrifted {
+			return true
+		}
+	}
+	return false
+}
+
 // windowDays returns the freshness window per type (in days). One window per
 // type derives both thresholds: stale_at = last_verified + window (-> yellow),
 // expiry = last_verified + 2×window (-> red). Mistakes never decay and are
@@ -185,6 +196,8 @@ func (e *evaluator) compute(n *Note) Verdict {
 
 	// YELLOW — not red, but something keeps it below green.
 	switch {
+	case hasDriftedEvidence(n.Evidence):
+		return Verdict{Yellow, "la evidencia citada cambió desde la última verificación — re-verificá", staleAt}
 	case tier == TierReported || tier == TierReasoned:
 		return Verdict{Yellow, "evidence is reported/reasoned (caps at yellow)", staleAt}
 	case n.Check.Status != "passed": // tier is observed here

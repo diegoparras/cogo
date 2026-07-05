@@ -579,6 +579,7 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	n.Check.Status = "passed"
 	n.LastVerified = s.today()
+	core.StampEvidenceHashes(n, s.evRoots()) // re-baseline drift: this is what I confirmed against
 	v := core.Evaluate(n, vault, s.contras(), s.today())
 	n.Apply(v)
 	path := n.Path
@@ -786,6 +787,11 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		if cosmeticEdit(existing, n) {
 			n.Check.Status = existing.Check.Status
 			n.LastVerified = existing.LastVerified
+			// Evidence is unchanged (kind+ref), so carry the drift baseline over —
+			// a typo fix must not silently re-confirm the evidence.
+			for i := range n.Evidence {
+				n.Evidence[i].Hash = existing.Evidence[i].Hash
+			}
 		}
 	}
 	vault[n.ID] = n

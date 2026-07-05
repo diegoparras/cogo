@@ -249,6 +249,7 @@ func newMCPServer(dir string) *mcp.Server {
 		}
 		n.Check.Status = "passed"
 		n.LastVerified = today()
+		core.StampEvidenceHashes(n, core.LoadEvidenceRoots(dir)) // re-baseline drift on verify
 		v := core.Evaluate(n, vault, contradictions(), today())
 		n.Apply(v)
 

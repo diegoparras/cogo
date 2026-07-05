@@ -18,6 +18,10 @@ type EvidenceRoots struct {
 	byPrj map[string]string
 }
 
+// SingleRoot builds an EvidenceRoots with just a global default — handy for the
+// single-root case and tests.
+func SingleRoot(root string) EvidenceRoots { return EvidenceRoots{def: root} }
+
 // Root returns the base dir for a project's relative refs, or the default.
 func (r EvidenceRoots) Root(project string) string {
 	if r.byPrj != nil {

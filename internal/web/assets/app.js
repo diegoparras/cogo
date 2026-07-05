@@ -659,6 +659,7 @@ function relSelect(ids, value, onchange) {
 function paintEvBadge(node, status) {
   const map = {
     resolved: ["✓ resuelve", "ev-status ok", "El archivo citado existe."],
+    drifted: ["⟳ cambió", "ev-status warn", "El archivo citado cambió desde la última verificación → la nota baja a amarillo hasta que la re-verifiques."],
     broken: ["✗ no resuelve", "ev-status bad", "El archivo citado no existe → esta evidencia NO cuenta para el color."],
     unchecked: ["— sin chequear", "ev-status muted", "COGO no puede verificar esta ref sin conexión (log, comando, URL o ruta sin raíz)."],
   };
