@@ -123,7 +123,11 @@ func FromEnv(ctx context.Context) (*Auth, error) {
 	if issuer == "" || clientID == "" || redirect == "" {
 		return nil, errors.New("AUTH_MODE=federado needs LOCKATUS_ISSUER, LOCKATUS_CLIENT_ID and LOCKATUS_REDIRECT_URI")
 	}
-	provider, err := oidc.NewProvider(ctx, issuer)
+	// Bounded: never hang the whole boot if Lockatus is unreachable — fail fast
+	// with a clear error instead of a silent stuck container.
+	dctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	provider, err := oidc.NewProvider(dctx, issuer)
 	if err != nil {
 		return nil, fmt.Errorf("lockatus discovery failed (%s): %w", issuer, err)
 	}
