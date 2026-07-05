@@ -1700,12 +1700,14 @@ function showTokenGate(withLockatusBack) {
     if (me.mode === "token") {
       showTokenGate(false);
     } else { // OIDC / Lockatus — con la opción de entrar por token también
-      $("#loginGate").classList.remove("hidden");
+      const card = $("#loginGate .login-card");
+      $("#loginSub").textContent = "La memoria con color de tu proyecto.";
+      const sso = el("a", "login-sso", "Entrar con Lockatus"); sso.href = "/auth/login";
       const alt = el("a", "login-alt", "o entrá con un token de acceso");
       alt.addEventListener("click", () => showTokenGate(true));
-      $("#loginGate .login-card").appendChild(alt);
+      card.appendChild(sso); card.appendChild(alt);
     }
-    return;
+    return; // el overlay ya cubre la pantalla: nunca se ve la cromía detrás
   }
   if (me.mode === "federated" && me.authenticated) {
     $("#menuUser").textContent = me.name ? (me.name + " · " + me.email) : me.email;
@@ -1718,6 +1720,7 @@ function showTokenGate(withLockatusBack) {
     lb.addEventListener("click", e => { e.preventDefault(); localStorage.removeItem("cogo.token"); location.reload(); });
     lb.classList.remove("hidden"); $("#logoutSep").classList.remove("hidden");
   }
+  $("#loginGate").classList.add("hidden"); // autenticado (o standalone): recién acá sacamos la cubierta
   await loadConfig();
   render();
 })();
