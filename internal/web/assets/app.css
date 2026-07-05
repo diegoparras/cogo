@@ -448,14 +448,17 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .fresh-zen-h { font-size: 19px; font-weight: 650; color: var(--text); }
 .fresh-zen-sub { font-size: 13.5px; color: var(--muted); margin-top: 6px; max-width: 380px; line-height: 1.5; }
 
-/* Guard — cajas pastel diferenciadas */
+/* Guard/Veracidad — caja BLANCA (superficie) con el CAMPO tintado por su color.
+   Cada variante define --fieldbg (el tinte del input) y el color del borde izq. */
 .gbox { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 14px 16px;
-  border: 1px solid var(--border); border-radius: var(--radius); border-left-width: 3px; }
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); border-left-width: 3px; box-shadow: var(--shadow); }
 .gbox-lbl { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-2); }
-.gbox textarea, .gbox input { width: 100%; }
-.gbox-mandate { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); border-left-color: var(--accent); }
-.gbox-context { background: color-mix(in srgb, #5b8def 8%, var(--panel)); border-left-color: color-mix(in srgb, #5b8def 60%, var(--border)); }
-.gbox-turn { background: color-mix(in srgb, var(--warn) 9%, var(--panel)); border-left-color: color-mix(in srgb, var(--warn) 65%, var(--border)); }
+.gbox textarea, .gbox input { width: 100%; background: var(--fieldbg, var(--card-2)); border-color: var(--border); }
+.gbox textarea:focus, .gbox input:focus { background: var(--fieldbg, var(--bg-2)); }
+.gbox-mandate { --fieldbg: color-mix(in srgb, var(--accent) 8%, var(--panel)); border-left-color: var(--accent); }
+.gbox-context { --fieldbg: color-mix(in srgb, #5b8def 11%, var(--panel)); border-left-color: color-mix(in srgb, #5b8def 60%, var(--border)); }
+.gbox-turn { --fieldbg: color-mix(in srgb, var(--warn) 12%, var(--panel)); border-left-color: color-mix(in srgb, var(--warn) 65%, var(--border)); }
+.gbox-xray { --fieldbg: color-mix(in srgb, var(--accent) 8%, var(--panel)); border-left-color: var(--accent); }
 
 /* Veracidad — pills por eje + tarjetas */
 .xr-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto; }

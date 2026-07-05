@@ -1390,7 +1390,10 @@ function xrPill(spec) {
 async function renderVeracidad(main) {
   viewHead(main, "Suite Escriba · Memoria", "Veracidad", "Radiografía una respuesta de IA por afirmación: cuánto se compromete el lenguaje vs cuánto fundamento declara. Determinista, sin modelo — el gemelo del Guard. No dice “es verdad”: marca lo afirmado fuerte sin fundamento y las opiniones disfrazadas de hecho.");
   const ta = el("textarea", "md"); ta.setAttribute("rows", "7"); ta.placeholder = "Pegá acá una respuesta de una IA…";
-  main.appendChild(field("Respuesta a radiografiar", ta));
+  const xbox = el("div", "gbox gbox-xray");
+  xbox.appendChild(el("div", "gbox-lbl", "Respuesta a radiografiar"));
+  xbox.appendChild(ta);
+  main.appendChild(xbox);
   const bar = el("div", "viewbar");
   const btn = el("button", null, "Radiografiar");
   const overall = el("span", "xr-overall");
