@@ -977,7 +977,7 @@ async function openAgents() {
   const pre = el("pre", "ag-pre mono");
   card.appendChild(pre);
 
-  const actions = el("div", "tk-form-row");
+  const actions = el("div", "ag-actions");
   const copy = el("button", "mini", "copiar");
   const dl = el("button", "mini ghost", "descargar");
   actions.appendChild(copy); actions.appendChild(dl);
