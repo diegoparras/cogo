@@ -563,10 +563,12 @@ async function renderAgents(main) {
 // ---------- graph (motor Canvas: graph.js) ----------
 async function renderGraph(main) {
   const g = await api("/api/graph");
-  if (!g.nodes.length) { main.appendChild(el("div", "empty", "Sin notas para graficar.")); return; }
-  const nodes = g.nodes.filter(matchesProject);
+  // Un vault vacío puede devolver nodes/edges nulos (slices vacíos de Go); guardá.
+  const gNodes = (g && g.nodes) || [], gEdges = (g && g.edges) || [];
+  if (!gNodes.length) { main.appendChild(el("div", "empty", "Sin notas para graficar.")); return; }
+  const nodes = gNodes.filter(matchesProject);
   const keep = new Set(nodes.map(n => n.id));
-  const edges = g.edges.filter(e => keep.has(e.from) && keep.has(e.to));
+  const edges = gEdges.filter(e => keep.has(e.from) && keep.has(e.to));
   if (!nodes.length) { main.appendChild(el("div", "empty", "Sin notas para este proyecto.")); return; }
 
   viewHead(main, "Suite Escriba · Memoria", "Grafo", "Cómo se relacionan tus notas, pintadas por confianza. Mirálo en 2D o entrá a la constelación 3D.");

@@ -38,7 +38,9 @@ func BuildGraph(vault map[string]*Note, contradictions map[string]bool, today Da
 	state := Lifecycle(vault)
 	show := func(id string) bool { return includeArchived || state[id] == StateActive }
 
-	g := GraphData{}
+	// Non-nil slices so an empty vault serializes to [] (not null), which the
+	// front end can safely call .length/.filter on.
+	g := GraphData{Nodes: []GraphNode{}, Edges: []GraphEdge{}}
 	for id, n := range vault {
 		if !show(id) {
 			continue
