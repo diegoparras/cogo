@@ -114,7 +114,7 @@ function confirmDialog({ title, message, note, hint, confirmText = "Aceptar", ca
   });
 }
 
-const state = { view: "vault", project: "", hideGreen: false, showArchived: false, editing: null, llmConfigured: false, scrubEnabled: false };
+const state = { view: "vault", project: "", showArchived: false, editing: null, llmConfigured: false, scrubEnabled: false, vaultColors: new Set(), graphColors: new Set() };
 
 // ---------- chrome ----------
 function initTheme() {
@@ -186,18 +186,32 @@ async function loadConfig() {
 // ---------- shared ----------
 function matchesProject(n) { return !state.project || n.project === state.project; }
 
-function legend(notes) {
+// colorFilterBar: chips clickeables por color (verde/amarillo/rojo/s-grado) que
+// filtran la vista. `active` es un Set de colores seleccionados (vacío = todos).
+// Chip tintado por su color; borde más oscuro cuando está seleccionado.
+function colorFilterBar(notes, active, onToggle) {
   const counts = { green: 0, yellow: 0, red: 0, ungraded: 0 };
   notes.forEach(n => counts[n.color] = (counts[n.color] || 0) + 1);
-  const wrap = el("div", "legend");
+  const wrap = el("div", "cfilter");
   [["green", "verde"], ["yellow", "amarillo"], ["red", "rojo"], ["ungraded", "s/grado"]].forEach(([c, label]) => {
     if (!counts[c]) return;
-    const lg = el("span", "lg " + cls(c));
-    lg.appendChild(el("span", "dot"));
-    lg.appendChild(el("span", null, counts[c] + " " + label));
-    wrap.appendChild(lg);
+    const chip = el("button", "cf " + cls(c) + (active.has(c) ? " on" : ""));
+    chip.appendChild(el("span", "dot"));
+    chip.appendChild(el("span", null, counts[c] + " " + label));
+    chip.title = "Filtrar por color (clic para alternar)";
+    chip.addEventListener("click", () => {
+      if (active.has(c)) active.delete(c); else active.add(c);
+      chip.classList.toggle("on"); // in-place (graph); un render completo lo reconstruye igual (vault)
+      onToggle();
+    });
+    wrap.appendChild(chip);
   });
   return wrap;
+}
+
+// colorVisible: aplica un Set de colores a una lista (vacío = todos).
+function colorVisible(notes, active) {
+  return active.size === 0 ? notes : notes.filter(n => active.has(n.color));
 }
 
 // edgeLegend: muestra qué significa cada color/estilo de arista presente en el grafo.
@@ -227,7 +241,7 @@ function render() {
   const main = $("#main");
   main.innerHTML = "";
   if (state.editing) { renderEditor(main); return; }
-  ({ vault: renderVault, fresh: renderFresh, pack: renderPack, graph: renderGraph, lint: renderLint, guard: renderGuard, xray: renderVeracidad }[state.view])(main);
+  ({ vault: renderVault, fresh: renderFresh, pack: renderAgents, graph: renderGraph, lint: renderLint, guard: renderGuard, xray: renderVeracidad }[state.view])(main);
 }
 
 // ---------- vault ----------
@@ -285,21 +299,17 @@ async function renderVault(main) {
   const addBtn = el("button", "mini", "+ Nueva nota");
   addBtn.addEventListener("click", () => openEditor(null));
   bar.appendChild(addBtn);
-  bar.appendChild(legend(notes));
-  const hg = el("label", "hg");
-  const cb = el("input"); cb.type = "checkbox"; cb.checked = state.hideGreen;
-  cb.addEventListener("change", () => { state.hideGreen = cb.checked; render(); });
-  hg.appendChild(cb); hg.appendChild(el("span", null, "ocultar verdes"));
-  bar.appendChild(hg);
-  const ha = el("label", "hg");
-  const acb = el("input"); acb.type = "checkbox"; acb.checked = state.showArchived;
-  acb.addEventListener("change", () => { state.showArchived = acb.checked; render(); });
-  ha.appendChild(acb); ha.appendChild(el("span", null, "mostrar archivadas"));
-  bar.appendChild(ha);
+  bar.appendChild(colorFilterBar(notes, state.vaultColors, render));
+  bar.appendChild(el("span", "vb-spacer"));
+  const arch = el("button", "pilltog" + (state.showArchived ? " on" : ""));
+  arch.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7"/><path d="M10 12h4"/></svg><span>archivadas</span>';
+  arch.title = state.showArchived ? "Ocultar archivadas" : "Mostrar archivadas";
+  arch.addEventListener("click", () => { state.showArchived = !state.showArchived; render(); });
+  bar.appendChild(arch);
   main.appendChild(bar);
 
-  const shown = notes.filter(n => !(state.hideGreen && n.color === "green"));
-  if (!shown.length) { main.appendChild(el("div", "empty", "Sin notas para mostrar.")); return; }
+  const shown = colorVisible(notes, state.vaultColors);
+  if (!shown.length) { main.appendChild(el("div", "empty", "Ninguna nota de ese color.")); return; }
 
   const list = el("div", "note-list");
   shown.forEach(n => {
@@ -358,6 +368,26 @@ function freshnessLabel(iso) {
   return { text: "↻ vencida hace " + (-d) + "d", cls: "bad" };
 }
 
+// freshEmptyState: cuando no hay nada vencido ni por vencer — un brote fresco
+// con un check, en vez de una línea de texto sola. `total` = notas con vencimiento.
+function freshEmptyState(total) {
+  const w = el("div", "fresh-zen");
+  w.innerHTML = `
+    <svg viewBox="0 0 200 168" width="184" height="154" aria-hidden="true" class="fresh-art">
+      <circle cx="100" cy="88" r="60" fill="var(--ok)" opacity="0.07"/>
+      <circle cx="100" cy="88" r="43" fill="var(--ok)" opacity="0.09"/>
+      <path d="M100 126 C100 106 100 96 100 80" stroke="var(--ok)" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M100 96 C80 96 67 83 67 68 C87 68 100 80 100 96 Z" fill="var(--ok)" opacity="0.9"/>
+      <path d="M100 86 C120 86 133 73 133 58 C113 58 100 70 100 86 Z" fill="var(--ok)" opacity="0.62"/>
+      <path d="M72 126 h56" stroke="var(--ok)" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+      <circle cx="138" cy="120" r="15" fill="var(--ok)"/>
+      <path d="M131 120 l4.5 4.5 l8.5 -9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    <div class="fresh-zen-h">Todo fresco</div>
+    <div class="fresh-zen-sub">Nada vencido ni por vencer en los próximos 30 días.${total ? " Tus " + total + " nota(s) con vencimiento están al día." : ""}</div>`;
+  return w;
+}
+
 async function renderFresh(main) {
   const notes = (await api("/api/notes")).filter(matchesProject).filter(n => n.stale_at);
   const rows = notes.map(n => {
@@ -368,7 +398,7 @@ async function renderFresh(main) {
   rows.sort((a, b) => a.stale_at < b.stale_at ? -1 : 1);
 
   viewHead(main, "Suite Escriba · Memoria", "Frescura", "Las cosas caducan: acá están las notas vencidas o por vencer en ≤30 días. Revalidá una que ya chequeaste.");
-  if (!rows.length) { main.appendChild(el("div", "empty", "Nada vencido ni por vencer. Todo fresco.")); return; }
+  if (!rows.length) { main.appendChild(freshEmptyState(notes.length)); return; }
 
   rows.forEach(r => {
     const row = el("div", "fresh-row " + cls(r.color));
@@ -387,41 +417,97 @@ async function renderFresh(main) {
   });
 }
 
-// ---------- pack preview ----------
-let packTimer = null;
-async function renderPack(main) {
-  viewHead(main, "Suite Escriba · Memoria", "Pack", "Armá el contexto coloreado de un tema para pasárselo a una IA. El rojo se degrada solo — la política viaja en el pack.");
-  const form = el("div", "pack-form");
-  const q = el("input", "q"); q.placeholder = "tema, ej: redis"; q.value = window.__packQ || "";
-  const b = el("input", "b"); b.type = "number"; b.placeholder = "budget tokens"; b.value = window.__packB || "";
-  form.appendChild(q); form.appendChild(b);
-  main.appendChild(form);
+// ---------- agentes: gestor de instrucciones (.md) ----------
+// Editá/guardá/versioná los archivos que un agente lee al arrancar (AGENTS.md,
+// CLAUDE.md, GEMINI.md, copilot-instructions.md). Se guardan en el vault
+// (.cogo/agents/), con historial. Podés meterles la plantilla del protocolo COGO
+// y un "pack" de contexto coloreado del vault.
+async function renderAgents(main) {
+  viewHead(main, "Suite Escriba · Memoria", "Agentes",
+    "Los archivos de instrucciones que tus agentes (Claude Code, Cursor, Copilot, Gemini…) leen al arrancar. Editálos, versionálos, y meteles la plantilla del protocolo o contexto coloreado del vault. Se guardan en tu vault.");
 
-  const summary = el("div", "pack-summary");
-  const pre = el("pre", "pack-md");
-  const copyRow = el("div", "copy-row");
-  const copyBtn = el("button", "mini ghost", "copiar");
-  copyRow.appendChild(copyBtn);
-  main.appendChild(summary); main.appendChild(pre); main.appendChild(copyRow);
+  const data = await api("/api/agent-docs");
+  const savedSet = new Set((data.docs || []).map(d => d.name));
+  const names = Array.from(new Set([...(data.docs || []).map(d => d.name), ...(data.known || [])]));
+  let current = window.__agentDoc && names.includes(window.__agentDoc) ? window.__agentDoc : (names[0] || "AGENTS.md");
 
-  async function run() {
-    window.__packQ = q.value; window.__packB = b.value;
-    const params = new URLSearchParams({ query: q.value, project: state.project, budget: b.value || "0" });
-    const p = await api("/api/pack?" + params.toString());
-    summary.innerHTML = "";
-    [["green", p.greens, "verde"], ["yellow", p.yellows, "amarillo"], ["red", p.reds, "rojo"]].forEach(([c, n, label]) => {
-      const s = el("span", "lg " + cls(c)); s.appendChild(el("span", "dot")); s.appendChild(el("span", null, n + " " + label));
-      summary.appendChild(s);
+  // selector de archivo (chips)
+  const tabs = el("div", "agt-tabs");
+  names.forEach(n => {
+    const chip = el("button", "agt-tab" + (n === current ? " on" : "") + (savedSet.has(n) ? " saved" : ""));
+    chip.appendChild(el("span", null, n));
+    chip.title = savedSet.has(n) ? "Guardado en el vault" : "Todavía sin guardar";
+    chip.addEventListener("click", () => { window.__agentDoc = n; render(); });
+    tabs.appendChild(chip);
+  });
+  const addTab = el("button", "agt-tab agt-new", "+ nuevo");
+  addTab.addEventListener("click", () => {
+    const name = prompt("Nombre del archivo (ej: copilot-instructions.md):", "");
+    if (name && name.trim()) { window.__agentDoc = name.trim(); render(); }
+  });
+  tabs.appendChild(addTab);
+  main.appendChild(tabs);
+
+  const doc = await api("/api/agent-docs?name=" + encodeURIComponent(current));
+  const ta = el("textarea", "agt-editor mono"); ta.rows = 18; ta.value = doc.content || "";
+  ta.placeholder = "Escribí o generá las instrucciones para " + current + " — botón «Plantilla COGO».";
+  main.appendChild(ta);
+
+  const bar = el("div", "agt-bar");
+  const save = el("button", "mini", "Guardar");
+  const tpl = el("button", "mini ghost", "Plantilla COGO");
+  const ins = el("button", "mini ghost", "Insertar contexto…");
+  const dl = el("button", "mini ghost", "Descargar");
+  const st = el("span", "lint-status");
+  bar.append(save, tpl, ins, dl, st);
+  main.appendChild(bar);
+
+  const insRow = el("div", "agt-ins hidden");
+  const iq = el("input"); iq.placeholder = "tema del contexto, ej: redis (vacío = todo)";
+  const igo = el("button", "mini", "insertar pack");
+  insRow.append(iq, igo);
+  main.appendChild(insRow);
+
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    const r = await api("/api/agent-docs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: current, content: ta.value }) }).catch(() => null);
+    save.disabled = false;
+    if (r && r.ok) { st.textContent = "guardado ✓"; window.__agentDoc = current; render(); }
+    else st.textContent = (r && r.error) || "no se pudo guardar";
+  });
+  tpl.addEventListener("click", async () => {
+    if (ta.value.trim() && !(await confirmDialog({ title: "Cargar plantilla", message: "Reemplaza el contenido actual con la plantilla del protocolo COGO para " + current + ".", confirmText: "Cargar" }))) return;
+    const tool = /claude/i.test(current) ? "claude" : "";
+    const r = await api("/api/agents-md" + (tool ? "?tool=" + tool : "")).catch(() => null);
+    if (r) ta.value = r.markdown;
+  });
+  ins.addEventListener("click", () => { insRow.classList.toggle("hidden"); if (!insRow.classList.contains("hidden")) iq.focus(); });
+  igo.addEventListener("click", async () => {
+    igo.disabled = true;
+    const p = await api("/api/pack?" + new URLSearchParams({ query: iq.value, project: state.project, budget: "0" })).catch(() => null);
+    igo.disabled = false;
+    if (p) { ta.value = ta.value.replace(/\s*$/, "") + "\n\n" + p.markdown + "\n"; insRow.classList.add("hidden"); st.textContent = "contexto insertado — acordate de guardar"; }
+  });
+  dl.addEventListener("click", () => {
+    const blob = new Blob([ta.value], { type: "text/markdown" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = current; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  const hist = doc.history || [];
+  if (hist.length) {
+    const hb = el("div", "agt-hist");
+    hb.appendChild(el("div", "agt-hist-lbl", "Historial — " + hist.length + " versión(es) guardada(s)"));
+    hist.slice().reverse().forEach(v => {
+      const row = el("div", "agt-hist-row");
+      row.appendChild(el("span", "agt-hist-t", (v.time || "").replace("T", " ").replace("Z", "")));
+      const rb = el("button", "nc-act", "cargar esta versión");
+      rb.addEventListener("click", () => { ta.value = v.content; st.textContent = "versión cargada — guardá para fijarla"; });
+      row.appendChild(rb);
+      hb.appendChild(row);
     });
-    if (p.dropped) summary.appendChild(el("span", null, p.dropped + " omitidas"));
-    summary.appendChild(el("span", "tok", "~" + p.tokens + " tokens"));
-    pre.textContent = p.markdown;
-    copyBtn.onclick = () => { navigator.clipboard.writeText(p.markdown); copyBtn.textContent = "copiado"; setTimeout(() => copyBtn.textContent = "copiar", 1200); };
+    main.appendChild(hb);
   }
-  const debounced = () => { clearTimeout(packTimer); packTimer = setTimeout(run, 250); };
-  q.addEventListener("input", debounced);
-  b.addEventListener("input", debounced);
-  run();
 }
 
 // ---------- graph (motor Canvas: graph.js) ----------
@@ -436,7 +522,9 @@ async function renderGraph(main) {
   viewHead(main, "Suite Escriba · Memoria", "Grafo", "Cómo se relacionan tus notas, pintadas por confianza. Mirálo en 2D o entrá a la constelación 3D.");
   const view = el("div", "graph-view");
   const bar = el("div", "viewbar graph-bar");
-  bar.appendChild(legend(nodes));
+  // Filtro por color EN VIVO: al togglear, atenúa las esferas que no son de ese
+  // color (gv.setColorFilter), sin remontar el grafo.
+  bar.appendChild(colorFilterBar(nodes, state.graphColors, () => { if (window.__gv) window.__gv.setColorFilter(state.graphColors); }));
   bar.appendChild(el("span", "gb-sp"));
   const seg = el("div", "seg");
   const b2 = el("button", "seg-btn", "2D"), b3 = el("button", "seg-btn", "3D");
@@ -463,6 +551,8 @@ async function renderGraph(main) {
   const setActive = m => { b2.classList.toggle("on", m === "2d"); b3.classList.toggle("on", m === "3d"); };
   setActive(mode);
   const gv = CogoGraph.mount(wrap, { nodes, edges }, { mode, onSelect: id => openNoteModal(id) });
+  window.__gv = gv;
+  gv.setColorFilter(state.graphColors); // reaplicar el filtro si volvés a la pestaña
   b2.addEventListener("click", () => { window.__graphMode = "2d"; setActive("2d"); gv.setMode("2d"); });
   b3.addEventListener("click", () => { window.__graphMode = "3d"; setActive("3d"); gv.setMode("3d"); });
   reset.addEventListener("click", () => gv.resetView());
@@ -1239,6 +1329,14 @@ function contraCard(c, refresh) {
 }
 
 // ---------- veracidad (Motor de Veracidad · xray) ----------
+// Etiquetas + tono (ok/warn/err/neutral) de cada eje de la radiografía.
+const XR_COMMIT = { boosted: ["afirmado fuerte", "warn"], hedged: ["cauteloso", "ok"], neutral: ["neutro", "neutral"] };
+const XR_EVID = { observed: ["evidencia observada", "ok"], reported: ["evidencia reportada", "warn"], none: ["sin evidencia", "err"] };
+function xrPill(spec) {
+  const [label, tone] = Array.isArray(spec) ? spec : [spec, "neutral"];
+  return el("span", "xr-pill xr-" + (tone || "neutral"), label);
+}
+
 async function renderVeracidad(main) {
   viewHead(main, "Suite Escriba · Memoria", "Veracidad", "Radiografía una respuesta de IA por afirmación: cuánto se compromete el lenguaje vs cuánto fundamento declara. Determinista, sin modelo — el gemelo del Guard. No dice “es verdad”: marca lo afirmado fuerte sin fundamento y las opiniones disfrazadas de hecho.");
   const ta = el("textarea", "md"); ta.setAttribute("rows", "7"); ta.placeholder = "Pegá acá una respuesta de una IA…";
@@ -1261,13 +1359,18 @@ async function renderVeracidad(main) {
     overall.appendChild(el("strong", null, colorWord(r.overall)));
     if (r.summary) overall.appendChild(el("span", "xr-summary", r.summary));
     out.innerHTML = "";
-    (r.claims || []).forEach(c => {
+    (r.claims || []).forEach((c, i) => {
       const row = el("div", "xr-claim " + cls(c.color));
-      row.appendChild(el("span", "dot"));
+      const rail = el("div", "xr-rail"); rail.appendChild(el("span", "dot")); rail.appendChild(el("span", "xr-num", "#" + (i + 1)));
+      row.appendChild(rail);
       const body = el("div", "xr-claim-body");
       body.appendChild(el("div", "xr-claim-text", c.text));
       body.appendChild(el("div", "xr-claim-reason", c.reason));
-      body.appendChild(el("div", "xr-claim-meta", "compromiso: " + c.commitment + " · evidencia: " + c.evidence + " · " + (c.falsifiable ? "falsable" : "no falsable")));
+      const pills = el("div", "xr-pills");
+      pills.appendChild(xrPill(XR_COMMIT[c.commitment] || c.commitment));
+      pills.appendChild(xrPill(XR_EVID[c.evidence] || [c.evidence, "neutral"]));
+      pills.appendChild(xrPill(c.falsifiable ? ["falsable", "ok"] : ["opinión", "err"]));
+      body.appendChild(pills);
       row.appendChild(body);
       out.appendChild(row);
     });
@@ -1296,8 +1399,8 @@ async function renderGuard(main) {
 
   // --- mandato persistente ---
   const m = await api("/api/mandate");
-  const mand = el("div", "guard-mandate");
-  mand.appendChild(el("div", "field-lbl", "Tu mandato (queda guardado en el vault)"));
+  const mand = el("div", "gbox gbox-mandate");
+  mand.appendChild(el("div", "gbox-lbl", "Tu mandato (queda guardado en el vault)"));
   const goal = el("input"); goal.placeholder = "tu objetivo · ej: decidir mi carrera sin apuro"; goal.value = m.goal || "";
   mand.appendChild(goal);
   const lines = el("textarea", "md"); lines.rows = 3;
@@ -1320,11 +1423,17 @@ async function renderGuard(main) {
   //     se lee como un chat, el último mensaje abajo ---
   const trans = el("textarea", "md"); trans.rows = 4;
   trans.placeholder = "opcional — la charla hasta acá, un mensaje por renglón:\nU: lo que dijiste vos\nM: lo que respondió el modelo";
-  main.appendChild(field("1 · Conversación previa (contexto, para los recibos)", trans));
+  const cbox = el("div", "gbox gbox-context");
+  cbox.appendChild(el("div", "gbox-lbl", "1 · Conversación previa (contexto, para los recibos)"));
+  cbox.appendChild(trans);
+  main.appendChild(cbox);
 
   const turn = el("textarea", "md"); turn.rows = 5;
   turn.placeholder = "el ÚLTIMO mensaje del modelo — el que se radiografía";
-  main.appendChild(field("2 · Turno a analizar (el último mensaje del modelo)", turn));
+  const tbox = el("div", "gbox gbox-turn");
+  tbox.appendChild(el("div", "gbox-lbl", "2 · Turno a analizar (el último mensaje del modelo)"));
+  tbox.appendChild(turn);
+  main.appendChild(tbox);
 
   const srow = el("label", "hg guard-steel-row");
   const steel = el("input"); steel.type = "checkbox"; steel.disabled = !state.llmConfigured;

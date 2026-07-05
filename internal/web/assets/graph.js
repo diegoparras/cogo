@@ -98,6 +98,7 @@
     let yaw = 0.5, pitch = -0.35, spinY = 0, spinX = 0, autoSpin = 0.0016; // 3D
     let hovered = null, dragging = false, dragMoved = false, lastX = 0, lastY = 0;
     let W = 0, H = 0, dpr = 1;
+    let colorFilter = null; // Set of colors to show; null/empty = all
 
     function resize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -185,7 +186,10 @@
       for (const e of edges) {
         const st = edgeStyle(e);
         const touches = e.a === hovered || e.b === hovered;
-        ctx.globalAlpha = focusSet ? (touches ? 1 : 0.07) : (mode === "3d" ? 0.72 : 0.92);
+        const eDim = colorFilter && (!colorFilter.has(e.a.color) || !colorFilter.has(e.b.color));
+        let ea = focusSet ? (touches ? 1 : 0.07) : (mode === "3d" ? 0.72 : 0.92);
+        if (eDim) ea = Math.min(ea, 0.05);
+        ctx.globalAlpha = ea;
         ctx.strokeStyle = st.stroke; ctx.lineWidth = st.w; ctx.setLineDash(st.dash);
         const ax = e.a.sx, ay = e.a.sy, bx = e.b.sx, by = e.b.sy;
         ctx.beginPath();
@@ -206,7 +210,7 @@
       for (const n of order) {
         const r = radius(n) * (mode === "3d" ? Math.max(.4, n.ss / (n.ssBase || n.ss)) : 1);
         const rr = mode === "3d" ? radius(n) * Math.max(.45, Math.min(1.7, n.ss)) : radius(n);
-        const dim = focusSet && !focusSet.has(n);
+        const dim = (focusSet && !focusSet.has(n)) || (colorFilter && !colorFilter.has(n.color));
         const near = mode === "3d" ? Math.max(.35, Math.min(1, (n.depth + bounds3()) / (2 * bounds3()))) : 1;
         // halo
         ctx.globalAlpha = (dim ? 0.12 : 0.9) * near;
@@ -238,6 +242,7 @@
       const showAll = nodes.length <= 42;
       ctx.font = "600 11.5px ui-monospace, Consolas, monospace"; ctx.textAlign = "center";
       for (const n of order) {
+        if (colorFilter && !colorFilter.has(n.color)) continue; // filtered out → no label
         const show = showAll || n === hovered || (focusSet && focusSet.has(n));
         if (!show) continue;
         const dim = focusSet && !focusSet.has(n);
@@ -310,6 +315,7 @@
 
     return {
       setMode(m) { mode = m === "3d" ? "3d" : "2d"; zoom = 1; panX = panY = 0; alpha = Math.max(alpha, 0.5); },
+      setColorFilter(set) { colorFilter = (set && set.size) ? new Set(set) : null; },
       resetView() { zoom = 1; panX = panY = 0; yaw = 0.5; pitch = -0.35; spinY = spinX = 0; alpha = 1; },
       reheat() { alpha = 1; },
       destroy: stop,

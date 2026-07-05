@@ -421,3 +421,69 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .model-hint { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 15px; line-height: 1.4; }
 .model-hint.ok { color: var(--ok); }
 .model-hint.bad { color: var(--err); }
+
+/* ============ rediseño de vistas (2026-07-04) ============ */
+
+/* Filtro por color: chips clickeables (Vault y Grafo) */
+.cfilter { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cf { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+  background: color-mix(in srgb, var(--c) 9%, var(--panel)); transition: border-color .12s, background .12s, box-shadow .12s; }
+.cf:hover { background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
+.cf.on { color: var(--text); font-weight: 600; border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 18%, var(--panel)); box-shadow: inset 0 0 0 1px var(--c); }
+.cf .dot { width: 9px; height: 9px; }
+
+/* Botón toggle tipo pill (archivadas) */
+.pilltog { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 5px 13px; background: var(--panel); cursor: pointer; transition: all .12s; }
+.pilltog:hover { border-color: var(--muted); color: var(--text); }
+.pilltog.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.vb-spacer { flex: 1 1 auto; }
+
+/* Frescura — estado "todo fresco" */
+.fresh-zen { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px 30px; }
+.fresh-art { margin-bottom: 6px; }
+.fresh-zen-h { font-size: 19px; font-weight: 650; color: var(--text); }
+.fresh-zen-sub { font-size: 13.5px; color: var(--muted); margin-top: 6px; max-width: 380px; line-height: 1.5; }
+
+/* Guard — cajas pastel diferenciadas */
+.gbox { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 14px 16px;
+  border: 1px solid var(--border); border-radius: var(--radius); border-left-width: 3px; }
+.gbox-lbl { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-2); }
+.gbox textarea, .gbox input { width: 100%; }
+.gbox-mandate { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); border-left-color: var(--accent); }
+.gbox-context { background: color-mix(in srgb, #5b8def 8%, var(--panel)); border-left-color: color-mix(in srgb, #5b8def 60%, var(--border)); }
+.gbox-turn { background: color-mix(in srgb, var(--warn) 9%, var(--panel)); border-left-color: color-mix(in srgb, var(--warn) 65%, var(--border)); }
+
+/* Veracidad — pills por eje + tarjetas */
+.xr-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto; }
+.xr-num { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.xr-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.xr-pill { font-size: 10.5px; font-weight: 600; letter-spacing: .01em; border-radius: 999px; padding: 3px 9px;
+  background: color-mix(in srgb, var(--pc) 13%, var(--panel)); color: var(--pc); border: 1px solid color-mix(in srgb, var(--pc) 32%, var(--border)); }
+.xr-ok { --pc: var(--ok); }
+.xr-warn { --pc: var(--warn); }
+.xr-err { --pc: var(--err); }
+.xr-neutral { --pc: var(--muted); }
+.xr-overall { padding: 8px 14px; border-radius: 999px; background: color-mix(in srgb, var(--c) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--c) 30%, var(--border)); }
+
+/* Agentes — gestor de instrucciones */
+.agt-tabs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 16px 0 12px; }
+.agt-tab { position: relative; font-family: var(--mono); font-size: 12.5px; color: var(--muted-2); cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; transition: all .12s; }
+.agt-tab:hover { border-color: var(--muted); color: var(--text); }
+.agt-tab.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.agt-tab.saved:not(.on)::after { content: "●"; color: var(--ok); font-size: 8px; margin-left: 7px; vertical-align: middle; }
+.agt-new { font-family: inherit; border-style: dashed; color: var(--muted); }
+.agt-editor { width: 100%; font-size: 12.5px; line-height: 1.55; resize: vertical; min-height: 340px; }
+.agt-bar { display: flex; gap: 8px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+.agt-ins { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; }
+.agt-ins.hidden { display: none; }
+.agt-ins input { flex: 1; min-width: 200px; }
+.agt-hist { margin-top: 8px; border-top: 1px solid var(--hairline); padding-top: 12px; }
+.agt-hist-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 8px; }
+.agt-hist-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; font-size: 12.5px; color: var(--muted-2); }
+.agt-hist-t { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.agt-hist-row .nc-act { margin-left: auto; }

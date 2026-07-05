@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/diegoparras/cogo/internal/agentdocs"
 	"github.com/diegoparras/cogo/internal/agentsmd"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
@@ -117,6 +118,52 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
+	mux.HandleFunc("/api/agent-docs", s.handleAgentDocs)
+}
+
+// handleAgentDocs manages the agent-instruction files a user authors (AGENTS.md,
+// CLAUDE.md, …), stored in the vault with a version history. GET lists them, or
+// with ?name= returns one doc + its history; POST saves; DELETE removes.
+func (s *Server) handleAgentDocs(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		if name := r.URL.Query().Get("name"); name != "" {
+			content, err := agentdocs.Load(s.dir, name)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, map[string]any{"name": agentdocs.SafeName(name), "content": content, "history": agentdocs.History(s.dir, name)})
+			return
+		}
+		writeJSON(w, map[string]any{"docs": agentdocs.List(s.dir), "known": agentdocs.Known})
+	case http.MethodPost:
+		var in struct {
+			Name    string `json:"name"`
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if agentdocs.SafeName(in.Name) == "" {
+			writeJSON(w, map[string]any{"ok": false, "error": "nombre inválido (usá algo como CLAUDE.md)"})
+			return
+		}
+		if err := agentdocs.Save(s.dir, in.Name, in.Content, s.today().String()+"T00:00:00Z"); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	case http.MethodDelete:
+		if err := agentdocs.Delete(s.dir, r.URL.Query().Get("name")); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	default:
+		http.Error(w, "GET, POST or DELETE", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleAgentsMD generates the bootstrap file (AGENTS.md/CLAUDE.md) that teaches
