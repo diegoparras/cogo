@@ -114,6 +114,48 @@ function confirmDialog({ title, message, note, hint, confirmText = "Aceptar", ca
   });
 }
 
+// promptDialog: como confirmDialog pero con un campo de texto. Resuelve con el
+// valor (trim) o null si se cancela/queda vacío. Mismo estándar visual Escriba.
+function promptDialog({ title, message, placeholder = "", value = "", confirmText = "Aceptar", cancelText = "Cancelar" } = {}) {
+  return new Promise(resolve => {
+    const back = el("div", "modal-back confirm-back");
+    const card = el("div", "modal-card confirm-card");
+    card.appendChild(el("h2", "modal-tit", title));
+    const cuerpo = el("div", "modal-cuerpo");
+    if (message) cuerpo.appendChild(el("p", "confirm-msg", message));
+    const input = el("input", "prompt-input");
+    input.type = "text"; input.placeholder = placeholder; input.value = value;
+    cuerpo.appendChild(input);
+    card.appendChild(cuerpo);
+    const acc = el("div", "modal-acciones");
+    const cancel = el("button", "ghost", cancelText);
+    const ok = el("button", "", confirmText);
+    acc.appendChild(cancel);
+    acc.appendChild(ok);
+    card.appendChild(acc);
+    back.appendChild(card);
+    document.body.appendChild(back);
+    requestAnimationFrame(() => back.classList.add("show"));
+
+    const close = val => {
+      document.removeEventListener("keydown", onKey);
+      back.classList.remove("show");
+      setTimeout(() => back.remove(), 160);
+      resolve(val);
+    };
+    const submit = () => close(input.value.trim() || null);
+    const onKey = e => {
+      if (e.key === "Escape") close(null);
+      else if (e.key === "Enter") { e.preventDefault(); submit(); }
+    };
+    cancel.addEventListener("click", () => close(null));
+    ok.addEventListener("click", submit);
+    back.addEventListener("click", e => { if (e.target === back) close(null); });
+    document.addEventListener("keydown", onKey);
+    setTimeout(() => { input.focus(); input.select(); }, 40);
+  });
+}
+
 const state = { view: "vault", project: "", showArchived: false, editing: null, llmConfigured: false, scrubEnabled: false, vaultColors: new Set(), graphColors: new Set() };
 
 // ---------- chrome ----------
@@ -429,6 +471,9 @@ async function renderAgents(main) {
   const data = await api("/api/agent-docs");
   const savedSet = new Set((data.docs || []).map(d => d.name));
   const names = Array.from(new Set([...(data.docs || []).map(d => d.name), ...(data.known || [])]));
+  // Un archivo recién creado (custom) todavía no está guardado: lo mostramos como
+  // tab pendiente para poder editarlo antes de guardar.
+  if (window.__agentDoc && !names.includes(window.__agentDoc)) names.push(window.__agentDoc);
   let current = window.__agentDoc && names.includes(window.__agentDoc) ? window.__agentDoc : (names[0] || "AGENTS.md");
 
   // selector de archivo (chips)
@@ -441,9 +486,14 @@ async function renderAgents(main) {
     tabs.appendChild(chip);
   });
   const addTab = el("button", "agt-tab agt-new", "+ nuevo");
-  addTab.addEventListener("click", () => {
-    const name = prompt("Nombre del archivo (ej: copilot-instructions.md):", "");
-    if (name && name.trim()) { window.__agentDoc = name.trim(); render(); }
+  addTab.addEventListener("click", async () => {
+    const name = await promptDialog({
+      title: "Nuevo archivo de instrucciones",
+      message: "Nombre del archivo — tiene que terminar en .md (ej: copilot-instructions.md).",
+      placeholder: "mis-instrucciones.md",
+      confirmText: "Crear",
+    });
+    if (name) { window.__agentDoc = name; render(); }
   });
   tabs.appendChild(addTab);
   main.appendChild(tabs);
