@@ -13,6 +13,7 @@ import (
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/embed"
 	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/scrub"
@@ -171,11 +172,19 @@ func newMCPServer(dir string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search",
-		Description: "List notes matching a query: id, color and a one-line summary (no bodies).",
+		Description: "List notes matching a query: id, color and a one-line summary (no bodies). Ranks by MEANING (embeddings) when an embedding model is configured, else keyword BM25.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, any, error) {
 		vault, err := loadVault()
 		if err != nil {
 			return errResult(err), nil, nil
+		}
+		// Optional semantic ranking; on any failure it falls through to keyword.
+		if in.Query != "" {
+			if ep := embedProvider(dir); ep != nil && ep.EmbedAvailable() {
+				if out, ok := semanticSearch(ctx, dir, vault, contradictions(), in, ep); ok {
+					return textResult(out), nil, nil
+				}
+			}
 		}
 		hits := core.Search(vault, contradictions(), in.Query, in.Project, today(), in.Limit, in.IncludeArchived)
 		if len(hits) == 0 {
@@ -516,6 +525,76 @@ func guardProvider(dir string) llm.Provider {
 		}
 	}
 	return llm.FromEnv()
+}
+
+// embedProvider builds the OPTIONAL embeddings client for semantic search. It
+// reuses the base URL + key from .cogo/llm.json (GUI) or env, and the embedding
+// model from `embed_model` in that file or COGO_EMBED_MODEL. nil if not set up.
+func embedProvider(dir string) *llm.OpenAICompatible {
+	var set struct {
+		BaseURL    string `json:"base_url"`
+		APIKey     string `json:"api_key"`
+		EmbedModel string `json:"embed_model"`
+	}
+	em := os.Getenv("COGO_EMBED_MODEL")
+	if b, err := os.ReadFile(filepath.Join(dir, ".cogo", "llm.json")); err == nil {
+		_ = json.Unmarshal(b, &set)
+	}
+	if em == "" {
+		em = set.EmbedModel
+	}
+	base, key := set.BaseURL, set.APIKey
+	if base == "" {
+		base, key = os.Getenv("COGO_LLM_BASE_URL"), os.Getenv("COGO_LLM_API_KEY")
+	}
+	if base == "" || em == "" {
+		return nil
+	}
+	return &llm.OpenAICompatible{BaseURL: base, EmbedModel: em, APIKey: key, Referer: os.Getenv("COGO_LLM_REFERER")}
+}
+
+// semanticSearch ranks notes by meaning (embedding cosine). Returns (output,true)
+// on success; (_, false) to signal the caller to fall back to keyword search.
+func semanticSearch(ctx context.Context, dir string, vault map[string]*core.Note, cx map[string]bool, in searchIn, ep *llm.OpenAICompatible) (string, bool) {
+	verdicts := core.EvaluateVault(vault, cx, today())
+	state := core.Lifecycle(vault)
+	var docs []embed.Doc
+	for id, n := range vault {
+		if !in.IncludeArchived && state[id] != core.StateActive {
+			continue
+		}
+		if in.Project != "" && n.Project != in.Project {
+			continue
+		}
+		docs = append(docs, embed.Doc{ID: id, Text: core.Claim(n)})
+	}
+	if len(docs) == 0 {
+		return "", false
+	}
+	ids, err := embed.Rank(ctx, dir, docs, in.Query, ep)
+	if err != nil {
+		return "", false // any embed error → caller falls back to BM25
+	}
+	if in.Limit > 0 && len(ids) > in.Limit {
+		ids = ids[:in.Limit]
+	}
+	var b strings.Builder
+	b.WriteString("🔎 semántico (por significado)\n")
+	for _, id := range ids {
+		fmt.Fprintf(&b, "- %s `%s` — %s", verdicts[id].Color, id, clip(core.Claim(vault[id]), 100))
+		if st := state[id]; st != core.StateActive {
+			fmt.Fprintf(&b, " [%s]", st)
+		}
+		b.WriteString("\n")
+	}
+	return b.String(), true
+}
+
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
 }
 
 // --- helpers ---

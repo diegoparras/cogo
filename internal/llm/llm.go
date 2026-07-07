@@ -39,15 +39,74 @@ func (Noop) Complete(context.Context, string) (string, error) {
 // base URL + model (+ optional API key). Local: BaseURL "http://localhost:11434/v1".
 // Remote: BaseURL "https://api.deepseek.com" with an APIKey.
 type OpenAICompatible struct {
-	BaseURL string
-	Model   string
-	APIKey  string
-	Referer string       // optional, sent as HTTP-Referer (OpenRouter attribution)
-	Client  *http.Client // optional; a 60s client is used if nil
+	BaseURL    string
+	Model      string
+	EmbedModel string // optional; enables Embed() via /embeddings
+	APIKey     string
+	Referer    string       // optional, sent as HTTP-Referer (OpenRouter attribution)
+	Client     *http.Client // optional; a 60s client is used if nil
 }
 
-func (o *OpenAICompatible) Available() bool { return o.BaseURL != "" && o.Model != "" }
-func (o *OpenAICompatible) Name() string    { return o.Model + " @ " + o.BaseURL }
+func (o *OpenAICompatible) Available() bool      { return o.BaseURL != "" && o.Model != "" }
+func (o *OpenAICompatible) EmbedAvailable() bool { return o.BaseURL != "" && o.EmbedModel != "" }
+func (o *OpenAICompatible) Name() string         { return o.Model + " @ " + o.BaseURL }
+
+// Embed returns one vector per input text via the OpenAI-compatible /embeddings
+// endpoint (requires EmbedModel). One HTTP call for the whole batch.
+func (o *OpenAICompatible) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	if o.EmbedModel == "" {
+		return nil, fmt.Errorf("no embed model configured")
+	}
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	payload, _ := json.Marshal(map[string]any{"model": o.EmbedModel, "input": texts})
+	url := strings.TrimRight(o.BaseURL, "/") + "/embeddings"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if o.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+o.APIKey)
+	}
+	req.Header.Set("X-Title", "COGO")
+	if o.Referer != "" {
+		req.Header.Set("HTTP-Referer", o.Referer)
+	}
+	client := o.Client
+	if client == nil {
+		client = &http.Client{Timeout: 60 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("embeddings http %d", resp.StatusCode)
+	}
+	var out struct {
+		Data []struct {
+			Embedding []float32 `json:"embedding"`
+		} `json:"data"`
+		Usage struct {
+			PromptTokens int `json:"prompt_tokens"`
+			TotalTokens  int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	vecs := make([][]float32, len(out.Data))
+	for i, d := range out.Data {
+		vecs[i] = d.Embedding
+	}
+	if out.Usage.TotalTokens > 0 || out.Usage.PromptTokens > 0 {
+		addUsage(out.Usage.PromptTokens, 0, out.Usage.TotalTokens)
+	}
+	return vecs, nil
+}
 
 func (o *OpenAICompatible) Complete(ctx context.Context, prompt string) (string, error) {
 	payload, _ := json.Marshal(map[string]any{

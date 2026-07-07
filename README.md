@@ -161,7 +161,7 @@ La **frescura** decae por tipo (un comando dura 30 días; una decisión de arqui
 | Cara | Para quién | Cómo |
 |------|------------|------|
 | **Visor web** | todos | `cogo serve -http :8080` → navegador (Vault · Frescura · Pack · Grafo · Revisión · **Guard** · **Veracidad**) |
-| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — tools: `pack` `search` `open` `capture` `verify` `archive` `restore` `remove` `guard` `xray` |
+| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — tools: `pack` `search` `open` `capture` `verify` `archive` `restore` `remove` `recall` `reflect` `guard` `xray` |
 | **CLI** | power users | `cogo add · pack · search · stale · verify · lint · agents` |
 
 Es un **solo binario Go** (imagen Docker `scratch` de ~12 MB) que es las tres cosas a la vez.

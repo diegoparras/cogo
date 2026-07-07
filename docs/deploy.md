@@ -215,6 +215,7 @@ Ninguna es obligatoria en local. Agrupadas por función.
 | `COGO_LLM_STRONG_BASE_URL` | — | modelo **fuerte e independiente** para el *steelman* del Guard (Tier 2). |
 | `COGO_LLM_STRONG_MODEL` | — | id del modelo fuerte. |
 | `COGO_LLM_STRONG_API_KEY` | — | key del modelo fuerte. |
+| `COGO_EMBED_MODEL` | — | modelo de **embeddings** (ej. `text-embedding-3-small`) — prende la **búsqueda semántica** del tool `search` (por significado, no por palabra). Reusa el mismo base/key del LLM; cachea en `.cogo/embeddings.json`. Opcional. |
 
 > Podés configurar el modelo IA **desde el visor** (menú ⋮ → *Ajustes · Modelo IA*)
 > en vez de env vars: se guarda en `<vault>/.cogo/llm.json` (gitignoreado, texto
