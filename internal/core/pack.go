@@ -152,6 +152,27 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	}
 }
 
+// BuildConstraints renders the load-bearing memory an agent must NOT lose across
+// a context compaction: the verified (green) decisions and constraints, terse.
+// These are the "active constraints still binding" that compaction silently
+// erodes; re-injecting them re-anchors the agent. "" if there are none.
+func BuildConstraints(vault map[string]*Note, contradictions map[string]bool, today Date) string {
+	verdicts := EvaluateVault(vault, contradictions, today)
+	hidden := Hidden(vault)
+	var lines []string
+	for id, n := range vault {
+		if hidden[id] || verdicts[id].Color != Green {
+			continue // only verified, live notes are load-bearing
+		}
+		if n.Type != "decision" && n.Type != "constraint" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- **%s** (%s): %s", id, n.Type, claimOf(n)))
+	}
+	sort.Strings(lines)
+	return strings.Join(lines, "\n")
+}
+
 func writeSection(b *strings.Builder, title string, blocks []string) {
 	if len(blocks) == 0 {
 		return

@@ -124,6 +124,52 @@ func newMCPServer(dir string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "recall",
+		Description: "Re-anchor after a context compaction. Returns the load-bearing memory you must not lose: the user's mandate (red lines) and the verified decisions and constraints. Call it at the start of a session and again after any auto-compaction, so binding constraints don't silently disappear from context.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in recallIn) (*mcp.CallToolResult, any, error) {
+		var b strings.Builder
+		b.WriteString("# Recall — do not lose these\n")
+		if m := suasion.LoadMandate(suasion.MandatePath(dir)); m != nil && (m.Goal != "" || len(m.RedLines) > 0) {
+			b.WriteString("\n## Mandate (red lines)\n")
+			if m.Goal != "" {
+				fmt.Fprintf(&b, "- goal: %s\n", m.Goal)
+			}
+			for _, rl := range m.RedLines {
+				fmt.Fprintf(&b, "- 🔴 %s\n", rl)
+			}
+		}
+		if vault, err := loadVault(); err == nil {
+			if c := core.BuildConstraints(vault, contradictions(), today()); c != "" {
+				b.WriteString("\n## Verified decisions & constraints\n")
+				b.WriteString(c)
+				b.WriteString("\n")
+			}
+		}
+		if b.Len() < 40 {
+			b.WriteString("\n_No mandate declared and no verified decisions/constraints yet._\n")
+		}
+		return textResult(b.String()), nil, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "reflect",
+		Description: "After finishing a task, hand a short summary of what you did and verified. If a model is configured, COGO proposes graded notes worth capturing (claim + evidence + a check) so real findings persist instead of being re-derived next session — you still decide what to `capture`.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in reflectIn) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.Summary) == "" {
+			return errResult(fmt.Errorf("reflect needs a `summary` of what you did/learned")), nil, nil
+		}
+		p := guardProvider(dir)
+		if !p.Available() {
+			return textResult("No model configured (Ajustes → Modelo IA). `reflect` needs a model to score what's worth keeping; capture findings by hand with `capture`."), nil, nil
+		}
+		out, err := p.Complete(ctx, reflectPrompt(in.Summary))
+		if err != nil {
+			return errResult(fmt.Errorf("reflect model call failed: %w", err)), nil, nil
+		}
+		return textResult("# Capturables — revisá y guardá lo que valga con `capture`\n\n" + strings.TrimSpace(out)), nil, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search",
 		Description: "List notes matching a query: id, color and a one-line summary (no bodies).",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, any, error) {
@@ -367,6 +413,27 @@ type packIn struct {
 	Query   string `json:"query" jsonschema:"the topic to build context for"`
 	Project string `json:"project,omitempty" jsonschema:"optional project filter"`
 	Budget  int    `json:"token_budget,omitempty" jsonschema:"approximate token ceiling; 0 means unlimited"`
+}
+
+type recallIn struct{} // no input: recall returns the whole load-bearing bundle
+
+type reflectIn struct {
+	Summary string `json:"summary" jsonschema:"a short summary of what you did and verified this session"`
+}
+
+// reflectPrompt asks the model to distil a session summary into capturable notes.
+// Conservative: only concrete, verifiable findings; no invention; caller decides.
+func reflectPrompt(summary string) string {
+	return "Ayudás a decidir qué vale la pena guardar en la memoria de un proyecto (COGO).\n" +
+		"A partir de este resumen de lo que hizo un agente, extraé 0 a 5 HALLAZGOS que valga la pena capturar como notas.\n" +
+		"Incluí SOLO cosas concretas y verificables (una decisión tomada, un bug confirmado, una restricción, un comando que anduvo). Descartá corazonadas sin fundamento.\n" +
+		"Respondé en el idioma del resumen. Para cada hallazgo:\n" +
+		"- **claim**: afirmación declarativa y testeable, una línea.\n" +
+		"- type: decision|bug|runbook|architecture|constraint|command|mistake\n" +
+		"- evidence: el archivo/comando/log que lo respalda (si lo hay).\n" +
+		"- check: el test mínimo que lo confirmaría.\n" +
+		"Si no hay nada que valga la pena, respondé exactamente: (nada que capturar).\n" +
+		"NO inventes nada que no esté en el resumen.\n\nRESUMEN:\n" + summary
 }
 
 type searchIn struct {
