@@ -26,6 +26,7 @@ import (
 	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
+	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/tokens"
 	"github.com/diegoparras/cogo/internal/xray"
@@ -385,12 +386,14 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(projects)
 	u := llm.Usage()
+	sv := savings.Read(s.dir)
 	writeJSON(w, map[string]any{
 		"version": Version, "projects": projects, "count": len(vault),
 		"llm_configured": s.prov().Available(),
 		"scrub_enabled":  s.scrubber.Enabled(),
 		"evidence_root":  s.evRoots().Configured(),
 		"tokens":         u.Total, "token_calls": u.Calls,
+		"saved_tokens": sv.Total, "saved_packs": sv.Packs,
 	})
 }
 
@@ -424,8 +427,9 @@ func (s *Server) handlePack(w http.ResponseWriter, r *http.Request) {
 		Budget:  budget,
 		Today:   s.today(),
 	})
+	savings.Add(s.dir, p.RawTokens-p.Tokens, s.today().String())
 	writeJSON(w, map[string]any{
-		"markdown": p.Markdown, "tokens": p.Tokens,
+		"markdown": p.Markdown, "tokens": p.Tokens, "raw_tokens": p.RawTokens,
 		"greens": p.Greens, "yellows": p.Yellows, "reds": p.Reds,
 		"mistakes": p.Mistakes, "dropped": p.Dropped,
 	})
@@ -913,9 +917,10 @@ func (s *Server) handleContradictions(w http.ResponseWriter, r *http.Request) {
 // ---- LLM settings (configurable from the GUI, persisted next to the vault) ----
 
 type llmSettings struct {
-	BaseURL string `json:"base_url"`
-	Model   string `json:"model"`
-	APIKey  string `json:"api_key"`
+	BaseURL    string `json:"base_url"`
+	Model      string `json:"model"`
+	EmbedModel string `json:"embed_model,omitempty"` // optional; enables semantic search
+	APIKey     string `json:"api_key"`
 }
 
 func (s *Server) settingsPath() string { return filepath.Join(s.dir, ".cogo", "llm.json") }
@@ -958,7 +963,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		set, _ := s.readSettings()
 		p := s.prov()
 		writeJSON(w, map[string]any{
-			"base_url": set.BaseURL, "model": set.Model, "has_key": set.APIKey != "",
+			"base_url": set.BaseURL, "model": set.Model, "embed_model": set.EmbedModel, "has_key": set.APIKey != "",
 			"configured": p.Available(), "name": providerName(p),
 		})
 	case http.MethodPost:
@@ -967,8 +972,8 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if strings.TrimSpace(set.BaseURL) == "" || strings.TrimSpace(set.Model) == "" {
-			_ = os.Remove(s.settingsPath()) // clearing turns the LLM off
+		if strings.TrimSpace(set.BaseURL) == "" || (strings.TrimSpace(set.Model) == "" && strings.TrimSpace(set.EmbedModel) == "") {
+			_ = os.Remove(s.settingsPath()) // clearing turns the LLM (and embeddings) off
 		} else {
 			if set.APIKey == "" { // blank key on save means "keep the existing one"
 				if old, err := s.readSettings(); err == nil {

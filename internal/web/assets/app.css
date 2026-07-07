@@ -330,6 +330,7 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .form-row .field { flex: 1; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field-lbl { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+.field-opt { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted-2); font-size: 10.5px; }
 .editor textarea.md { width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.5; resize: vertical; }
 .ev-wrap { display: flex; flex-direction: column; gap: 7px; }
 .ev-row { display: flex; gap: 7px; align-items: center; }

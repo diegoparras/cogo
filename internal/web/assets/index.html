@@ -65,6 +65,7 @@
         Acerca de COGO
       </a>
       <div class="menu-sep"></div>
+      <div class="menu-meta" id="menuSaved" title="Tokens que el `pack` le ahorró a tu agente: el contexto coloreado y presupuestado en vez de leer las notas enteras. Acumulado.">💚 ≈ 0 tokens ahorrados</div>
       <div class="menu-meta" id="menuTokens" title="Tokens que el modelo opcional de COGO consumió (detección de contradicciones + Guard). Aproximado; acumulado.">≈ 0 tokens IA</div>
       <div class="menu-sep hidden" id="logoutSep"></div>
       <a class="menu-item hidden" id="logoutBtn" href="/auth/logout">
@@ -130,6 +131,11 @@
         </div>
         <select id="setModelSelect" class="hidden"><option value="">— elegí un modelo —</option></select>
         <div class="model-hint" id="setModelHint"></div>
+      </div>
+      <div class="field">
+        <label class="field-lbl">Modelo de embeddings <span class="field-opt">· opcional</span></label>
+        <input id="setEmbed" placeholder="ej: text-embedding-3-small">
+        <div class="model-hint">Prende la <b>búsqueda semántica</b> (encontrar notas por significado, no por palabra). Usa el mismo servidor y key.</div>
       </div>
       <div class="field"><label class="field-lbl">API key</label>
         <div class="pass-wrap">

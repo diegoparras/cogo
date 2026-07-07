@@ -16,6 +16,7 @@ import (
 	"github.com/diegoparras/cogo/internal/embed"
 	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/llm"
+	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/tokens"
@@ -121,6 +122,7 @@ func newMCPServer(dir string) *mcp.Server {
 			return errResult(err), nil, nil
 		}
 		p := core.BuildPack(vault, contradictions(), core.PackOptions{Query: in.Query, Project: in.Project, Budget: in.Budget, Today: today()})
+		savings.Add(dir, p.RawTokens-p.Tokens, today().String())
 		return textResult(p.Markdown), nil, nil
 	})
 

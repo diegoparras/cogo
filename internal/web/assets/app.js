@@ -210,6 +210,8 @@ function fmtTokens(n) {
 function updateTokenBadge() {
   const node = $("#menuTokens");
   if (node) node.textContent = "≈ " + fmtTokens(state.tokens) + " tokens IA";
+  const sv = $("#menuSaved");
+  if (sv) sv.textContent = "💚 ≈ " + fmtTokens(state.savedTokens) + " tokens ahorrados";
 }
 
 async function loadConfig() {
@@ -217,6 +219,7 @@ async function loadConfig() {
   state.llmConfigured = !!c.llm_configured;
   state.scrubEnabled = !!c.scrub_enabled;
   state.tokens = c.tokens || 0;
+  state.savedTokens = c.saved_tokens || 0;
   updateTokenBadge();
   $("#aboutVersion").textContent = c.version;
   $("#aboutCount").textContent = c.count;
@@ -1596,6 +1599,7 @@ async function openSettings() {
   const s = await api("/api/settings");
   $("#setBase").value = s.base_url || "";
   $("#setModel").value = s.model || "";
+  $("#setEmbed").value = s.embed_model || "";
   $("#setKey").value = "";
   $("#setKey").placeholder = s.has_key ? "•••• guardada — vacío = no cambiar" : "tu API key";
   const st = $("#setStatus");
@@ -1605,7 +1609,7 @@ async function openSettings() {
 }
 
 async function saveSettings() {
-  const body = JSON.stringify({ base_url: $("#setBase").value.trim(), model: $("#setModel").value.trim(), api_key: $("#setKey").value });
+  const body = JSON.stringify({ base_url: $("#setBase").value.trim(), model: $("#setModel").value.trim(), embed_model: $("#setEmbed").value.trim(), api_key: $("#setKey").value });
   const r = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body });
   state.llmConfigured = r.configured;
   return r;
