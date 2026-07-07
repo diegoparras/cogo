@@ -18,6 +18,9 @@ func LoadVault(dir string) (map[string]*Note, error) {
 			return err
 		}
 		if d.IsDir() {
+			if d.Name() == ".cogo" {
+				return fs.SkipDir // config, settings and the delete trash live here — never notes
+			}
 			return nil
 		}
 		name := strings.ToLower(d.Name())

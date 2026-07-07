@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>COGO</title>
 <script>if(localStorage.getItem("cogo.theme")==="dark")document.documentElement.dataset.theme="dark"</script>
-<link rel="icon" href="/cogo.svg">
+<link rel="icon" type="image/svg+xml" href="/cogo.svg?v=2">
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/escriba-ui.css">
 <link rel="stylesheet" href="/app.css">
@@ -14,7 +14,7 @@
 <header class="app-header">
   <a class="logo-link" href="#" title="COGO">
     <img class="logo brand" src="/cogo.svg" alt="">
-    <h1>COGO</h1>
+    <h1>COGO<small>Memoria · Suite Escriba</small></h1>
   </a>
   <span class="sp"></span>
   <div class="menu-wrap">
@@ -36,10 +36,37 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
         Ajustes · Modelo IA
       </a>
+      <a class="menu-item" id="tokensBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.5 12.5 20 3"/><path d="m16 7 3 3"/><path d="m13 10 3 3"/></svg>
+        Conexiones MCP
+      </a>
+      <a class="menu-item" id="trashBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14"/></svg>
+        Papelera
+      </a>
+      <a class="menu-item" id="auditBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
+        Auditoría MCP
+      </a>
+      <a class="menu-item" id="evrootsBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2"/><path d="M3 7h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        Raíces de evidencia
+      </a>
+      <a class="menu-item" id="exportBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        Exportar (backup)
+      </a>
+      <a class="menu-item" id="agentsBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+        Instrucciones para agentes
+      </a>
       <a class="menu-item" id="aboutBtn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
         Acerca de COGO
       </a>
+      <div class="menu-sep"></div>
+      <div class="menu-meta" id="menuSaved" title="Tokens que el `pack` le ahorró a tu agente: el contexto coloreado y presupuestado en vez de leer las notas enteras. Acumulado.">💚 ≈ 0 tokens ahorrados</div>
+      <div class="menu-meta" id="menuTokens" title="Tokens que el modelo opcional de COGO consumió (detección de contradicciones + Guard). Aproximado; acumulado.">≈ 0 tokens IA</div>
       <div class="menu-sep hidden" id="logoutSep"></div>
       <a class="menu-item hidden" id="logoutBtn" href="/auth/logout">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -52,19 +79,20 @@
 <nav class="tabs">
   <button class="tab active" data-view="vault">Vault</button>
   <button class="tab" data-view="fresh">Frescura</button>
-  <button class="tab" data-view="pack">Pack</button>
+  <button class="tab" data-view="pack">Agentes</button>
   <button class="tab" data-view="graph">Grafo</button>
   <button class="tab" data-view="lint">Revisión</button>
+  <button class="tab" data-view="guard">Guard</button>
+  <button class="tab" data-view="xray">Veracidad</button>
 </nav>
 
 <main id="main"></main>
 
-<div class="login-overlay hidden" id="loginGate">
+<div class="login-overlay" id="loginGate">
   <div class="login-card">
     <img class="logo" src="/cogo.svg" alt="">
     <h2>COGO</h2>
-    <p class="login-sub">La memoria con color de tu proyecto.</p>
-    <a class="login-sso" href="/auth/login">Entrar con Lockatus</a>
+    <p class="login-sub" id="loginSub">Cargando…</p>
   </div>
 </div>
 
@@ -95,7 +123,23 @@
     <div class="modal-cuerpo">
       <p>Opcional. Conectá un modelo y COGO detecta <strong>contradicciones</strong> entre notas. Local (Ollama) o remoto (OpenRouter, DeepSeek…). Sin esto, COGO anda igual — solo sin esa detección.</p>
       <div class="field"><label class="field-lbl">Servidor (base URL)</label><input id="setBase" placeholder="https://openrouter.ai/api/v1"></div>
-      <div class="field"><label class="field-lbl">Modelo</label><input id="setModel" placeholder="deepseek/deepseek-chat"></div>
+      <div class="field">
+        <label class="field-lbl">Modelo</label>
+        <div class="model-row">
+          <input id="setModel" placeholder="ej: deepseek/deepseek-chat">
+          <button class="mini ghost" id="setLoadModels" type="button">cargar modelos</button>
+        </div>
+        <select id="setModelSelect" class="hidden"><option value="">— elegí un modelo —</option></select>
+        <div class="model-hint" id="setModelHint"></div>
+      </div>
+      <div class="field">
+        <label class="field-lbl">Modelo de embeddings <span class="field-opt">· opcional</span></label>
+        <div class="model-row">
+          <input id="setEmbed" placeholder="ej: text-embedding-3-small">
+          <button class="mini ghost" id="setTestEmbed" type="button">probar</button>
+        </div>
+        <div class="model-hint" id="setEmbedHint">Prende la <b>búsqueda semántica</b> (encontrar notas por significado, no por palabra). Usa el mismo servidor y key.</div>
+      </div>
       <div class="field"><label class="field-lbl">API key</label>
         <div class="pass-wrap">
           <input id="setKey" type="password" placeholder="tu API key">
@@ -113,6 +157,7 @@
   </div>
 </div>
 
+<script src="/graph.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

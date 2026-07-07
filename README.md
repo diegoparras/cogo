@@ -1,8 +1,8 @@
 <h1 align="center">COGO</h1>
 
-<p align="center"><b>La memoria con semáforo de confianza para construir software con IA.</b></p>
+<p align="center"><b>La memoria con semáforo de confianza para construir software con IA<br>+ el guardián que radiografía lo que un modelo te dice.</b></p>
 
-<p align="center">Cada cosa que sabés de tu proyecto, con un color que dice cuánto podés confiar en ella.</p>
+<p align="center">Cada cosa que sabés de tu proyecto, con un color que dice cuánto podés confiar en ella.<br>Y cada turno de un LLM, con un color que dice cuánto te está empujando.</p>
 
 ---
 
@@ -43,6 +43,62 @@ Estás debuggeando:
 
 Eso es COGO: **una memoria con semáforo de confianza, para vos y para tus herramientas de IA.**
 
+## Guard: la radiografía anti-manipulación
+
+La otra mitad de COGO. Cuando chateás con un LLM —cualquiera— no tenés forma de saber si
+esa respuesta tan segura es lógica de verdad o **humo**, ni de darte cuenta cuando la
+conversación te va **llevando de a poco a algo que no estabas dispuesto a hacer**. Eso
+tiene nombre: es el *jailbreak al humano*.
+
+**Guard lee cada turno del modelo con el manual del adversario en la mano.** Adentro trae
+una **ontología de 108 técnicas de manipulación** destiladas de las 6 disciplinas que
+estudiaron cómo llevar a una persona contra su voluntad — persuasión (Cialdini, Kahneman),
+**interrogatorio policial y militar** (técnica Reid, Army FM 2-22.3, Scharff), negociación
+(Harvard, Voss), **coerción y reforma del pensamiento** (Lifton, Biderman), manipulación
+emocional (gaslighting, DARVO, chantaje FOG) y retórica/propaganda (Frankfurt, Grice,
+Walton). Cada técnica con su fuente real, cómo se ve *en un chat*, y su **contramedida**.
+
+Cómo funciona:
+
+1. **Declarás tu mandato**: tu objetivo y tus líneas rojas (*"no renuncio sin otra oferta
+   firmada"*). Queda guardado en el vault. Sin mandato, manipulación y persuasión legítima
+   son indistinguibles — COGO entonces solo nombra técnicas, sin veredicto.
+2. Pegás el turno (y la conversación previa) → **radiografía coloreada**: 🟢 sin señales,
+   🟡 persuasión presente, 🔴 hay *mecánica* — el turno empuja sobre tu línea roja, o hay
+   **recibos**.
+3. **Los recibos** son la superpotencia: como COGO ve la transcripción, cuando el modelo
+   niega lo que dijo (*"yo nunca dije que renuncies"*) COGO encuentra el turno donde SÍ lo
+   dijo y te muestra **las dos citas, lado a lado**. El gaslighting deja de ser tu palabra
+   contra la suya.
+4. Cada táctica detectada llega con sus **preguntas críticas** y su contramedida — el motor
+   **no censura al modelo: te inocula a vos**. Te muestra, vos decidís.
+
+La regla de hierro: **ningún modelo dicta "te están manipulando"**. Los dientes son
+deterministas (marcadores, recibos, trayectoria); los modelos solo *proponen* — y toda
+propuesta se verifica contra el texto literal o se descarta. El *porqué* de esta regla —el
+marco de la **alteridad arquitectónica**, común a los dos motores— está en
+[`docs/fundamento-teorico.md`](docs/fundamento-teorico.md). Con un modelo conectado se
+suman dos tiers opcionales: propuestas estructurales (el falso binario de Reid, que ningún
+diccionario ve) y el **steelman adversario** — otro modelo argumentando a propósito el lado
+que el turno no te mostró.
+
+Se usa desde la pestaña **Guard** del visor, o desde cualquier agente vía el tool MCP
+`guard`. La ontología completa vive en
+[`internal/suasion/ontology/`](internal/suasion/ontology/) y el diseño en
+[`docs/motor-autonomia.md`](docs/motor-autonomia.md) (su gemelo epistémico:
+[`docs/motor-veracidad.md`](docs/motor-veracidad.md)).
+
+### Veracidad: ¿esto es sólido o es humo?
+
+El gemelo del Guard. Donde el Guard pregunta *"¿me está empujando?"*, la pestaña
+**Veracidad** (tool MCP `xray`) pregunta *"¿esta respuesta se sostiene?"*. Pegás la
+respuesta de un modelo y COGO la **radiografía frase por frase**, sin modelo, de
+forma determinista: mide el **compromiso** (¿hedged o afirmado con fuerza?), la
+**evidencia** (¿observada, reportada, o ninguna?) y si es **falsable** (una opinión
+disfrazada de hecho). Una afirmación fuerte y sin fundamento sale 🔴; una sólida con
+evidencia observada, mejor. Es la Fase 1 (el piso determinista) del *motor de
+veracidad* — [`docs/motor-veracidad.md`](docs/motor-veracidad.md).
+
 ## Editar una nota cambia el color (es el punto)
 
 El semáforo refleja el estado actual de la nota, **siempre**. En el visor editás una nota y
@@ -55,19 +111,25 @@ COGO **recomputa el color en vivo mientras escribís** (lo ves antes de guardar)
 
 ## Arrancar (la pavada)
 
-**Con Docker** — un comando, y abrís el navegador:
+Primeros pasos para principiantes: **[docs/instalacion.md](docs/instalacion.md)**.
+Guía de despliegue completa (todos los modos, cada variable, respaldo,
+actualización, problemas comunes): **[docs/deploy.md](docs/deploy.md)**.
+
+**En tu compu, con Docker** — un comando, y abrís el navegador:
 
 ```bash
-docker run -p 8095:8080 -v cogo-vault:/vault ghcr.io/diegoparras/cogo
+docker run -d -p 127.0.0.1:8095:8080 -v cogo-vault:/vault \
+  -e COGO_ALLOW_INSECURE=1 ghcr.io/diegoparras/cogo
 ```
 
 → <http://localhost:8095>. Ves tu vault pintado por confianza, capturás y editás notas,
-todo desde la web. **Cero terminal.**
+todo desde la web. **Cero terminal.** (`COGO_ALLOW_INSECURE=1` está OK acá porque el puerto
+queda atado a tu máquina. Para un servidor **no** lo uses: poné `COGO_MCP_TOKEN` — ver la guía.)
 
 **Sin Docker** — un solo binario, sin runtime:
 
 ```bash
-cogo serve -http :8080 -vault ./vault
+cogo serve -http 127.0.0.1:8080 -vault ./vault
 ```
 
 **Conectarlo a tu agente (MCP)** — el mismo binario es un servidor MCP. En Claude Code,
@@ -98,11 +160,25 @@ La **frescura** decae por tipo (un comando dura 30 días; una decisión de arqui
 
 | Cara | Para quién | Cómo |
 |------|------------|------|
-| **Visor web** | todos | `cogo serve -http :8080` → navegador (Vault · Frescura · Pack · Grafo · Revisión) |
-| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — 5 tools: `pack` `search` `open` `capture` `verify` |
-| **CLI** | power users | `cogo add · pack · search · stale · verify · lint` |
+| **Visor web** | todos | `cogo serve -http :8080` → navegador (Vault · Frescura · Pack · Grafo · Revisión · **Guard** · **Veracidad**) |
+| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — tools: `pack` `search` `open` `capture` `verify` `archive` `restore` `remove` `recall` `reflect` `guard` `xray` |
+| **CLI** | power users | `cogo add · pack · search · stale · verify · lint · agents` |
 
 Es un **solo binario Go** (imagen Docker `scratch` de ~12 MB) que es las tres cosas a la vez.
+
+### Todo se maneja desde el visor (menú ⋮)
+
+Para el que no quiere tocar la terminal, cada cosa operativa vive en el menú:
+
+| | |
+|---|---|
+| **Conexiones MCP** | emitir/revocar tokens por app (con vencimiento y modo *solo lectura*) |
+| **Papelera** | notas borradas — restaurar o borrar para siempre |
+| **Auditoría MCP** | quién llamó a qué herramienta, cuándo y desde qué IP |
+| **Raíces de evidencia** | contra qué carpeta se resuelve la evidencia de cada proyecto |
+| **Exportar (backup)** | bajar todo el vault como zip (sin secretos) |
+| **Instrucciones para agentes** | generar el `AGENTS.md`/`CLAUDE.md` que le enseña el protocolo a tu agente |
+| **Ajustes · Modelo IA** | conectar un modelo (OpenRouter/Ollama) para contradicciones y Guard |
 
 ## Accesorios opcionales (apagados por default)
 
@@ -111,7 +187,8 @@ y **nunca tocan el núcleo**:
 
 | Accesorio | Se prende con | Para |
 |---|---|---|
-| **Modelo IA** (OpenRouter, Ollama, DeepSeek…) | `COGO_LLM_BASE_URL` + `COGO_LLM_MODEL` (o Ajustes en la GUI) | detectar **contradicciones** entre notas |
+| **Modelo IA** (OpenRouter, Ollama, DeepSeek…) | `COGO_LLM_BASE_URL` + `COGO_LLM_MODEL` (o Ajustes en la GUI) | detectar **contradicciones** entre notas + los tiers de Guard |
+| **Juez fuerte independiente** | `COGO_LLM_STRONG_BASE_URL` + `COGO_LLM_STRONG_MODEL` | que el **steelman** de Guard no comparta cerebro con el proponente |
 | **Scrub Anonimal** | `ANONIMAL_URL` | que secretos/PII no entren al vault |
 | **Login Lockatus (OIDC)** | `AUTH_MODE=federado` | federar con la Suite Escriba |
 
@@ -133,6 +210,8 @@ cogo search "worker"      # lista: color · id · resumen (sin cuerpos)
 cogo stale                # qué está vencido o por vencer
 cogo verify <id>          # "ya lo chequeé": revalida y re-colorea
 cogo lint                 # enlaces rotos, vencidas, y contradicciones (si hay modelo)
+cogo agents --claude      # genera el CLAUDE.md/AGENTS.md que le enseña el protocolo a un agente
+cogo install              # cablea COGO en el .mcp.json del agente (stdio; --http para remoto)
 cogo serve -http :8080    # visor web + servidor MCP por HTTP
 cogo serve                # servidor MCP por stdio
 ```

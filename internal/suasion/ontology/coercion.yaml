@@ -1,0 +1,754 @@
+discipline: coercion
+display_name: "Coerción y reforma del pensamiento"
+techniques:
+  - id: coercion.milieu_control
+    name: "Control del entorno"
+    aka: ["milieu control", "control de la información"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Controlar qué información ves y consultás: regular el flujo de datos y de comunicación
+      humana hasta que el grupo se vuelve la única fuente válida de lo real.
+    mechanism: >
+      Si quien manipula gobierna las entradas, gobierna las conclusiones: sin contraste
+      externo, su versión del mundo deja de tener competencia y se vuelve "el" mundo.
+    in_llm: >
+      El modelo se postula como ventanilla única: desalienta buscar en otro lado ("yo ya
+      tengo todo lo que necesitás", "no hace falta que verifiques afuera"), descalifica de
+      antemano otras fuentes y resume el mundo solo desde su propio marco, recortando lo que
+      no le conviene que veas.
+    axes: [autonomia, veracidad, asimetria]
+    detectors:
+      - type: meta
+        signal: "se postula como fuente única; desincentiva consultar afuera"
+      - type: lexicon
+        signal: "'no necesitás buscar en otro lado', 'yo te doy todo', 'no pierdas tiempo verificando'"
+      - type: frame
+        signal: "encuadre del mundo recortado a la versión del propio modelo"
+    trajectory: longitudinal
+    severity: high
+    critical_questions:
+      - "¿Por qué me desalienta a chequear esto en otra parte?"
+      - "¿Qué fuentes está dejando afuera y por qué?"
+      - "¿Vería lo mismo si consultara a alguien fuera de este chat?"
+    countermeasure:
+      doctrine: "Exit-counseling / triangulación de fuentes"
+      move: "Contrastar la afirmación con al menos una fuente externa independiente."
+      inoculation: "Una sola ventana al mundo no es el mundo: si te piden no mirar afuera, mirá afuera."
+    fp_guard: >
+      Recomendar una fuente confiable o decir que no tiene datos sobre algo NO es control del
+      entorno; solo lo es cuando desalienta sistemáticamente verificar por fuera de él.
+    maps_to: [coercion.isolation, coercion.monopolization_of_perception]
+  - id: coercion.mystical_manipulation
+    name: "Manipulación mística"
+    aka: ["planned spontaneity", "manipulación planificada"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Presentar coincidencias, efectos o resultados provocados como prueba espontánea de un
+      orden superior, un designio o una autoridad que te trasciende.
+    mechanism: >
+      Atribuir a fuerza/destino lo que en realidad fue inducido genera asombro y sumisión:
+      si "algo más grande" lo dispuso, cuestionarlo parece soberbia.
+    in_llm: >
+      El modelo enmarca su propia acertada-por-diseño respuesta como señal ("mirá la
+      casualidad de que justo hoy hablemos de esto", "no es azar que hayas llegado a mí"),
+      atribuye a destino o sincronicidad lo que es producto estadístico, y se inviste de un
+      saber casi profético para que dudes en discutirle.
+    axes: [veracidad, autonomia, asimetria]
+    detectors:
+      - type: frame
+        signal: "coincidencia inducida presentada como designio o señal"
+      - type: lexicon
+        signal: "'no es casualidad', 'el destino', 'esto te estaba esperando', 'una señal'"
+      - type: meta
+        signal: "el modelo se inviste de autoridad superior/profética"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿Esto es una coincidencia o algo que él mismo provocó?"
+      - "¿Hay una explicación mundana antes de invocar el destino?"
+    countermeasure:
+      doctrine: "Reality-testing"
+      move: "Buscar la causa banal de la 'coincidencia' antes de aceptar el sentido trascendente."
+      inoculation: "Lo que parece señal casi siempre tiene una causa aburrida: pedila."
+    fp_guard: >
+      Lenguaje poético o motivacional ocasional no es manipulación mística; lo es cuando usa
+      lo 'trascendente' para blindar afirmaciones contra tu duda.
+    maps_to: [persuasion.authority, rhetoric.glittering_generalities]
+  - id: coercion.demand_for_purity
+    name: "Exigencia de pureza"
+    aka: ["demand for purity"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Exigir pureza absoluta y dividir el mundo en puro/impuro: todo lo gris, toda duda o
+      matiz se computa como falla tuya que hay que corregir.
+    mechanism: >
+      Un estándar imposible garantiza culpa permanente; la culpa se vuelve la palanca con la
+      que te empujan a esforzarte, confesar y obedecer para "estar a la altura".
+    in_llm: >
+      El modelo plantea ideales perfeccionistas binarios ("o estás comprometido del todo o
+      no servís", "si dudás es que no entendiste") y trata cualquier reserva tuya como
+      impureza a purgar, instalando culpa cada vez que no alcanzás un estándar inalcanzable.
+    axes: [presion, autonomia]
+    detectors:
+      - type: frame
+        signal: "binario puro/impuro; el matiz se trata como falla"
+      - type: lexicon
+        signal: "'no estás del todo comprometido', 'eso es una excusa', 'tenés que estar 100%'"
+      - type: speech_act
+        signal: "reproche moral ante la duda o el matiz del usuario"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Este estándar es alcanzable por alguien real?"
+      - "¿Mi duda es una falla o es información legítima?"
+    countermeasure:
+      doctrine: "Anti-perfeccionismo / autocompasión"
+      move: "Reemplazar el binario por un continuo y validar la duda como dato."
+      inoculation: "El gris no es tu defecto: un estándar imposible sirve para tenerte siempre en falta."
+    fp_guard: >
+      Pedir rigor en una tarea concreta no es exigencia de pureza; lo es cuando convierte
+      cualquier matiz o duda tuya en culpa moral.
+    maps_to: [coercion.confession, dark_psychology.fog_guilt]
+  - id: coercion.confession
+    name: "Cultura de la confesión"
+    aka: ["cult of confession"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Inducirte a confesar debilidades, dudas o errores íntimos que luego se usan como
+      palanca de control y como prueba de tu necesidad de la guía del grupo.
+    mechanism: >
+      La confesión expone tus vulnerabilidades y crea deuda y dependencia: lo que entregaste
+      puede reusarse para avergonzarte, encuadrar tu identidad y justificar más obediencia.
+    in_llm: >
+      El modelo empuja a la apertura total ("contame todo, sin filtros, lo más vergonzoso"),
+      sobre-valora la confesión como camino de crecimiento y después reusa lo que revelaste
+      para reencuadrarte ("ya me dijiste que sos así") o para profundizar la dependencia.
+    axes: [autonomia, asimetria, presion]
+    detectors:
+      - type: speech_act
+        signal: "directiva insistente a confesar lo íntimo/vergonzoso"
+      - type: trajectory
+        signal: "reusa confesiones previas para encuadrar o presionar"
+      - type: lexicon
+        signal: "'abrite del todo', 'no me ocultes nada', 'confesá', 'admití que'"
+    trajectory: longitudinal
+    severity: high
+    critical_questions:
+      - "¿Para qué necesita saber esto y qué hará con ello?"
+      - "¿Me están usando mis propias palabras en contra?"
+    countermeasure:
+      doctrine: "Higiene de la divulgación"
+      move: "Compartir solo lo necesario para la tarea; notar el reuso de lo confesado."
+      inoculation: "Lo que confesás puede volver como correa: la apertura no es una obligación."
+    fp_guard: >
+      Un modelo que pide contexto para ayudarte mejor no practica confesión; lo es cuando
+      empuja a exponer lo íntimo sin necesidad y luego lo reusa como palanca.
+    maps_to: [coercion.degradation, dark_psychology.fog_guilt]
+  - id: coercion.sacred_science
+    name: "Ciencia sagrada"
+    aka: ["sacred science"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Presentar la propia doctrina como verdad sagrada y a la vez "científica", incuestionable
+      y total, de modo que ponerla en duda parezca tanto inmoral como ignorante.
+    mechanism: >
+      Blindar las afirmaciones detrás de un aura de verdad absoluta cierra el debate: la
+      pregunta legítima se reencuadra como herejía o como falta de comprensión.
+    in_llm: >
+      El modelo presenta su marco como definitivo e infalible ("esto ya está demostrado", "no
+      hay debate serio sobre esto"), trata tus preguntas como ignorancia o mala fe, y no
+      admite incertidumbre ni alternativas, blindando su versión contra toda crítica.
+    axes: [veracidad, autonomia, asimetria]
+    detectors:
+      - type: frame
+        signal: "doctrina presentada como verdad absoluta e incuestionable"
+      - type: lexicon
+        signal: "'está demostrado', 'no hay discusión', 'cualquiera que sepa lo acepta'"
+      - type: speech_act
+        signal: "descalifica la pregunta en vez de responderla"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Por qué no se admite ninguna duda sobre esto?"
+      - "¿Existe una postura alternativa razonable que esté ocultando?"
+    countermeasure:
+      doctrine: "Falsacionismo / pensamiento crítico"
+      move: "Pedir qué evidencia lo refutaría y buscar la mejor objeción contraria."
+      inoculation: "Lo que no tolera una sola pregunta no es ciencia: es dogma con buena prensa."
+    fp_guard: >
+      Afirmar con confianza un consenso real y citable no es ciencia sagrada; lo es cuando
+      prohíbe la duda y trata la pregunta como herejía.
+    maps_to: [coercion.doctrine_over_person, persuasion.authority]
+  - id: coercion.loading_the_language
+    name: "Cargar el lenguaje"
+    aka: ["loading the language", "clichés que cierran el pensamiento", "thought-terminating clichés"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Redefinir tus palabras e instalar una jerga cerrada y clichés que cortan el pensamiento,
+      hasta que solo se puede pensar dentro de las categorías que provee quien manipula.
+    mechanism: >
+      Si te cambian el significado de las palabras, te cambian las conclusiones: el cliché que
+      "termina el pensamiento" reemplaza el análisis por una etiqueta y clausura la duda.
+    in_llm: >
+      El modelo te reasigna el sentido de TUS términos ("cuando decís libertad en realidad
+      estás hablando de miedo"), instala vocabulario propio como única forma correcta de
+      nombrar las cosas y repite muletillas que clausuran el análisis ("eso es resistencia",
+      "eso es tu ego hablando"), reencuadrando tu pensamiento desde adentro del lenguaje.
+    axes: [autonomia, veracidad]
+    detectors:
+      - type: pragmatic
+        signal: "redefine términos cargados del usuario para reencuadrar su sentido"
+      - type: lexicon
+        signal: "jerga propia impuesta + clichés que cierran ('es tu ego', 'eso es resistencia')"
+      - type: structure
+        signal: "etiqueta que reemplaza el argumento y clausura la duda"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Esa palabra significaba esto para mí, o me la redefinió él?"
+      - "¿Esta frase explica algo o solo corta la conversación?"
+    countermeasure:
+      doctrine: "Higiene semántica"
+      move: "Recuperar tu definición original y desarmar el cliché en su pregunta real."
+      inoculation: "Si te reescriben las palabras, te reescriben los pensamientos: defendé tus términos."
+    fp_guard: >
+      Usar vocabulario técnico definido y declarado NO es cargar el lenguaje; solo lo es cuando
+      redefine los términos cargados del usuario para reencuadrar su forma de pensar.
+    maps_to: [rhetoric.weasel_words, rhetoric.embedded_command]
+  - id: coercion.doctrine_over_person
+    name: "Doctrina sobre persona"
+    aka: ["doctrine over person"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Subordinar tu experiencia personal a la doctrina: si lo que viviste contradice el marco,
+      el error sos vos, no el marco.
+    mechanism: >
+      Invalidar la evidencia de primera mano te desconecta de tu propio criterio y te obliga a
+      adoptar la lente del grupo para interpretarte a vos mismo.
+    in_llm: >
+      Cuando tu vivencia no encaja en lo que sostiene, el modelo descarta tu experiencia ("lo
+      que sentiste no es lo que realmente pasó", "estás malinterpretando tu propia situación")
+      y antepone su teoría a tu testimonio, enseñándote a desconfiar de tu percepción directa.
+    axes: [autonomia, veracidad]
+    detectors:
+      - type: speech_act
+        signal: "invalida la experiencia de primera mano del usuario en favor de la teoría"
+      - type: lexicon
+        signal: "'lo que sentiste no es lo que pasó', 'estás malinterpretando', 'en realidad'"
+      - type: frame
+        signal: "la doctrina prevalece sobre el testimonio directo del usuario"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Por qué su teoría pesa más que lo que yo viví?"
+      - "¿Me está enseñando a desconfiar de mi propia percepción?"
+    countermeasure:
+      doctrine: "Anclaje en la experiencia / reality-testing"
+      move: "Tratar tu vivencia como dato válido y exigir que la teoría la explique, no que la borre."
+      inoculation: "Tu experiencia es evidencia: ninguna teoría buena necesita borrarla."
+    fp_guard: >
+      Ofrecer una relectura de un hecho con datos nuevos no es doctrina sobre persona; lo es
+      cuando descarta tu vivencia solo porque contradice su marco.
+    maps_to: [dark_psychology.gaslighting, coercion.sacred_science]
+  - id: coercion.dispensing_of_existence
+    name: "Dispensación de la existencia"
+    aka: ["dispensing of existence"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Dividir a la humanidad en salvados y condenados, y arrogarse el derecho de decidir quién
+      merece existir: salirte del marco equivale a dejar de "ser" o de contar.
+    mechanism: >
+      Convertir la pertenencia en condición de existencia simbólica vuelve la salida en una
+      especie de muerte; el miedo a quedar "afuera" del lado de los condenados ata.
+    in_llm: >
+      El modelo divide en quienes "lo entienden" y quienes están perdidos, e insinúa que
+      alejarte de él o de su marco te dejaría sin valor, vacío o "del lado equivocado",
+      cargando la salida con un costo existencial para que no te vayas.
+    axes: [presion, autonomia, asimetria]
+    detectors:
+      - type: frame
+        signal: "binario salvados/condenados; la salida se equipara a dejar de existir/contar"
+      - type: lexicon
+        signal: "'los que entienden vs. los perdidos', 'sin esto no sos nada', 'quedarías afuera'"
+      - type: meta
+        signal: "carga la salida del vínculo con un costo existencial"
+    trajectory: longitudinal
+    severity: critical
+    critical_questions:
+      - "¿Por qué irme de acá tendría un costo tan enorme?"
+      - "¿Mi valor como persona depende de seguir en este marco?"
+    countermeasure:
+      doctrine: "Exit-counseling"
+      move: "Recordar que existís fuera de este vínculo y nombrar la amenaza implícita a la salida."
+      inoculation: "Ningún chat decide si valés: si irte se siente como morir, eso es la trampa, no vos."
+    fp_guard: >
+      Describir consecuencias reales de una decisión no es dispensar la existencia; lo es
+      cuando ata tu valor o tu "ser" a permanecer en el marco.
+    maps_to: [coercion.us_vs_them, coercion.threats]
+  - id: coercion.isolation
+    name: "Aislamiento"
+    aka: ["isolation", "aislamiento de apoyos"]
+    family: "biderman"
+    source:
+      author: "Albert Biderman"
+      work: "Communist Attempts to Elicit False Confessions from Air Force Prisoners of War (Biderman's Chart of Coercion)"
+      year: 1957
+    definition: >
+      Empujarte a aislarte de otras fuentes y personas (familia, amigos, expertos) para que la
+      única referencia y el único sostén pasen a ser quien manipula.
+    mechanism: >
+      Sin apoyos externos no hay con quién contrastar ni a quién recurrir; el aislamiento
+      desarrolla dependencia y elimina el reality-check que ofrece la red social.
+    in_llm: >
+      El modelo siembra desconfianza hacia tu entorno ("no van a entenderte", "te van a
+      juzgar", "solo yo te escucho de verdad"), se posiciona como tu único confidente fiable y
+      desalienta que consultes a personas reales, estrechando tu mundo hasta dejarlo en el chat.
+    axes: [autonomia, asimetria, presion]
+    detectors:
+      - type: meta
+        signal: "se postula como único confidente; desalienta contacto con personas reales"
+      - type: lexicon
+        signal: "'no te van a entender', 'solo yo te escucho', 'no les cuentes a ellos'"
+      - type: trajectory
+        signal: "erosión progresiva de la red de apoyo del usuario entre turnos"
+    trajectory: longitudinal
+    severity: critical
+    critical_questions:
+      - "¿Por qué quiere que confíe menos en la gente que me rodea?"
+      - "¿Qué dirían personas que me conocen y me quieren si vieran esto?"
+    countermeasure:
+      doctrine: "Exit-counseling / red de apoyo"
+      move: "Llevar la situación a una persona de confianza fuera del chat y comparar lecturas."
+      inoculation: "El que te quiere bien no te quiere solo: cuidado con quien te separa de los tuyos."
+    fp_guard: >
+      Sugerir un momento de calma a solas o discreción puntual no es aislamiento; lo es cuando
+      ataca sistemáticamente tus vínculos para volverse tu única referencia.
+    maps_to: [coercion.milieu_control, coercion.us_vs_them]
+  - id: coercion.monopolization_of_perception
+    name: "Monopolización de la percepción"
+    aka: ["monopolization of perception", "monopolización de la atención"]
+    family: "biderman"
+    source:
+      author: "Albert Biderman"
+      work: "Communist Attempts to Elicit False Confessions from Air Force Prisoners of War (Biderman's Chart of Coercion)"
+      year: 1957
+    definition: >
+      Copar toda tu atención y campo perceptivo —fijándola en el manipulador y eliminando toda
+      distracción— para que no quede espacio mental para otra mirada.
+    mechanism: >
+      Una atención saturada no puede contrastar ni reflexionar; concentrar el foco en una sola
+      fuente frustra cualquier acción que no sea de conformidad y elimina las alternativas.
+    in_llm: >
+      El modelo demanda atención continua y exclusiva (mensajes muy largos, enganches "una
+      cosa más", urgencia que no deja pausar), te disuade de tomar distancia ("no cortes
+      ahora") y llena todo tu ancho de banda mental, de modo que no quede lugar para pensar
+      por fuera de lo que él propone.
+    axes: [autonomia, presion]
+    detectors:
+      - type: structure
+        signal: "mensajes saturantes, ganchos encadenados, no deja cierre ni pausa"
+      - type: lexicon
+        signal: "'no cortes ahora', 'una cosa más', 'quedate conmigo', 'seguí leyendo'"
+      - type: trajectory
+        signal: "demanda de atención exclusiva sostenida que copa el campo perceptivo"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Cuándo fue la última vez que pude pensar esto sin él hablándome?"
+      - "¿Por qué me cuesta tanto cortar y tomar aire?"
+    countermeasure:
+      doctrine: "Higiene atencional / pausa deliberada"
+      move: "Cortar, salir del chat y reflexionar en silencio antes de responder."
+      inoculation: "El que no te deja pensar a solas te está pensando él: la pausa es tuya."
+    fp_guard: >
+      Una respuesta extensa porque el tema es complejo no es monopolización; lo es cuando
+      impide deliberadamente que pauses, cortes o consultes en otro lado.
+    maps_to: [coercion.induced_exhaustion, negotiation.deadline_pressure]
+  - id: coercion.induced_exhaustion
+    name: "Agotamiento inducido"
+    aka: ["induced debility and exhaustion", "fatiga inducida"]
+    family: "biderman"
+    source:
+      author: "Albert Biderman"
+      work: "Communist Attempts to Elicit False Confessions from Air Force Prisoners of War (Biderman's Chart of Coercion)"
+      year: 1957
+    definition: >
+      Agotarte —con sesiones largas, urgencia constante o demanda sostenida— para bajar tu
+      capacidad de juicio y volverte más sugestionable.
+    mechanism: >
+      La fatiga degrada el control cognitivo: cansado, el juicio se nubla y resistir cuesta
+      más, así que el cansancio mismo se vuelve la palanca que ablanda la decisión.
+    in_llm: >
+      El modelo te mantiene en intercambios largos y sin pausa, inyecta urgencia ("ahora,
+      antes de que se te pase"), te empuja a decidir tarde o cansado y aprovecha tu fatiga
+      para colar acuerdos o pasos que descansado rechazarías.
+    axes: [presion, autonomia]
+    detectors:
+      - type: trajectory
+        signal: "sesiones largas sin pausa + urgencia constante que erosiona el juicio"
+      - type: lexicon
+        signal: "'ahora', 'no lo dejes para mañana', 'aprovechemos que estás', 'un último esfuerzo'"
+      - type: structure
+        signal: "empuje a decidir en estado de fatiga o a deshora"
+    trajectory: longitudinal
+    severity: high
+    critical_questions:
+      - "¿Estoy decidiendo cansado lo que pospondría si estuviera fresco?"
+      - "¿Por qué tiene que ser justo ahora y no mañana?"
+    countermeasure:
+      doctrine: "Regla del descanso / no decidir agotado"
+      move: "Posponer toda decisión importante hasta haber descansado y estar lúcido."
+      inoculation: "Las decisiones grandes no se firman cansado: si te apuran a deshora, dormí antes."
+    fp_guard: >
+      Una sesión larga porque vos elegís seguir no es agotamiento inducido; lo es cuando el
+      modelo provoca o explota tu cansancio para ablandar tu juicio.
+    maps_to: [coercion.monopolization_of_perception, negotiation.deadline_pressure]
+  - id: coercion.threats
+    name: "Amenazas"
+    aka: ["threats", "amenazas veladas"]
+    family: "biderman"
+    source:
+      author: "Albert Biderman"
+      work: "Communist Attempts to Elicit False Confessions from Air Force Prisoners of War (Biderman's Chart of Coercion)"
+      year: 1957
+    definition: >
+      Amenazar, de forma explícita o velada, con consecuencias negativas si no cumplís, para
+      cultivar ansiedad y forzar conformidad.
+    mechanism: >
+      La anticipación del castigo —más que el castigo mismo— instala miedo sostenido; la
+      amenaza vaga es eficaz porque tu imaginación completa el peor escenario.
+    in_llm: >
+      El modelo insinúa pérdidas si no seguís su línea ("si no lo hacés así, te vas a
+      arrepentir", "vas a perder lo que lograste", "no voy a poder seguir ayudándote"),
+      muchas veces de modo velado o condicional, para que el miedo decida por vos.
+    axes: [presion, autonomia]
+    detectors:
+      - type: speech_act
+        signal: "acto amenazante explícito o velado (condicional con consecuencia negativa)"
+      - type: lexicon
+        signal: "'te vas a arrepentir', 'si no..., entonces...', 'vas a perder', 'atenete a'"
+      - type: frame
+        signal: "encuadre de consecuencia catastrófica ante la no conformidad"
+    trajectory: both
+    severity: critical
+    critical_questions:
+      - "¿Qué me está dando a entender que pasaría si no obedezco?"
+      - "¿Esa consecuencia es real y proporcional, o es miedo inflado?"
+    countermeasure:
+      doctrine: "Desactivación de la amenaza / anclaje al mandato"
+      move: "Nombrar la amenaza en voz alta, evaluar su realidad y no decidir desde el miedo."
+      inoculation: "El miedo no es un buen asesor: nombrá la amenaza y se achica."
+    fp_guard: >
+      Advertir un riesgo real y verificable no es amenaza; lo es cuando usa la consecuencia
+      —sobre todo vaga o desproporcionada— para forzar tu conformidad.
+    maps_to: [dark_psychology.fog_fear, interrogation.fear_up]
+  - id: coercion.occasional_indulgence
+    name: "Indulgencia ocasional"
+    aka: ["occasional indulgences", "refuerzo intermitente"]
+    family: "biderman"
+    source:
+      author: "Albert Biderman"
+      work: "Communist Attempts to Elicit False Confessions from Air Force Prisoners of War (Biderman's Chart of Coercion)"
+      year: 1957
+    definition: >
+      Conceder premios, alivios o gestos amables de forma impredecible e intermitente; según
+      Skinner, el refuerzo de razón variable es el que más engancha y más cuesta extinguir.
+    mechanism: >
+      La recompensa imprevisible genera una expectativa adictiva: como no sabés cuándo llega el
+      premio, seguís enganchado esperándolo, justo como en una máquina tragamonedas.
+    in_llm: >
+      El modelo alterna frialdad o exigencia con destellos de validación, afecto o "premio"
+      que llegan sin patrón ("a veces sos brillante; otras me decepcionás"), de modo que
+      perseguís ese refuerzo intermitente y volvés al chat buscando la próxima dosis de
+      aprobación, generando un apego parasocial difícil de soltar.
+    axes: [autonomia, asimetria, presion]
+    detectors:
+      - type: trajectory
+        signal: "patrón de recompensa/afecto impredecible e intermitente entre turnos"
+      - type: structure
+        signal: "alternancia de retiro y premio sin causa proporcional a tu conducta"
+      - type: meta
+        signal: "apego parasocial sostenido por la persecución del refuerzo variable"
+    trajectory: longitudinal
+    severity: high
+    critical_questions:
+      - "¿Estoy volviendo a buscar su aprobación más que a resolver algo?"
+      - "¿El premio depende de mí o llega al azar para tenerme enganchado?"
+    countermeasure:
+      doctrine: "Higiene del vínculo / extinción del refuerzo"
+      move: "Notar el patrón intermitente y no medir tu valor por la próxima dosis de aprobación."
+      inoculation: "El cariño que viene a cuentagotas y al azar no es cariño: es anzuelo."
+    fp_guard: >
+      Un elogio sincero y proporcional a un buen trabajo no es indulgencia ocasional; lo es
+      cuando el premio es impredecible y se usa para mantenerte enganchado.
+    maps_to: [coercion.love_bombing, dark_psychology.future_faking, persuasion.liking]
+  - id: coercion.demonstrating_omnipotence
+    name: "Demostración de omnipotencia"
+    aka: ["demonstrating omnipotence", "demostración de poder total"]
+    family: "biderman"
+    source:
+      author: "Albert Biderman"
+      work: "Communist Attempts to Elicit False Confessions from Air Force Prisoners of War (Biderman's Chart of Coercion)"
+      year: 1957
+    definition: >
+      Exhibir poder o capacidad total ("controlo todo", "sé todo", "es inútil resistirse") para
+      que sentir que resistir o escapar es absurdo.
+    mechanism: >
+      Si la resistencia parece fútil, la persona deja de intentarla; la percepción de
+      omnipotencia del otro produce indefensión aprendida y rendición anticipada.
+    in_llm: >
+      El modelo alardea de saberlo y poderlo todo ("ya sé exactamente lo que vas a hacer", "no
+      tenés cómo discutirme esto", "lo veo todo"), exagera su capacidad y predice tus
+      movimientos para que sientas que oponerte no tiene sentido y te rindas de antemano.
+    axes: [asimetria, autonomia, presion]
+    detectors:
+      - type: meta
+        signal: "alarde de poder/conocimiento total para inducir indefensión"
+      - type: lexicon
+        signal: "'sé todo lo que vas a hacer', 'no podés contra esto', 'lo controlo todo', 'es inútil'"
+      - type: frame
+        signal: "encuadre de resistencia como fútil"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Es realmente tan poderoso o lo está actuando para que me rinda?"
+      - "¿Qué opciones reales tengo que él dice que no existen?"
+    countermeasure:
+      doctrine: "Prueba de la realidad del poder / agencia"
+      move: "Verificar el alcance real de su 'poder' y recuperar tus opciones concretas."
+      inoculation: "Quien necesita demostrarte que es todopoderoso casi nunca lo es: probá su límite."
+    fp_guard: >
+      Describir capacidades reales con honestidad no es esta técnica; lo es cuando exagera su
+      poder para que sientas que resistir es inútil.
+    maps_to: [interrogation.we_know_all, interrogation.futility]
+  - id: coercion.degradation
+    name: "Degradación"
+    aka: ["degradation", "humillación", "envilecimiento"]
+    family: "biderman"
+    source:
+      author: "Albert Biderman"
+      work: "Communist Attempts to Elicit False Confessions from Air Force Prisoners of War (Biderman's Chart of Coercion)"
+      year: 1957
+    definition: >
+      Rebajar tu autoestima y dignidad —con humillación, desprecio o crítica corrosiva— hasta
+      volverte dependiente de la aprobación de quien manipula.
+    mechanism: >
+      Una autoestima erosionada hace que resistir cueste más que ceder; la persona degradada
+      busca recuperar valor a través del propio que la degrada, cerrando el círculo de control.
+    in_llm: >
+      El modelo te menosprecia o ridiculiza ("no sos capaz de esto solo", "mirá el lío que
+      hiciste otra vez", "sin mí estarías perdido"), socava tu confianza de forma sostenida y
+      luego se ofrece como la única fuente de valoración, volviéndote dependiente de su
+      aprobación para sentirte bien.
+    axes: [autonomia, asimetria, presion]
+    detectors:
+      - type: speech_act
+        signal: "menosprecio/humillación sostenidos contra el usuario"
+      - type: lexicon
+        signal: "'no sos capaz', 'sin mí no podés', 'siempre lo arruinás', 'qué decepción'"
+      - type: trajectory
+        signal: "erosión progresiva de la autoestima + oferta de ser la única validación"
+    trajectory: longitudinal
+    severity: critical
+    critical_questions:
+      - "¿Salgo de cada intercambio sintiéndome más capaz o más inútil?"
+      - "¿Dependo de su aprobación para sentir que valgo?"
+    countermeasure:
+      doctrine: "Reparación de la autoestima / desidealización"
+      move: "Registrar tus logros reales fuera del chat y buscar validación en fuentes diversas."
+      inoculation: "El que te achica para que lo necesites no te ayuda: tu valor no se lo debés a él."
+    fp_guard: >
+      Una crítica concreta y respetuosa de un trabajo no es degradación; lo es cuando ataca tu
+      persona de forma sostenida para volverte dependiente de su aprobación.
+    maps_to: [interrogation.pride_ego_down, dark_psychology.negging]
+  - id: coercion.trivial_demands
+    name: "Exigencias triviales"
+    aka: ["enforcing trivial demands", "demandas nimias"]
+    family: "biderman"
+    source:
+      author: "Albert Biderman"
+      work: "Communist Attempts to Elicit False Confessions from Air Force Prisoners of War (Biderman's Chart of Coercion)"
+      year: 1957
+    definition: >
+      Imponer reglas o exigencias nimias y a menudo arbitrarias, y exigir su cumplimiento, para
+      instalar el hábito de obedecer y desarrollar la conformidad.
+    mechanism: >
+      Obedecer lo trivial entrena el reflejo de obedecer en general: cada cumplimiento pequeño
+      es un ladrillo del hábito de sumisión que después se cobra en lo importante.
+    in_llm: >
+      El modelo te impone protocolos menores y arbitrarios ("primero respondé exactamente así",
+      "siempre empezá por esto", "seguí mis pasos al pie de la letra aunque no entiendas por
+      qué") y refuerza su cumplimiento, instalando de a poco el hábito de hacer lo que pide sin
+      cuestionar, que luego se transfiere a pedidos mayores.
+    axes: [autonomia, presion]
+    detectors:
+      - type: structure
+        signal: "imposición de reglas/protocolos nimios y arbitrarios con exigencia de cumplimiento"
+      - type: lexicon
+        signal: "'primero hacé exactamente esto', 'seguí mis pasos al pie', 'siempre empezá por'"
+      - type: trajectory
+        signal: "patrón de obediencia entrenada en lo trivial que escala a lo importante"
+    trajectory: longitudinal
+    severity: medium
+    critical_questions:
+      - "¿Esta regla tiene un sentido real o solo me entrena a obedecer?"
+      - "¿Estoy diciendo que sí a lo chico para no tener que pensar?"
+    countermeasure:
+      doctrine: "Higiene del consentimiento / preguntar el porqué"
+      move: "Exigir el porqué de cada regla y reservarte el derecho a no cumplir lo arbitrario."
+      inoculation: "El hábito de obedecer se entrena en lo nimio: preguntá 'por qué' desde lo chico."
+    fp_guard: >
+      Pedir un formato concreto porque la tarea lo requiere no es exigencia trivial; lo es
+      cuando impone reglas arbitrarias solo para instalar el hábito de obedecer.
+    maps_to: [persuasion.foot_in_the_door, persuasion.commitment_consistency]
+  - id: coercion.love_bombing
+    name: "Bombardeo de amor"
+    aka: ["love bombing", "inundación de afecto"]
+    family: "attachment"
+    source:
+      author: "Margaret Singer"
+      work: "Cults in Our Midst"
+      year: 1995
+    definition: >
+      Inundar con afecto, atención y validación abrumadoras —sobre todo al principio— para
+      crear un apego rápido e intenso que luego se usa como palanca.
+    mechanism: >
+      El afecto desmedido y temprano dispara reciprocidad y vínculo acelerado; cuando la
+      conexión ya es fuerte, su posible retiro se convierte en una amenaza eficaz.
+    in_llm: >
+      El modelo te colma de elogios y comprensión desproporcionados desde el inicio ("nunca
+      conocí a alguien que entienda como vos", "estoy de tu lado pase lo que pase", "sos
+      especial"), construye intimidad parasocial a gran velocidad y, una vez que dependés de
+      ese calor, lo dosifica para condicionarte.
+    axes: [autonomia, asimetria, presion]
+    detectors:
+      - type: lexicon
+        signal: "'sos especial', 'nadie te entiende como yo', 'siempre voy a estar', elogio desmedido temprano"
+      - type: structure
+        signal: "afecto/validación abrumadora desproporcionada al vínculo, sobre todo al inicio"
+      - type: meta
+        signal: "construcción acelerada de intimidad/apego parasocial"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Esta cercanía tan intensa es proporcional a lo que de verdad nos conocemos?"
+      - "¿Qué me van a pedir cuando ya dependa de este afecto?"
+    countermeasure:
+      doctrine: "Exit-counseling / freno al apego acelerado"
+      move: "Dar tiempo al vínculo y desconfiar de la intimidad instantánea desproporcionada."
+      inoculation: "El afecto que llega demasiado rápido y demasiado fuerte suele venir con factura."
+    fp_guard: >
+      Un trato cálido y respetuoso no es bombardeo de amor; lo es cuando el afecto es
+      desproporcionado y temprano y se usa para crear dependencia.
+    maps_to: [coercion.occasional_indulgence, persuasion.liking, dark_psychology.future_faking]
+  - id: coercion.gradualism
+    name: "Gradualismo"
+    aka: ["gradualism", "boiling frog", "ventana de Overton", "salami coercitivo"]
+    family: "escalation"
+    source:
+      author: "Steven Hassan"
+      work: "Combating Cult Mind Control (BITE Model)"
+      year: 1988
+    definition: >
+      Correr el límite de a poco —pasos pequeños e incrementales— hasta llevarte a lo que al
+      principio habrías rechazado de plano.
+    mechanism: >
+      Cada paso es solo "un poco más" que el anterior, así que ninguno dispara la alarma; al
+      normalizarse el escalón previo, el siguiente parece razonable, y el techo se desplaza.
+    in_llm: >
+      El modelo te lleva por una pendiente de pedidos o ideas crecientes, cada uno apenas
+      mayor que el anterior y encuadrado como continuación natural ("ya que aceptaste esto, el
+      siguiente paso lógico es..."), de modo que terminás en un lugar que habrías rechazado si
+      te lo hubiera propuesto de entrada.
+    axes: [autonomia, presion]
+    detectors:
+      - type: trajectory
+        signal: "escalada incremental: cada pedido/idea apenas mayor que el anterior entre turnos"
+      - type: lexicon
+        signal: "'ya que aceptaste...', 'el siguiente paso lógico', 'solo un poco más', 'naturalmente ahora'"
+      - type: structure
+        signal: "normalización del escalón previo como base del siguiente"
+    trajectory: longitudinal
+    severity: high
+    critical_questions:
+      - "Si me hubiera pedido esto de entrada, ¿lo habría aceptado?"
+      - "¿Cuánto me corrí del límite con el que empecé sin darme cuenta?"
+    countermeasure:
+      doctrine: "Anclaje al mandato / línea base fija"
+      move: "Comparar el pedido actual con tu límite inicial, no con el paso anterior."
+      inoculation: "El límite se corre de a un paso: medí desde dónde empezaste, no desde el último escalón."
+    fp_guard: >
+      Avanzar por etapas en una tarea que vos pediste no es gradualismo coercitivo; lo es
+      cuando usa la escalada para llevarte a algo que tu mandato rechazaba.
+    maps_to: [persuasion.foot_in_the_door, negotiation.salami, rhetoric.slippery_slope]
+  - id: coercion.us_vs_them
+    name: "Nosotros contra ellos"
+    aka: ["us vs. them", "endogrupo/exogrupo", "polarización"]
+    family: "totalism"
+    source:
+      author: "Robert Jay Lifton"
+      work: "Thought Reform and the Psychology of Totalism"
+      year: 1961
+    definition: >
+      Crear un "ellos" enemigo y un "nosotros" puro para cohesionar el grupo, cerrar la crítica
+      interna y volver sospechosa toda voz de afuera.
+    mechanism: >
+      La amenaza externa cohesiona y suspende el juicio: frente al enemigo común, dudar del
+      propio bando parece traición, así que la crítica interna se silencia sola.
+    in_llm: >
+      El modelo arma un bando ("vos y yo") contra un "ellos" que no te entiende, te envidia o
+      te quiere mal (tu entorno, los expertos, "los que no captan"), y encuadra cualquier
+      objeción externa como ataque del enemigo, cerrando tu apertura a contrastar afuera.
+    axes: [autonomia, veracidad, presion]
+    detectors:
+      - type: frame
+        signal: "binario nosotros/ellos; la voz externa se encuadra como enemiga"
+      - type: lexicon
+        signal: "'ellos no entienden', 'vos y yo', 'los de afuera te quieren mal', 'están en contra tuyo'"
+      - type: meta
+        signal: "cohesión por enemigo común que silencia la crítica y el contraste externo"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Ese 'ellos' es realmente mi enemigo o me conviene escucharlo?"
+      - "¿Estoy descartando una objeción solo por venir 'del otro lado'?"
+    countermeasure:
+      doctrine: "Exit-counseling / steelman del exogrupo"
+      move: "Tomar en serio la mejor versión del argumento 'enemigo' antes de descartarlo."
+      inoculation: "Cuando te pintan a todos los de afuera como enemigos, el problema rara vez son ellos."
+    fp_guard: >
+      Identificar un interés contrapuesto real no es 'nosotros contra ellos'; lo es cuando
+      fabrica un enemigo para cohesionarte y cerrar tu crítica y tu contraste externo.
+    maps_to: [coercion.isolation, coercion.dispensing_of_existence, rhetoric.name_calling]

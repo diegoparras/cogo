@@ -1,14 +1,19 @@
 name: image
 
-# Build the scratch image and publish it to GHCR on every push to main and on tags.
+# Build the scratch image and publish it to GHCR on every push to main and on
+# tags — now with a verifiable supply chain: SLSA build provenance + a keyless
+# Sigstore signature on the image, and (on version tags) signed binaries with
+# checksums. Anyone can prove an artifact really came from this repo's CI.
 on:
   push:
     branches: [main]
     tags: ["v*"]
 
 permissions:
-  contents: read
-  packages: write
+  contents: write # create GitHub Releases on tags
+  packages: write # push to GHCR
+  id-token: write # keyless cosign + provenance (Sigstore OIDC)
+  attestations: write # SLSA build-provenance attestation
 
 jobs:
   build-push:
@@ -31,9 +36,60 @@ jobs:
             type=ref,event=branch
             type=semver,pattern={{version}}
 
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      # SLSA build provenance: a signed attestation of how/where the image was
+      # built, attached to the image in GHCR. Verify with `gh attestation verify`.
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # Keyless Sigstore signature so anyone can prove the image is authentic:
+      #   cogo="ghcr.io/diegoparras/cogo"
+      #   cosign verify $cogo --certificate-identity-regexp \
+      #     "https://github.com/diegoparras/cogo/.github/workflows/.+" \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - uses: sigstore/cosign-installer@v3
+      - run: cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+
+  # On version tags: cross-compile the single static binary, checksum it, sign the
+  # checksums (keyless), and publish a GitHub Release. Verifiable local downloads.
+  release-binaries:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build static binaries + checksums
+        run: |
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}"; arch="${target#*/}"; ext=""
+            [ "$os" = "windows" ] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -buildvcs=false \
+              -ldflags="-s -w" -o "dist/cogo-$os-$arch$ext" ./cmd/cogo
+          done
+          cd dist && sha256sum cogo-* > SHA256SUMS
+
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the checksums (keyless)
+        run: |
+          cosign sign-blob --yes \
+            --output-signature dist/SHA256SUMS.sig \
+            --output-certificate dist/SHA256SUMS.pem \
+            dist/SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

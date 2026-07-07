@@ -34,6 +34,16 @@ func (c Color) String() string {
 type Evidence struct {
 	Kind string `yaml:"kind" json:"kind"`
 	Ref  string `yaml:"ref" json:"ref"`
+	// Hash is a content hash of the cited file at the moment the note was last
+	// verified (persisted). It is the drift baseline: if the file changes after
+	// verification, the note can no longer be green — the evidence moved under it.
+	// Empty for non-file evidence or notes never verified through COGO.
+	Hash string `yaml:"hash,omitempty" json:"-"`
+	// Status is computed at runtime by ResolveEvidence (not persisted): whether
+	// the ref actually points at something real. A "broken" item stops counting
+	// toward the note's color — that is the difference between an honest green
+	// and a claimed one. "drifted" = resolves, but changed since Hash was stamped.
+	Status string `yaml:"-" json:"status,omitempty"` // resolved | broken | unchecked | drifted
 }
 
 // Check is the minimal test that would verify the claim.
@@ -55,6 +65,7 @@ type Note struct {
 	DependsOn    []string   `yaml:"depends_on"` // hard graph edges this note rests on
 	Supersedes   string     `yaml:"supersedes"`
 	CausedBy     string     `yaml:"caused_by"`
+	Status       string     `yaml:"status"` // "" (active) | archived | retracted — the lifecycle axis, orthogonal to color
 
 	// ---- computed by COGO · do not edit ----
 	Confidence  string `yaml:"confidence"`

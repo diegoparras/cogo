@@ -12,19 +12,26 @@ type NoteView struct {
 	Reason  string `json:"reason"`
 	StaleAt string `json:"stale_at"`
 	Claim   string `json:"claim"`
+	State   string `json:"state,omitempty"` // archived|retracted|superseded; empty = active
 }
 
 // Overview grades the whole vault and returns one NoteView per note, ordered
-// red-first (what needs attention), then by id.
-func Overview(vault map[string]*Note, contradictions map[string]bool, today Date) []NoteView {
+// red-first (what needs attention), then by id. Non-active notes (archived,
+// retracted, superseded) are dropped unless includeArchived is set.
+func Overview(vault map[string]*Note, contradictions map[string]bool, today Date, includeArchived bool) []NoteView {
 	verdicts := EvaluateVault(vault, contradictions, today)
+	state := Lifecycle(vault)
 	out := make([]NoteView, 0, len(vault))
 	for id, n := range vault {
+		if !includeArchived && state[id] != StateActive {
+			continue
+		}
 		v := verdicts[id]
 		out = append(out, NoteView{
 			ID: id, Type: n.Type, Project: n.Project,
 			Color: v.Color.String(), Reason: v.Reason,
 			StaleAt: v.StaleAt.String(), Claim: summarize(claimOf(n), 200),
+			State: stateTag(state, id),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

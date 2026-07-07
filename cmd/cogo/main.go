@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/cogo/internal/agentsmd"
+	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 )
 
@@ -39,6 +42,10 @@ func main() {
 		err = cmdLint(args)
 	case "serve":
 		err = cmdServe(args)
+	case "agents":
+		err = cmdAgents(args)
+	case "install":
+		err = cmdInstall(args)
 	case "-h", "--help", "help":
 		usage()
 		return
@@ -67,6 +74,8 @@ commands:
   verify <id>          mark a note's check passed, re-date and re-color
   lint                 deterministic checks + (optional) LLM contradiction scan
   serve                run as an MCP server over stdio (any LLM connects)
+  agents               print an AGENTS.md/CLAUDE.md that teaches an agent the COGO protocol
+  install              wire COGO into an agent's .mcp.json (stdio by default, or --http)
 
 common flags:
   -vault <dir>         vault directory (default $COGO_VAULT or ./vault)
@@ -267,7 +276,7 @@ func cmdSearch(args []string) error {
 	if err != nil {
 		return err
 	}
-	hits := core.Search(vault, nil, strings.Join(fs.Args(), " "), *project, t, *limit)
+	hits := core.Search(vault, nil, strings.Join(fs.Args(), " "), *project, t, *limit, false)
 	if len(hits) == 0 {
 		fmt.Println("no matching notes")
 		return nil
@@ -275,6 +284,125 @@ func cmdSearch(args []string) error {
 	for _, h := range hits {
 		fmt.Printf("%-9s %-28s %s\n", colorTag(h.Color), h.ID, h.Summary)
 	}
+	return nil
+}
+
+// cmdAgents emits the bootstrap file (AGENTS.md/CLAUDE.md) that teaches a coding
+// agent the COGO protocol and how to connect. --digest embeds a static snapshot
+// of the current green/yellow notes for an agent that can't speak MCP.
+func cmdAgents(args []string) error {
+	fs := flag.NewFlagSet("agents", flag.ExitOnError)
+	dir := vaultFlag(fs)
+	claude := fs.Bool("claude", false, "name it CLAUDE.md (Claude Code) instead of AGENTS.md")
+	httpURL := fs.String("http", "", "MCP-over-HTTP endpoint for the connection snippet (else a stdio snippet)")
+	digest := fs.Bool("digest", false, "embed a static snapshot of the current green/yellow notes")
+	out := fs.String("o", "", "write to this file instead of stdout")
+	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD")
+	_ = fs.Parse(args)
+
+	name := "AGENTS.md"
+	if *claude {
+		name = "CLAUDE.md"
+	}
+	opts := agentsmd.Options{Filename: name, HTTPURL: *httpURL, Vault: *dir}
+	if *httpURL == "" {
+		if exe, err := os.Executable(); err == nil {
+			opts.Binary = exe
+		}
+	}
+	if *digest {
+		t, err := resolveToday(*todayStr)
+		if err != nil {
+			return err
+		}
+		vault, err := core.LoadVault(*dir)
+		if err != nil {
+			return err
+		}
+		core.ResolveEvidence(vault, core.LoadEvidenceRoots(*dir))
+		verdicts := core.EvaluateVault(vault, contra.Open(*dir).OpenNoteSet(), t)
+		items := make([]agentsmd.DigestItem, 0, len(vault))
+		for id, n := range vault {
+			if n.Status != "" {
+				continue // skip archived/retracted — the snapshot is the live memory
+			}
+			items = append(items, agentsmd.DigestItem{Color: verdicts[id].Color.String(), ID: id, Claim: core.Claim(n)})
+		}
+		sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+		opts.Digest = agentsmd.RenderDigest(items)
+		opts.Date = t.String()
+	}
+	md := agentsmd.Generate(opts)
+	if *out != "" {
+		if err := os.WriteFile(*out, []byte(md), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "wrote %s\n", *out)
+		return nil
+	}
+	fmt.Print(md)
+	return nil
+}
+
+// cmdInstall wires COGO into an agent's .mcp.json — stdio (this binary + vault)
+// by default, or a remote HTTP endpoint with --http (+ optional --token). It
+// MERGES into an existing .mcp.json, preserving any other servers already there.
+func cmdInstall(args []string) error {
+	fs := flag.NewFlagSet("install", flag.ExitOnError)
+	dir := vaultFlag(fs)
+	httpURL := fs.String("http", "", "remote MCP endpoint (HTTP); default = local stdio using this binary")
+	token := fs.String("token", "", "Bearer token for the HTTP endpoint (optional)")
+	name := fs.String("name", "cogo", "server key under mcpServers")
+	out := fs.String("o", ".mcp.json", "path to the .mcp.json to write/merge")
+	claude := fs.Bool("claude", false, "also drop a CLAUDE.md with the COGO protocol next to it")
+	_ = fs.Parse(args)
+
+	bin, err := os.Executable()
+	if err != nil {
+		bin = "cogo"
+	}
+	vabs, _ := filepath.Abs(*dir)
+
+	server := map[string]any{"command": bin, "args": []any{"serve", "-vault", vabs}}
+	mode := "stdio"
+	if *httpURL != "" {
+		mode = "http"
+		server = map[string]any{"type": "http", "url": *httpURL}
+		if *token != "" {
+			server["headers"] = map[string]any{"Authorization": "Bearer " + *token}
+		}
+	}
+
+	// Merge into an existing .mcp.json, preserving any other servers.
+	root := map[string]any{}
+	if b, err := os.ReadFile(*out); err == nil {
+		_ = json.Unmarshal(b, &root)
+	}
+	servers, _ := root["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	servers[*name] = server
+	root["mcpServers"] = servers
+
+	b, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(*out, append(b, '\n'), 0o644); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "cogo: wired %q → mcpServers.%s (%s)\n", *out, *name, mode)
+
+	if *claude {
+		p := filepath.Join(filepath.Dir(*out), "CLAUDE.md")
+		md := agentsmd.Generate(agentsmd.Options{Filename: "CLAUDE.md", HTTPURL: *httpURL, Binary: bin, Vault: vabs})
+		if err := os.WriteFile(p, []byte(md), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "cogo: wrote %s\n", p)
+	}
+	fmt.Fprintln(os.Stderr, "  reiniciá tu agente para que tome la config.")
 	return nil
 }
 

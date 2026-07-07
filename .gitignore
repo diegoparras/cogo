@@ -6,3 +6,4 @@
 # local LLM settings (may hold an API key) — never commit
 .cogo/
 vault/.cogo/
+.mcp.json

@@ -13,6 +13,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -32,14 +33,49 @@ const sessionTTL = 12 * time.Hour
 
 type Auth struct {
 	enabled      bool
+	federated    bool   // OIDC (Lockatus) active
+	token        string // COGO_MCP_TOKEN: a shared Bearer secret for programmatic clients (MCP)
 	secret       []byte
 	cookieSecure bool
 
 	oauth2   oauth2.Config
 	verifier *oidc.IDTokenVerifier
 
+	// verify, if set, checks a presented Bearer secret against the issued-token
+	// store; returns the token's label, whether it is read-only, and whether it
+	// matched. Wired by the server so this package stays free of the store's I/O.
+	verify func(secret string) (label string, readOnly bool, ok bool)
+
 	mu    sync.Mutex
 	flows map[string]flow // login state -> PKCE verifier + nonce
+}
+
+// SetVerifier wires the issued-token store's check into the gate (see
+// internal/tokens). Issued tokens are an ADDITIONAL authorization path — they do
+// not turn auth on by themselves; the root COGO_MCP_TOKEN or OIDC is the
+// bootstrap credential that enables the gate and lets you manage the store.
+func (a *Auth) SetVerifier(f func(secret string) (string, bool, bool)) { a.verify = f }
+
+// ctxKey carries per-request auth facts (scope, caller) to downstream middleware.
+type ctxKey int
+
+const (
+	readOnlyKey ctxKey = iota
+	callerKey
+)
+
+// ReadOnlyGranted reports whether the request was authorized by a read-only
+// token (so write endpoints/tools must be refused).
+func ReadOnlyGranted(r *http.Request) bool {
+	v, _ := r.Context().Value(readOnlyKey).(bool)
+	return v
+}
+
+// Caller identifies who authorized the request ("root", "user:<email>",
+// "token:<label>", or "" when auth is off) — for the audit log.
+func Caller(r *http.Request) string {
+	v, _ := r.Context().Value(callerKey).(string)
+	return v
 }
 
 type flow struct {
@@ -64,12 +100,22 @@ type session struct {
 // Disabled returns an auth that gates nothing (standalone).
 func Disabled() *Auth { return &Auth{enabled: false} }
 
-// FromEnv builds federated auth from AUTH_MODE=federado + LOCKATUS_*. Anything
-// else returns Disabled(). Discovery (and thus a reachable Lockatus) is only
-// required in federated mode.
+// FromEnv builds auth from the environment. Two independent mechanisms, either
+// of which authorizes a protected request:
+//
+//   - COGO_MCP_TOKEN: a shared Bearer token — the simple, strong way to secure
+//     the MCP + API for a programmatic client (Claude Code) on a VPS.
+//   - AUTH_MODE=federado + LOCKATUS_*: OIDC/Lockatus session cookie (the browser
+//     path). They compose: OIDC for humans, the token for machines.
+//
+// With neither set, auth is Disabled (standalone: safe only on loopback).
 func FromEnv(ctx context.Context) (*Auth, error) {
+	token := os.Getenv("COGO_MCP_TOKEN")
 	if os.Getenv("AUTH_MODE") != "federado" {
-		return Disabled(), nil
+		if token == "" {
+			return Disabled(), nil
+		}
+		return &Auth{enabled: true, token: token}, nil // token-only, no OIDC
 	}
 	issuer := os.Getenv("LOCKATUS_ISSUER")
 	clientID := os.Getenv("LOCKATUS_CLIENT_ID")
@@ -77,7 +123,11 @@ func FromEnv(ctx context.Context) (*Auth, error) {
 	if issuer == "" || clientID == "" || redirect == "" {
 		return nil, errors.New("AUTH_MODE=federado needs LOCKATUS_ISSUER, LOCKATUS_CLIENT_ID and LOCKATUS_REDIRECT_URI")
 	}
-	provider, err := oidc.NewProvider(ctx, issuer)
+	// Bounded: never hang the whole boot if Lockatus is unreachable — fail fast
+	// with a clear error instead of a silent stuck container.
+	dctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	provider, err := oidc.NewProvider(dctx, issuer)
 	if err != nil {
 		return nil, fmt.Errorf("lockatus discovery failed (%s): %w", issuer, err)
 	}
@@ -88,6 +138,8 @@ func FromEnv(ctx context.Context) (*Auth, error) {
 	}
 	return &Auth{
 		enabled:      true,
+		federated:    true,
+		token:        token,
 		secret:       secret,
 		cookieSecure: os.Getenv("COOKIE_SECURE") == "1",
 		oauth2: oauth2.Config{
@@ -116,16 +168,60 @@ func (a *Auth) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/auth/logout", a.handleLogout)
 }
 
-// Gate blocks /api/* and /mcp when federated and unauthenticated. Static assets,
-// /auth/*, /healthz and the SPA shell stay open so the login screen can render.
+// Gate blocks /api/* and /mcp when auth is on and the request is unauthenticated.
+// Static assets, /auth/*, /healthz and the SPA shell stay open so the login (or
+// token) screen can render.
 func (a *Auth) Gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.enabled && protected(r.URL.Path) && a.session(r) == nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
+		if a.enabled && protected(r.URL.Path) {
+			caller, readOnly, ok := a.authorize(r)
+			if !ok {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			ctx := context.WithValue(r.Context(), readOnlyKey, readOnly)
+			ctx = context.WithValue(ctx, callerKey, caller)
+			r = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// authorize accepts a valid OIDC session cookie (browser, full scope), the root
+// env token (full scope), or a matching issued token from the store (its own
+// scope). Returns who the caller is, whether the grant is read-only, and ok.
+func (a *Auth) authorize(r *http.Request) (caller string, readOnly bool, ok bool) {
+	if a.federated {
+		if s := a.session(r); s != nil {
+			return "user:" + s.Email, false, true
+		}
+	}
+	bearer := a.bearer(r)
+	if bearer == "" {
+		return "", false, false
+	}
+	if a.token != "" && subtle.ConstantTimeCompare([]byte(bearer), []byte(a.token)) == 1 {
+		return "root", false, true
+	}
+	if a.verify != nil {
+		if label, ro, matched := a.verify(bearer); matched {
+			return "token:" + label, ro, true
+		}
+	}
+	return "", false, false
+}
+
+// authorized is the boolean form (used by /auth/me).
+func (a *Auth) authorized(r *http.Request) bool { _, _, ok := a.authorize(r); return ok }
+
+// bearer pulls the token from an Authorization: Bearer header ("" if absent).
+func (a *Auth) bearer(r *http.Request) string {
+	const p = "Bearer "
+	h := r.Header.Get("Authorization")
+	if !strings.HasPrefix(h, p) {
+		return ""
+	}
+	return strings.TrimSpace(h[len(p):])
 }
 
 func protected(path string) bool {
@@ -187,10 +283,14 @@ func (a *Auth) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
-	resp := map[string]any{"enabled": a.enabled, "authenticated": false}
-	if a.enabled {
+	mode := a.Mode()
+	resp := map[string]any{
+		"enabled":       a.enabled,
+		"mode":          mode,
+		"authenticated": !a.enabled || a.authorized(r),
+	}
+	if a.federated {
 		if s := a.session(r); s != nil {
-			resp["authenticated"] = true
 			resp["email"] = s.Email
 			resp["name"] = s.Name
 			resp["role"] = s.Role
@@ -198,6 +298,17 @@ func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// Mode names the active auth mechanism, for the startup banner and /auth/me.
+func (a *Auth) Mode() string {
+	if a.federated {
+		return "federated"
+	}
+	if a.token != "" {
+		return "token"
+	}
+	return "off"
 }
 
 // --- session cookie: base64url(json) "." base64url(hmac-sha256) ---

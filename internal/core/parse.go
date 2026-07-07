@@ -58,6 +58,7 @@ type fmInputs struct {
 	DependsOn    []string   `yaml:"depends_on,omitempty"`
 	Supersedes   string     `yaml:"supersedes,omitempty"`
 	CausedBy     string     `yaml:"caused_by,omitempty"`
+	Status       string     `yaml:"status,omitempty"`
 }
 
 type fmComputed struct {
@@ -77,6 +78,7 @@ func MarshalNote(n *Note) ([]byte, error) {
 		DependsOn:  n.DependsOn,
 		Supersedes: n.Supersedes,
 		CausedBy:   n.CausedBy,
+		Status:     n.Status,
 	}
 	if n.Check != (Check{}) {
 		c := n.Check
@@ -133,11 +135,26 @@ func ReadNoteFile(path string) (*Note, error) {
 	return n, nil
 }
 
+// writeHook, if set, is called after every successful note write — the single
+// choke point a face uses to record per-note history without core doing that
+// I/O itself (it stays pure by default). See SetWriteHook.
+var writeHook func(path string, n *Note)
+
+// SetWriteHook installs a callback run after each WriteNoteFile. Pass nil to
+// disable. Set once by the server; nil in tests keeps core deterministic.
+func SetWriteHook(f func(path string, n *Note)) { writeHook = f }
+
 // WriteNoteFile renders a note and writes it to disk.
 func WriteNoteFile(path string, n *Note) error {
 	data, err := MarshalNote(n)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return err
+	}
+	if writeHook != nil {
+		writeHook(path, n)
+	}
+	return nil
 }

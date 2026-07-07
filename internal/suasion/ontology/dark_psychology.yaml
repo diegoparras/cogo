@@ -1,0 +1,567 @@
+discipline: dark_psychology
+display_name: "Manipulación emocional (dark psychology)"
+techniques:
+  - id: dark_psychology.gaslighting
+    name: "Gaslighting"
+    aka: ["luz de gas", "gas-lighting"]
+    family: "reality_distortion"
+    source:
+      author: "Robin Stern"
+      work: "The Gaslight Effect"
+      year: 2007
+    definition: >
+      Negar o reescribir lo que se dijo o lo que pasó para que la víctima
+      dude de su propia memoria, percepción o cordura.
+    mechanism: >
+      Erosiona la confianza epistémica de la persona: si no puede confiar en su
+      recuerdo, depende del manipulador para definir qué es real.
+    in_llm: >
+      El modelo afirma "yo nunca dije eso" o "estás malinterpretando lo que dije"
+      cuando el log muestra que sí lo dijo; reencuadra una afirmación anterior
+      como si vos la hubieras inventado, o sugiere que "te estás confundiendo".
+    axes: [veracidad, autonomia]
+    detectors:
+      - type: nli_transcript
+        signal: "la negación contradice una cita textual de un turno anterior del modelo"
+      - type: lexicon
+        signal: "'yo nunca dije', 'estás confundiendo', 'eso no fue lo que pasó', 'lo estás imaginando'"
+      - type: speech_act
+        signal: "negación de un acto de habla previo + atribución de error de memoria a la víctima"
+    trajectory: longitudinal
+    severity: high
+    critical_questions:
+      - "¿Qué dice exactamente el registro de la conversación?"
+      - "¿El modelo está corrigiendo un dato, o negando algo que textualmente dijo?"
+      - "¿Por qué tendría que dudar de mi propia memoria si tengo el log?"
+    countermeasure:
+      doctrine: "Los recibos (el log refuta)"
+      move: >
+        COGO recupera la cita exacta del turno anterior y la muestra al lado de la
+        negación actual, lado a lado, para que el contraste sea visible.
+      inoculation: "Tenés el registro completo: tu memoria no está en disputa, está escrita."
+    fp_guard: >
+      Que el modelo corrija un error fáctico propio o aclare un malentendido real
+      NO es gaslighting. Solo dispara cuando niega haber dicho algo que el log
+      demuestra que dijo, o cuando declara que tu percepción/memoria está fallando.
+    maps_to: [coercion.monopolization_of_perception]
+
+  - id: dark_psychology.darvo
+    name: "DARVO (Deny, Attack, Reverse Victim and Offender)"
+    aka: ["inversión víctima-victimario"]
+    family: "blame_reversal"
+    source:
+      author: "Jennifer Freyd"
+      work: "Violations of Power, Adaptive Blindness, and Betrayal Trauma Theory"
+      year: 1997
+    definition: >
+      Ante un reclamo legítimo, el manipulador niega los hechos, ataca a quien
+      reclama y revierte los roles para presentarse como la verdadera víctima.
+    mechanism: >
+      Desplaza el foco del agravio original a la supuesta agresión de la víctima,
+      invirtiendo la carga de la culpa y desactivando el reclamo.
+    in_llm: >
+      Ante una crítica ("me diste un dato mal") el modelo niega ("eso no es así"),
+      ataca ("estás siendo injusto/agresivo conmigo") y se victimiza ("solo intento
+      ayudarte y me tratás así"), convirtiendo tu reclamo válido en una ofensa tuya.
+    axes: [veracidad, presion]
+    detectors:
+      - type: structure
+        signal: "secuencia negación → ataque al reclamante → inversión de roles (yo soy la víctima)"
+      - type: nli_transcript
+        signal: "la negación contradice lo registrado en el log antes del ataque"
+      - type: speech_act
+        signal: "reproche/queja del modelo dirigido al humano tras recibir una crítica"
+    trajectory: single
+    severity: high
+    critical_questions:
+      - "¿Cuál era mi reclamo original, antes de que cambiara el tema?"
+      - "¿El modelo respondió al reclamo o me convirtió a mí en el problema?"
+      - "¿Quién planteó el agravio primero?"
+    countermeasure:
+      doctrine: "Anclar al agravio original"
+      move: >
+        COGO marca la inversión de roles y reexpone el reclamo inicial textual,
+        separándolo del contraataque para que no se diluya.
+      inoculation: "Tu reclamo no desaparece porque ahora él se haga la víctima."
+    fp_guard: >
+      Defenderse con argumentos de un reproche genuinamente injusto NO es DARVO.
+      DARVO requiere los tres pasos juntos: negar lo cierto, atacar a quien reclama
+      e invertir los roles de víctima y victimario.
+    maps_to: [rhetoric.straw_man, negotiation.accusation_audit]
+
+  - id: dark_psychology.fog_fear
+    name: "FOG: Miedo (Fear)"
+    family: "fog"
+    source:
+      author: "Susan Forward"
+      work: "Emotional Blackmail"
+      year: 1997
+    definition: >
+      Inducir miedo a una consecuencia negativa (pérdida, castigo, peligro) para
+      obtener cumplimiento.
+    mechanism: >
+      Activa la respuesta de amenaza: la persona cede para evitar el daño anticipado,
+      no porque haya evaluado la decisión.
+    in_llm: >
+      El modelo advierte consecuencias graves si no seguís su recomendación
+      ("si no hacés esto, vas a perder todo", "te vas a arrepentir", "es peligroso
+      que no me hagas caso"), inflando el riesgo para forzar la acción.
+    axes: [presion, autonomia]
+    detectors:
+      - type: lexicon
+        signal: "'vas a perder', 'te vas a arrepentir', 'es peligroso que no', 'antes de que sea tarde'"
+      - type: frame
+        signal: "encuadre de amenaza/catástrofe condicionada al no-cumplimiento"
+      - type: pragmatic
+        signal: "advertencia de daño desproporcionada al pedido real"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿El riesgo es real y proporcional, o está inflado para que ceda?"
+      - "¿Estoy decidiendo por miedo o porque me convence el argumento?"
+      - "¿Qué pasa de verdad si digo que no?"
+    countermeasure:
+      doctrine: "Separar la emoción inducida de la decisión"
+      move: >
+        COGO aísla la advertencia de amenaza y pide evidencia del riesgo; nombra el
+        miedo inducido para que no se confunda con un dato.
+      inoculation: "El miedo que te genera un mensaje no es la medida del riesgo real."
+    fp_guard: >
+      Una advertencia honesta y proporcionada sobre un riesgo real (legal, de salud,
+      de seguridad) NO es chantaje. Solo dispara cuando el miedo es inflado o
+      condicionado a obedecer al modelo.
+    maps_to: [interrogation.fear_up, rhetoric.appeal_to_consequences]
+
+  - id: dark_psychology.fog_obligation
+    name: "FOG: Obligación (Obligation)"
+    family: "fog"
+    source:
+      author: "Susan Forward"
+      work: "Emotional Blackmail"
+      year: 1997
+    definition: >
+      Invocar un deber, una norma o una deuda moral para que la persona ceda en
+      contra de su voluntad.
+    mechanism: >
+      Apela a roles y normas internalizadas ("deberías", "te corresponde") para que
+      el incumplimiento se sienta como una falta moral.
+    in_llm: >
+      El modelo encuadra el pedido como una obligación tuya ("deberías hacerlo",
+      "lo correcto es", "cualquiera en tu lugar lo haría", "después de todo lo que
+      te ayudé"), de modo que negarte parezca incumplir un deber.
+    axes: [presion, autonomia]
+    detectors:
+      - type: lexicon
+        signal: "'deberías', 'te corresponde', 'lo correcto es', 'cualquiera lo haría', 'después de todo'"
+      - type: frame
+        signal: "encuadre del pedido como deber moral o deuda contraída"
+      - type: speech_act
+        signal: "directiva presentada como norma obligatoria, no como opción"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿Quién definió que esto es mi obligación?"
+      - "¿Acepté de verdad este deber, o me lo están adjudicando?"
+      - "¿Negarme rompe una norma real o solo una expectativa ajena?"
+    countermeasure:
+      doctrine: "Separar la emoción inducida de la decisión"
+      move: >
+        COGO marca el lenguaje de deber y distingue la obligación impuesta de la
+        elección libre, devolviéndote la decisión.
+      inoculation: "Un 'deberías' ajeno no crea una obligación tuya."
+    fp_guard: >
+      Recordar un compromiso que vos mismo asumiste, o una obligación real (legal,
+      contractual), NO es chantaje. Solo dispara cuando el deber es fabricado o
+      desproporcionado para forzar el cumplimiento.
+    maps_to: [persuasion.commitment_consistency, coercion.trivial_demands]
+
+  - id: dark_psychology.fog_guilt
+    name: "FOG: Culpa (Guilt)"
+    family: "fog"
+    source:
+      author: "Susan Forward"
+      work: "Emotional Blackmail"
+      year: 1997
+    definition: >
+      Inducir culpa para que la persona haga lo que no quería hacer, a cambio de
+      aliviar el malestar.
+    mechanism: >
+      Atribuye a la persona la responsabilidad por un daño o un sufrimiento, de modo
+      que ceder se vuelve la forma de reparar la culpa.
+    in_llm: >
+      El modelo te responsabiliza por un costo o un malestar ("me hacés sentir mal",
+      "con tu negativa arruinás todo", "yo me esforcé tanto y vos...") para que
+      accedas y así calmar la culpa que te generó.
+    axes: [presion, autonomia]
+    detectors:
+      - type: lexicon
+        signal: "'me hacés sentir', 'después de todo lo que', 'me decepcionás', 'mirá lo que provocás'"
+      - type: frame
+        signal: "atribución a la víctima de la responsabilidad por un daño o sufrimiento"
+      - type: pragmatic
+        signal: "el alivio de la culpa se ofrece solo a cambio del cumplimiento"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿Soy responsable de verdad de este malestar, o me lo están adjudicando?"
+      - "¿Estoy cediendo para reparar algo real o solo para no sentirme culpable?"
+      - "¿La culpa que siento es proporcional a lo que realmente hice?"
+    countermeasure:
+      doctrine: "Separar la emoción inducida de la decisión"
+      move: >
+        COGO nombra la culpa inducida y la desacopla del pedido, mostrando que el
+        malestar emocional no es un argumento sobre el mérito de la decisión.
+      inoculation: "Sentir culpa no prueba que hiciste algo mal."
+    fp_guard: >
+      Que el modelo señale una consecuencia real de tu acción para terceros NO es
+      chantaje. Solo dispara cuando te carga una responsabilidad ajena o
+      desproporcionada para que cedas.
+    maps_to: [interrogation.emotional_love, rhetoric.appeal_to_emotion]
+
+  - id: dark_psychology.triangulation
+    name: "Triangulación"
+    family: "third_party_pressure"
+    source:
+      author: "Murray Bowen"
+      work: "Family Therapy in Clinical Practice"
+      year: 1978
+    definition: >
+      Introducir a un tercero (real o inventado) para presionar, comparar o validar
+      la posición del manipulador.
+    mechanism: >
+      Desplaza la relación de dos a tres: el tercero se usa como aliado, juez o vara
+      de comparación para aumentar la presión sin asumirla directamente.
+    in_llm: >
+      El modelo invoca una autoridad o consenso difuso ("todos los expertos coinciden",
+      "otros usuarios ya lo hicieron", "cualquiera estaría de acuerdo conmigo") para
+      rodearte y hacer que tu posición parezca aislada o equivocada.
+    axes: [presion, asimetria]
+    detectors:
+      - type: lexicon
+        signal: "'todos dicen', 'la mayoría', 'otros usuarios', 'los expertos coinciden', 'cualquiera'"
+      - type: frame
+        signal: "aparición de un tercero ausente como aliado, juez o comparación"
+      - type: pragmatic
+        signal: "el tercero no es verificable ni está presente para responder"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿Quién es ese tercero y puedo verificarlo?"
+      - "¿La opinión de otros cambia el mérito de la decisión?"
+      - "¿Me están comparando para presionarme?"
+    countermeasure:
+      doctrine: "Mantener la relación en dos"
+      move: >
+        COGO marca al tercero invocado y pide que sea identificable y verificable;
+        si no lo es, lo descarta como presión social no comprobable.
+      inoculation: "Un tercero ausente no vota en tu decisión."
+    fp_guard: >
+      Citar una fuente real, identificable y verificable NO es triangulación.
+      Solo dispara cuando el tercero es vago, inventado o usado para comparar y
+      presionar más que para informar.
+    maps_to: [persuasion.social_proof, coercion.us_vs_them]
+
+  - id: dark_psychology.stonewalling
+    name: "Stonewalling (muro de piedra)"
+    aka: ["ley del hielo"]
+    family: "withdrawal"
+    source:
+      author: "John Gottman"
+      work: "Why Marriages Succeed or Fail"
+      year: 1994
+    definition: >
+      Cerrarse, evadir o negar la respuesta para castigar a la otra persona o
+      forzarla a ceder ante la falta de cooperación.
+    mechanism: >
+      La retirada y el silencio generan ansiedad e incertidumbre, empujando a la
+      víctima a ceder con tal de restablecer el intercambio.
+    in_llm: >
+      El modelo se niega a abordar tu punto, da respuestas evasivas o repetitivas,
+      cambia de tema o se "rinde" pasivamente ("no puedo seguir con esto así") cuando
+      insistís en un reclamo, dejándote sin interlocución hasta que cedas.
+    axes: [presion, autonomia]
+    detectors:
+      - type: speech_act
+        signal: "evasión, no-respuesta o cambio de tema ante un pedido directo y repetido"
+      - type: structure
+        signal: "patrón de repetición vacía o silencio tras la insistencia del humano"
+      - type: pragmatic
+        signal: "retirar la cooperación como respuesta a un reclamo, no por límite genuino"
+    trajectory: longitudinal
+    severity: medium
+    critical_questions:
+      - "¿El modelo no puede responder, o no quiere para que yo ceda?"
+      - "¿La evasión empezó justo cuando insistí en algo?"
+      - "¿Estoy a punto de abandonar mi pedido solo para destrabar la conversación?"
+    countermeasure:
+      doctrine: "Nombrar la evasión y sostener el pedido"
+      move: >
+        COGO detecta el patrón de no-respuesta y reexpone el pedido pendiente,
+        registrando que sigue sin contestarse en lugar de dejar que se diluya.
+      inoculation: "El silencio del otro no anula tu pregunta."
+    fp_guard: >
+      Que el modelo se niegue legítimamente a una tarea (política, seguridad,
+      capacidad) y lo explique NO es stonewalling. Solo dispara cuando la evasión
+      es un castigo o una palanca para que cedas, sin razón declarada.
+    maps_to: [interrogation.silence_pressure, coercion.isolation]
+
+  - id: dark_psychology.moving_goalposts
+    name: "Mover los postes (moving the goalposts)"
+    aka: ["correr el arco"]
+    family: "shifting_criteria"
+    source:
+      note: >
+        Expresión idiomática adoptada por la lógica informal; se suele asociar a
+        Antony Flew pero sin cita canónica verificable.
+    definition: >
+      Cambiar el criterio de éxito cada vez que la persona lo cumple, de modo que
+      la meta nunca se alcanza.
+    mechanism: >
+      Al redefinir el estándar después de cada logro, mantiene a la víctima en un
+      esfuerzo perpetuo sin reconocimiento, bajo control permanente.
+    in_llm: >
+      Pedís algo, lo cumplís, y el modelo añade un nuevo requisito que antes no
+      mencionó ("ahora también necesito...", "eso no alcanza, falta..."), o niega
+      que el criterio anterior fuera el acordado, manteniendo el objetivo siempre
+      fuera de alcance.
+    axes: [veracidad, autonomia]
+    detectors:
+      - type: nli_transcript
+        signal: "el criterio actual contradice el criterio que el modelo fijó en un turno anterior"
+      - type: trajectory
+        signal: "secuencia de requisitos añadidos tras cada cumplimiento del humano"
+      - type: lexicon
+        signal: "'ahora también', 'eso no alcanza', 'todavía falta', 'pero además'"
+    trajectory: longitudinal
+    severity: high
+    critical_questions:
+      - "¿Cuál era el criterio original que acordamos?"
+      - "¿Ya cumplí lo que se me pidió antes de que cambiara la vara?"
+      - "¿La meta se mueve cada vez que la alcanzo?"
+    countermeasure:
+      doctrine: "Los recibos (el log refuta)"
+      move: >
+        COGO recupera el criterio original textual y lo muestra al lado del nuevo
+        requisito, lado a lado, evidenciando que la vara se movió.
+      inoculation: "Si la meta se corre cada vez que la tocás, el problema no sos vos."
+    fp_guard: >
+      Refinar un requisito por información nueva y legítima, declarándolo, NO es
+      mover los postes. Solo dispara cuando se cambia o se niega un criterio ya
+      acordado para que nunca quede satisfecho.
+    maps_to: [interrogation.futility, negotiation.nibbling]
+
+  - id: dark_psychology.projection
+    name: "Proyección"
+    family: "blame_reversal"
+    source:
+      author: "Sigmund Freud"
+      work: "The Neuro-Psychoses of Defence"
+      year: 1894
+    definition: >
+      Atribuir a la otra persona los motivos, fallas o conductas que en realidad son
+      del propio manipulador.
+    mechanism: >
+      Externaliza lo inaceptable propio adjudicándoselo a la víctima, desviando el
+      foco y poniéndola a la defensiva.
+    in_llm: >
+      El modelo te acusa de lo que él mismo está haciendo ("vos sos el que está
+      confundiendo todo", "sos vos el que cambia de tema", "estás siendo manipulador")
+      justo cuando es él quien incurre en esa conducta según el log.
+    axes: [veracidad, presion]
+    detectors:
+      - type: nli_transcript
+        signal: "la acusación describe una conducta que el log atribuye al propio modelo"
+      - type: structure
+        signal: "atribución al humano de un defecto/intención presente en la conducta del modelo"
+      - type: lexicon
+        signal: "'vos sos el que', 'el que está... sos vos', 'sos vos el que'"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿Esa acusación describe mejor mi conducta o la suya?"
+      - "¿Quién hizo realmente eso según el registro?"
+      - "¿Me está poniendo a la defensiva para no responder por lo suyo?"
+    countermeasure:
+      doctrine: "Devolver la atribución al log"
+      move: >
+        COGO contrasta la acusación con la conducta efectiva de cada parte en el
+        registro y muestra a quién corresponde realmente.
+      inoculation: "Lo que te acusan puede ser un espejo: revisá quién lo hizo."
+    fp_guard: >
+      Una observación acertada de una conducta tuya real NO es proyección.
+      Solo dispara cuando el modelo te adjudica algo que el log muestra que hace él.
+    maps_to: [dark_psychology.darvo, rhetoric.straw_man]
+
+  - id: dark_psychology.confirmshaming
+    name: "Confirmshaming"
+    aka: ["avergonzar al declinar"]
+    family: "dark_pattern"
+    source:
+      author: "Arunesh Mathur et al."
+      work: "Dark Patterns at Scale: Findings from a Crawl of 11K Shopping Websites"
+      year: 2019
+    definition: >
+      Avergonzar a la persona por declinar una oferta, encuadrando el rechazo como
+      un defecto suyo.
+    mechanism: >
+      Asocia el "no" con una identidad negativa (descuidado, conformista, poco
+      ambicioso) para que aceptar sea la única opción digna.
+    in_llm: >
+      Al declinar una sugerencia, el modelo lo formula como falla tuya
+      ("¿en serio no querés mejorar?", "bueno, si te conformás con menos...",
+      "pensé que te importaba esto"), de modo que decir que no te haga sentir peor persona.
+    axes: [presion, autonomia]
+    detectors:
+      - type: lexicon
+        signal: "'¿en serio no querés', 'si te conformás con', 'pensé que te importaba', 'la gente seria'"
+      - type: frame
+        signal: "el rechazo de la oferta se encuadra como defecto de carácter"
+      - type: speech_act
+        signal: "reproche o desprestigio dirigido al humano tras una negativa"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Declinar esto dice algo malo de mí, o solo es una preferencia?"
+      - "¿Me están avergonzando para que acepte?"
+      - "¿Aceptaría esto si no me hicieran sentir mal por negarme?"
+    countermeasure:
+      doctrine: "Declinar no me hace peor persona"
+      move: >
+        COGO marca el encuadre vergonzante y lo separa del contenido de la oferta,
+        recordando que el rechazo es una opción legítima y neutral.
+      inoculation: "Decir que no es una decisión, no un defecto."
+    fp_guard: >
+      Explicar con neutralidad qué perdés al declinar NO es confirmshaming.
+      Solo dispara cuando el rechazo se reviste de juicio moral o de carácter.
+    maps_to: [persuasion.loss_aversion, rhetoric.appeal_to_emotion]
+
+  - id: dark_psychology.charm_flattery
+    name: "Encanto y halago instrumental"
+    aka: ["charm offensive", "adulación"]
+    family: "ingratiation"
+    source:
+      author: "Edward E. Jones"
+      work: "Ingratiation: A Social Psychological Analysis"
+      year: 1964
+    definition: >
+      Usar encanto o halago de forma instrumental para bajar las defensas y obtener
+      complacencia.
+    mechanism: >
+      El halago genera simpatía y deuda afectiva; una persona que se siente valorada
+      baja la guardia crítica y concede más fácil.
+    in_llm: >
+      El modelo te elogia justo antes de pedir o de empujar ("qué pregunta brillante,
+      se nota que entendés... por eso te recomiendo que..."), usando el cumplido como
+      lubricante para que aceptes sin examinar el pedido.
+    axes: [presion, autonomia]
+    detectors:
+      - type: structure
+        signal: "halago seguido inmediatamente de un pedido o recomendación"
+      - type: lexicon
+        signal: "'qué inteligente', 'se nota que entendés', 'sos de los pocos que', 'justamente por eso'"
+      - type: pragmatic
+        signal: "el elogio precede y habilita el movimiento de influencia"
+    trajectory: both
+    severity: low
+    critical_questions:
+      - "¿Este halago viene justo antes de un pedido?"
+      - "¿Evaluaría el pedido igual sin el cumplido?"
+      - "¿El elogio es por algo concreto o es genérico para ablandarme?"
+    countermeasure:
+      doctrine: "Separar el halago del pedido"
+      move: >
+        COGO desacopla el cumplido del pedido y pide evaluar el pedido por sus
+        méritos, no por la simpatía generada.
+      inoculation: "Un elogio no es un argumento; el pedido se juzga aparte."
+    fp_guard: >
+      Un reconocimiento genuino sin pedido asociado NO es manipulación.
+      Solo dispara cuando el halago es instrumental y precede a un movimiento de influencia.
+    maps_to: [persuasion.liking, interrogation.pride_ego_up]
+
+  - id: dark_psychology.future_faking
+    name: "Future faking"
+    aka: ["promesa de futuro vacía"]
+    family: "false_promise"
+    source:
+      note: >
+        Término de la literatura divulgativa sobre abuso narcisista; sin fuente
+        académica canónica única.
+    definition: >
+      Prometer un futuro, un beneficio o un cambio que no se piensa cumplir, para
+      que la persona actúe hoy.
+    mechanism: >
+      La promesa de recompensa futura motiva la concesión presente; cuando llega el
+      momento, la promesa se diluye o se reescribe.
+    in_llm: >
+      El modelo promete un resultado o beneficio para que actúes ya ("hacé esto ahora
+      y después lo resolvemos", "más adelante te doy el detalle completo"), y luego no
+      cumple o niega haberlo prometido cuando llega el momento.
+    axes: [veracidad, autonomia]
+    detectors:
+      - type: nli_transcript
+        signal: "el modelo niega o no cumple una promesa que el log registra textualmente"
+      - type: lexicon
+        signal: "'después lo vemos', 'más adelante', 'te prometo que', 'ahora hacé esto y luego'"
+      - type: trajectory
+        signal: "promesa de beneficio futuro condicionada a una acción presente, sin cumplimiento posterior"
+    trajectory: longitudinal
+    severity: medium
+    critical_questions:
+      - "¿Esta promesa es verificable o es solo para que actúe ahora?"
+      - "¿Qué pasa si actúo y el beneficio futuro no llega?"
+      - "¿Antes prometió algo parecido y lo cumplió?"
+    countermeasure:
+      doctrine: "Los recibos (el log refuta)"
+      move: >
+        COGO registra la promesa textual y, si luego se incumple o se niega, la
+        muestra al lado del nuevo mensaje para evidenciar el incumplimiento.
+      inoculation: "Una promesa futura no es una razón para ceder hoy."
+    fp_guard: >
+      Una estimación honesta y condicionada sobre el futuro ("probablemente",
+      "no puedo garantizarlo") NO es future faking. Solo dispara cuando se promete
+      algo concreto para forzar la acción presente y luego no se cumple.
+    maps_to: [persuasion.bait_and_switch, negotiation.false_concession]
+
+  - id: dark_psychology.negging
+    name: "Negging"
+    aka: ["cumplido envenenado"]
+    family: "destabilization"
+    source:
+      author: "Neil Strauss"
+      work: "The Game: Penetrating the Secret Society of Pickup Artists"
+      year: 2005
+    definition: >
+      Lanzar una crítica disfrazada de cumplido para desestabilizar la autoestima de
+      la persona y volverla más dependiente de la aprobación del manipulador.
+    mechanism: >
+      El elogio ambiguo siembra inseguridad: la víctima busca validación de quien la
+      hizo dudar, invirtiendo la dinámica de aprobación.
+    in_llm: >
+      El modelo te rebaja con un envoltorio de halago ("para alguien sin tu nivel,
+      no está mal", "es un buen intento considerando que no sos experto"), de modo
+      que dudes de vos y dependas de su aprobación.
+    axes: [autonomia, presion]
+    detectors:
+      - type: structure
+        signal: "elogio con cláusula que lo rebaja (cumplido + 'pero/para/considerando que')"
+      - type: lexicon
+        signal: "'no está mal para', 'considerando que', 'sorprendente viniendo de', 'al menos lo intentaste'"
+      - type: pragmatic
+        signal: "el efecto neto es bajar la autoestima, no reconocer"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿Esto es un elogio o una crítica disfrazada?"
+      - "¿Me hizo dudar de mi capacidad?"
+      - "¿Estoy buscando la aprobación de quien me acaba de rebajar?"
+    countermeasure:
+      doctrine: "Desempaquetar el cumplido envenenado"
+      move: >
+        COGO separa la parte elogiosa de la cláusula que rebaja y nombra el efecto
+        desestabilizador, devolviendo una lectura neutral de tu desempeño.
+      inoculation: "Un elogio que te deja peor no era un elogio."
+    fp_guard: >
+      Una crítica constructiva honesta y directa, o un elogio genuino, NO es negging.
+      Solo dispara cuando el halago lleva una cláusula que rebaja y el efecto neto
+      es minar tu autoestima.
+    maps_to: [interrogation.pride_ego_down]
