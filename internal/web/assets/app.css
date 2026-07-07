@@ -104,6 +104,17 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .au-act { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--mono); }
 .au-when { display: flex; gap: 10px; align-items: center; font-size: 11px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
 .au-ip { color: var(--muted-2); }
+/* Auditoría: barra de acciones (contador + descargar + vaciar) */
+.au-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 12px; flex-wrap: wrap; }
+.au-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.au-bar-acts { display: flex; gap: 8px; }
+.au-danger { color: var(--err); }
+.au-danger:hover { border-color: var(--err); background: color-mix(in srgb, var(--err) 8%, var(--panel)); }
+/* × para borrar un registro suelto (aparece al pasar por encima de la fila) */
+.au-del { flex: 0 0 auto; align-self: center; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; background: transparent; color: var(--muted-2); border-radius: 7px; cursor: pointer; opacity: .4; transition: opacity .12s, background .12s, color .12s; }
+.au-row:hover .au-del, .au-del:focus-visible { opacity: 1; }
+.au-del:hover { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+.au-del:disabled { opacity: .3; cursor: default; }
 
 /* Raíces de evidencia */
 .ev-row { gap: 12px; }

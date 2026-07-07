@@ -844,13 +844,51 @@ async function openAudit() {
   x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   card.appendChild(x);
   card.appendChild(el("h2", "modal-tit", "Auditoría MCP"));
-  card.appendChild(el("p", "tk-intro", "Registro append-only de cada llamada MCP y cada escritura por API: quién, qué herramienta, cuándo y desde qué IP. Se guarda en .cogo/audit.jsonl."));
+  card.appendChild(el("p", "tk-intro", "Registro append-only de cada llamada MCP y cada escritura por API: quién, qué herramienta, cuándo y desde qué IP. Se guarda en .cogo/audit.jsonl y se auto-recorta para no crecer sin fin."));
+  const bar = el("div", "au-bar");
+  const count = el("div", "au-count");
+  const acts = el("div", "au-bar-acts");
+  const dl = el("button", "mini ghost", "descargar");
+  const clr = el("button", "mini ghost au-danger", "vaciar");
+  acts.appendChild(dl); acts.appendChild(clr);
+  bar.appendChild(count); bar.appendChild(acts);
+  card.appendChild(bar);
   const list = el("div", "tk-list au-list");
   card.appendChild(list);
-  const r = await api("/api/audit").catch(() => null);
-  const items = (r && r.entries) || [];
-  if (!items.length) list.appendChild(el("div", "tk-empty", "Todavía no hay actividad registrada."));
-  else items.forEach(e => list.appendChild(auditRow(e)));
+
+  async function refresh() {
+    const r = await api("/api/audit").catch(() => null);
+    const items = (r && r.entries) || [];
+    const total = (r && r.total) || 0;
+    const cap = r ? (r.cap || 0) : 0;
+    let mt = total + (total === 1 ? " registro" : " registros");
+    if (total > items.length) mt += " · mostrando los últimos " + items.length;
+    mt += cap > 0 ? " · se recorta solo a " + cap : " · sin límite";
+    count.textContent = mt;
+    dl.disabled = clr.disabled = total === 0;
+    list.textContent = "";
+    if (!items.length) list.appendChild(el("div", "tk-empty", "Todavía no hay actividad registrada."));
+    else items.forEach(e => list.appendChild(auditRow(e, refresh)));
+  }
+  await refresh();
+
+  dl.addEventListener("click", async () => {
+    const tok = localStorage.getItem("cogo.token");
+    const res = await fetch("/api/audit?download=1", { headers: tok ? { Authorization: "Bearer " + tok } : {} }).catch(() => null);
+    if (!res || !res.ok) return;
+    const text = await res.text();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "application/x-ndjson" }));
+    a.download = "cogo-audit.jsonl"; a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  clr.addEventListener("click", async () => {
+    const ok = await confirmDialog({ title: "Vaciar la auditoría", message: "Se borra TODO el registro de actividad (.cogo/audit.jsonl). No se puede deshacer — si la necesitás, descargá una copia antes.", confirmText: "Vaciar", danger: true });
+    if (!ok) return;
+    await api("/api/audit", { method: "DELETE" }).catch(() => null);
+    await refresh();
+  });
+
   back.appendChild(card);
   document.body.appendChild(back);
   requestAnimationFrame(() => back.classList.add("show"));
@@ -871,7 +909,7 @@ function callerKind(c) {
   return [c, "au-token"];
 }
 
-function auditRow(e) {
+function auditRow(e, refresh) {
   const row = el("div", "au-row");
   const [who, kls] = callerKind(e.caller);
   const badge = el("span", "au-who " + kls, who);
@@ -886,6 +924,15 @@ function auditRow(e) {
   if (e.ip) when.appendChild(el("span", "au-ip", e.ip));
   mid.appendChild(when);
   row.appendChild(mid);
+  const del = el("button", "au-del", "");
+  del.title = "Borrar este registro";
+  del.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  del.addEventListener("click", async () => {
+    del.disabled = true;
+    await api("/api/audit", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify(e) }).catch(() => null);
+    if (refresh) await refresh();
+  });
+  row.appendChild(del);
   return row;
 }
 

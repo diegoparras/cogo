@@ -289,25 +289,102 @@ func (s *Server) handleEvidenceRoots(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleAudit returns the most recent MCP/API audit entries (who called what).
-func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "GET only", http.StatusMethodNotAllowed)
-		return
-	}
-	b, err := os.ReadFile(filepath.Join(s.dir, ".cogo", "audit.jsonl"))
-	if err != nil {
-		writeJSON(w, map[string]any{"entries": []any{}})
-		return
-	}
-	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
-	entries := []json.RawMessage{}
-	for i := len(lines) - 1; i >= 0 && len(entries) < 300; i-- {
-		if strings.TrimSpace(lines[i]) != "" {
-			entries = append(entries, json.RawMessage(lines[i]))
+// auditCap mirrors the writer-side cap (cmd/cogo defaultAuditMax) so the visor
+// can tell the operator how many entries the log retains. Kept in sync by hand.
+func auditCap() int {
+	if v := os.Getenv("COGO_AUDIT_MAX"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
 		}
 	}
-	writeJSON(w, map[string]any{"entries": entries})
+	return 5000
+}
+
+// auditLine is the parsed shape of one audit entry, used to match a single row
+// for deletion. All fields are strings so two entries compare with ==.
+type auditLine struct {
+	Time   string `json:"time"`
+	Caller string `json:"caller"`
+	Tool   string `json:"tool"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	IP     string `json:"ip"`
+}
+
+// handleAudit serves and manages the MCP/API audit trail:
+//
+//	GET               → the most recent 300 entries + total + cap
+//	GET  ?download=1  → the raw audit.jsonl as a file attachment
+//	DELETE            → clear the whole log (no body)
+//	DELETE  +body     → remove the single entry matching the posted row
+func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Join(s.dir, ".cogo", "audit.jsonl")
+	switch r.Method {
+	case http.MethodGet:
+		b, _ := os.ReadFile(path)
+		if r.URL.Query().Get("download") != "" {
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			w.Header().Set("Content-Disposition", `attachment; filename="cogo-audit.jsonl"`)
+			_, _ = w.Write(b)
+			return
+		}
+		lines := auditLines(b)
+		entries := []json.RawMessage{}
+		for i := len(lines) - 1; i >= 0 && len(entries) < 300; i-- {
+			entries = append(entries, json.RawMessage(lines[i]))
+		}
+		writeJSON(w, map[string]any{"entries": entries, "total": len(lines), "cap": auditCap()})
+	case http.MethodDelete:
+		var target auditLine
+		hasTarget := json.NewDecoder(r.Body).Decode(&target) == nil &&
+			(target.Time != "" || target.Path != "" || target.Tool != "")
+		if !hasTarget { // no body → clear everything
+			_ = os.Remove(path)
+			writeJSON(w, map[string]any{"ok": true, "total": 0})
+			return
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": true, "removed": false, "total": 0})
+			return
+		}
+		lines := auditLines(b)
+		kept := make([]string, 0, len(lines))
+		removed := false
+		for _, ln := range lines {
+			if !removed {
+				var e auditLine
+				if json.Unmarshal([]byte(ln), &e) == nil && e == target {
+					removed = true
+					continue
+				}
+			}
+			kept = append(kept, ln)
+		}
+		out := ""
+		if len(kept) > 0 {
+			out = strings.Join(kept, "\n") + "\n"
+		}
+		_ = os.WriteFile(path, []byte(out), 0o644)
+		writeJSON(w, map[string]any{"ok": true, "removed": removed, "total": len(kept)})
+	default:
+		http.Error(w, "GET or DELETE", http.StatusMethodNotAllowed)
+	}
+}
+
+// auditLines splits a jsonl blob into its non-empty lines.
+func auditLines(b []byte) []string {
+	if len(b) == 0 {
+		return nil
+	}
+	raw := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	out := make([]string, 0, len(raw))
+	for _, ln := range raw {
+		if strings.TrimSpace(ln) != "" {
+			out = append(out, ln)
+		}
+	}
+	return out
 }
 
 // handleTokens manages the issued MCP access tokens: GET lists them (no

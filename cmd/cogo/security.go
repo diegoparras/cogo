@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -92,10 +93,53 @@ type auditEntry struct {
 	IP     string `json:"ip"`
 }
 
+// defaultAuditMax caps the audit log so it can't grow without bound: the writer
+// keeps only the most recent N entries (override with COGO_AUDIT_MAX; 0 = keep
+// everything). Kept in sync with the display cap in internal/web (handleAudit).
+const defaultAuditMax = 5000
+
+// auditMax reads the entry cap from the environment (default defaultAuditMax).
+// A value <= 0 disables trimming (unbounded, the old behavior).
+func auditMax() int {
+	if v := os.Getenv("COGO_AUDIT_MAX"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return defaultAuditMax
+}
+
+// trimAudit keeps only the last max lines of the audit log, rewriting it
+// atomically. A no-op when the file is already within budget or max <= 0.
+func trimAudit(path string, max int) {
+	if max <= 0 {
+		return
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	if len(lines) <= max {
+		return
+	}
+	keep := lines[len(lines)-max:]
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, []byte(strings.Join(keep, "\n")+"\n"), 0o644) == nil {
+		_ = os.Rename(tmp, path)
+	}
+}
+
 // auditMiddleware records MCP tool calls and API writes to .cogo/audit.jsonl. It
-// runs after the auth gate, so auth.Caller(r) identifies who did it.
+// runs after the auth gate, so auth.Caller(r) identifies who did it. The log is
+// append-only but self-trimming: it's capped at auditMax() entries so it can't
+// grow forever (trimmed at startup and periodically as it's written).
 func auditMiddleware(dir string) func(http.Handler) http.Handler {
 	var mu sync.Mutex
+	path := filepath.Join(dir, ".cogo", "audit.jsonl")
+	max := auditMax()
+	trimAudit(path, max) // reclaim on boot in case the cap shrank
+	sinceTrim := 0
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var tool string
@@ -107,7 +151,8 @@ func auditMiddleware(dir string) func(http.Handler) http.Handler {
 				if tool = mcpToolName(body); tool != "" {
 					record = true
 				}
-			} else if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != http.MethodGet {
+			} else if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != http.MethodGet &&
+				!strings.HasPrefix(r.URL.Path, "/api/audit") { // don't audit audit-management itself
 				record = true
 			}
 			if record {
@@ -117,10 +162,14 @@ func auditMiddleware(dir string) func(http.Handler) http.Handler {
 				}
 				e := auditEntry{Time: time.Now().UTC().Format(time.RFC3339), Caller: caller, Tool: tool, Method: r.Method, Path: r.URL.Path, IP: clientIP(r)}
 				mu.Lock()
-				if f, err := os.OpenFile(filepath.Join(dir, ".cogo", "audit.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+				if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 					b, _ := json.Marshal(e)
 					_, _ = f.Write(append(b, '\n'))
 					_ = f.Close()
+				}
+				if sinceTrim++; max > 0 && sinceTrim >= 200 {
+					sinceTrim = 0
+					trimAudit(path, max)
 				}
 				mu.Unlock()
 			}
