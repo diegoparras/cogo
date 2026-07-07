@@ -109,6 +109,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/contradictions", s.handleContradictions)
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/settings/test", s.handleTestLLM)
+	mux.HandleFunc("/api/settings/test-embed", s.handleTestEmbed)
 	mux.HandleFunc("/api/settings/models", s.handleModels)
 	mux.HandleFunc("/api/guard", s.handleGuard)
 	mux.HandleFunc("/api/xray", s.handleXray)
@@ -1007,6 +1008,50 @@ func (s *Server) handleTestLLM(w http.ResponseWriter, r *http.Request) {
 	}
 	s.flushUsage()
 	writeJSON(w, map[string]any{"ok": true, "name": p.Name()})
+}
+
+// handleTestEmbed checks the embeddings model separately from the chat one:
+// it embeds a tiny text and reports the vector dimension. base/key/embed_model
+// come from the request so it works before saving (blank base/key reuse saved).
+func (s *Server) handleTestEmbed(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var in llmSettings
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	base, key, em := strings.TrimSpace(in.BaseURL), in.APIKey, strings.TrimSpace(in.EmbedModel)
+	if saved, err := s.readSettings(); err == nil {
+		if base == "" {
+			base = saved.BaseURL
+		}
+		if key == "" && base == saved.BaseURL {
+			key = saved.APIKey
+		}
+		if em == "" {
+			em = saved.EmbedModel
+		}
+	}
+	if base == "" || em == "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "falta el servidor y/o el modelo de embeddings"})
+		return
+	}
+	p := &llm.OpenAICompatible{BaseURL: base, EmbedModel: em, APIKey: key, Referer: os.Getenv("COGO_LLM_REFERER")}
+	vecs, err := p.Embed(r.Context(), []string{"cogo embeddings connectivity test"})
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	dim := 0
+	if len(vecs) > 0 {
+		dim = len(vecs[0])
+	}
+	if dim == 0 {
+		writeJSON(w, map[string]any{"ok": false, "error": "el endpoint respondió pero sin vector"})
+		return
+	}
+	s.flushUsage()
+	writeJSON(w, map[string]any{"ok": true, "dim": dim, "model": em})
 }
 
 // handleModels lists the models an endpoint exposes and flags which are a good

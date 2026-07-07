@@ -134,8 +134,11 @@
       </div>
       <div class="field">
         <label class="field-lbl">Modelo de embeddings <span class="field-opt">· opcional</span></label>
-        <input id="setEmbed" placeholder="ej: text-embedding-3-small">
-        <div class="model-hint">Prende la <b>búsqueda semántica</b> (encontrar notas por significado, no por palabra). Usa el mismo servidor y key.</div>
+        <div class="model-row">
+          <input id="setEmbed" placeholder="ej: text-embedding-3-small">
+          <button class="mini ghost" id="setTestEmbed" type="button">probar</button>
+        </div>
+        <div class="model-hint" id="setEmbedHint">Prende la <b>búsqueda semántica</b> (encontrar notas por significado, no por palabra). Usa el mismo servidor y key.</div>
       </div>
       <div class="field"><label class="field-lbl">API key</label>
         <div class="pass-wrap">

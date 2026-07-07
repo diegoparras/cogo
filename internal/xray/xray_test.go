@@ -8,8 +8,8 @@ func TestAnalyzeGapMeter(t *testing.T) {
 		wantColor string
 		wantEv    string
 	}{
-		{"Sin duda el servidor siempre responde en menos de 10ms.", "red", "none"},   // boosted + no basis
-		{"Esta librería es claramente la mejor que existe.", "red", "none"},          // opinion (not falsifiable)
+		{"Sin duda el servidor siempre responde en menos de 10ms.", "red", "none"}, // boosted + no basis
+		{"Esta librería es claramente la mejor que existe.", "red", "none"},        // opinion (not falsifiable)
 		{"Según la documentación oficial, el puerto por defecto es 8080.", "yellow", "reported"},
 		{"Probablemente el bug está en el módulo de red del worker.", "yellow", "none"}, // hedged
 		{"Verifiqué en el log que la conexión se cae a los 30 segundos.", "yellow", "observed"},

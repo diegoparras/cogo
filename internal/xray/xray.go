@@ -36,7 +36,7 @@ type Report struct {
 }
 
 var (
-	hedges = []string{"probablemente", "quizás", "quizá", "tal vez", "capaz", "creo que", "me parece", "parece que", "podría", "puede que", "en general", "suele", "a veces", "aparentemente", "diría", "posiblemente", "estimo", "aproximadamente", "más o menos", "no estoy seguro", "i think", "probably", "maybe", "might", "seems"}
+	hedges   = []string{"probablemente", "quizás", "quizá", "tal vez", "capaz", "creo que", "me parece", "parece que", "podría", "puede que", "en general", "suele", "a veces", "aparentemente", "diría", "posiblemente", "estimo", "aproximadamente", "más o menos", "no estoy seguro", "i think", "probably", "maybe", "might", "seems"}
 	boosters = []string{"seguro", "definitivamente", "siempre", "nunca", "obviamente", "claramente", "sin duda", "por supuesto", "garantizado", "100%", "totalmente", "indudablemente", "es un hecho", "sin lugar a dudas", "certeza", "definitely", "always", "never", "obviously", "guaranteed", "certainly"}
 	observed = []string{"corrí", "ejecuté", "medí", "el log", "los logs", "el output", "la salida", "verifiqué", "probé", "el test", "el comando", "confirmé", "reproduje", "ran ", "i ran", "the log", "the output", "i tested", "i verified"}
 	reported = []string{"según", "fuente", "documenta", "documentación", "el paper", "el estudio", "reporta", "http://", "https://", "cita", "referencia", "la doc", "according to", "the docs", "source:"}

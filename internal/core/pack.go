@@ -11,15 +11,15 @@ import (
 // agent consumes: green notes as fact, yellow flagged as probable, and red
 // physically quarantined into a "do not rely" section — never mixed in as fact.
 type Pack struct {
-	Query    string
-	Markdown string
-	Tokens   int // estimated tokens of the included note blocks
+	Query     string
+	Markdown  string
+	Tokens    int // estimated tokens of the included note blocks
 	RawTokens int // tokens it would cost to read every matching note in full
-	Greens   int
-	Yellows  int
-	Reds     int
-	Mistakes int
-	Dropped  int // notes left out to stay under budget
+	Greens    int
+	Yellows   int
+	Reds      int
+	Mistakes  int
+	Dropped   int // notes left out to stay under budget
 }
 
 // PackOptions parameterizes a pack. Budget is an approximate token ceiling on

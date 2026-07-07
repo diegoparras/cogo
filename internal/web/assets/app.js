@@ -1658,6 +1658,14 @@ function initSettings() {
     st.textContent = r.ok ? ("conecta" + (r.name ? " — " + r.name : "")) : ("no conecta: " + r.error);
     st.className = "set-status " + (r.ok ? "ok" : "bad");
   });
+  $("#setTestEmbed").addEventListener("click", async () => {
+    const hint = $("#setEmbedHint");
+    hint.textContent = "probando embeddings…"; hint.className = "model-hint";
+    const body = JSON.stringify({ base_url: $("#setBase").value.trim(), embed_model: $("#setEmbed").value.trim(), api_key: $("#setKey").value });
+    const r = await api("/api/settings/test-embed", { method: "POST", headers: { "Content-Type": "application/json" }, body }).catch(() => null);
+    if (r && r.ok) { hint.textContent = "✓ conecta — vectores de " + r.dim + " dimensiones (" + r.model + ")"; hint.className = "model-hint ok"; }
+    else { hint.textContent = "✗ no conecta: " + ((r && r.error) || "error"); hint.className = "model-hint bad"; }
+  });
   $("#setSave").addEventListener("click", async () => { await saveSettings(); m.classList.add("hidden"); render(); });
 }
 
