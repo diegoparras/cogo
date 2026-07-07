@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 )
@@ -13,6 +14,7 @@ type Pack struct {
 	Query    string
 	Markdown string
 	Tokens   int // estimated tokens of the included note blocks
+	RawTokens int // tokens it would cost to read every matching note in full
 	Greens   int
 	Yellows  int
 	Reds     int
@@ -37,32 +39,40 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	hidden := Hidden(vault)
 	qterms := terms(opts.Query)
 
+	// First pass: the candidate pool (visible, project-filtered). Its stats feed
+	// the BM25 ranker, and its full bodies are the "read it all" baseline used for
+	// the token-savings figure.
+	var pool []*Note
+	for id, n := range vault {
+		if hidden[id] || (opts.Project != "" && n.Project != opts.Project) {
+			continue // archived/retracted/superseded never feed an agent's context
+		}
+		pool = append(pool, n)
+	}
+	rk := newRanker(pool, qterms)
+
 	type cand struct {
 		n     *Note
 		v     Verdict
-		score int
+		score float64
 		block string
 		toks  int
 	}
 	var cands []cand
-	for id, n := range vault {
-		if hidden[id] {
-			continue // archived/retracted/superseded never feed an agent's context
+	rawTokens := 0 // cost of reading the RELEVANT notes in full (the pack's alternative)
+	for _, n := range pool {
+		score := rk.score(n, qterms, opts.Today)
+		if len(qterms) > 0 && score <= 0 {
+			continue // a query was given but nothing matched
 		}
-		if opts.Project != "" && n.Project != opts.Project {
-			continue
-		}
-		score := relevance(n, qterms)
-		if len(qterms) > 0 && score == 0 {
-			continue
-		}
-		v := verdicts[id]
+		v := verdicts[n.ID]
 		block := renderBlock(n, v)
 		cands = append(cands, cand{n: n, v: v, score: score, block: block, toks: estimateTokens(block)})
+		rawTokens += estimateTokens(n.Body)
 	}
 
-	// Most trustworthy first (green, yellow, mistakes, red), then most relevant,
-	// then by id so the output is stable for prompt caching.
+	// Most trustworthy first (green, yellow, mistakes, red), then most relevant
+	// (BM25 + recency), then by id so the output is stable for prompt caching.
 	sort.Slice(cands, func(i, j int) bool {
 		if ri, rj := rank(cands[i].v.Color), rank(cands[j].v.Color); ri != rj {
 			return ri < rj
@@ -114,6 +124,11 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 		fmt.Fprintf(&b, " · %d omitted (budget)", dropped)
 	}
 	b.WriteString("\n")
+	// The point of the pack: consume this instead of re-reading the notes in full.
+	if rawTokens > running && running > 0 {
+		fmt.Fprintf(&b, "> _~%d tokens vs ~%d reading these notes in full — %.0f%% less._\n",
+			running, rawTokens, 100*(1-float64(running)/float64(rawTokens)))
+	}
 
 	writeSection(&b, "Verified — treat as fact", greens)
 	writeSection(&b, "Probable — likely, not certain", yellows)
@@ -125,14 +140,15 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	}
 
 	return Pack{
-		Query:    opts.Query,
-		Markdown: b.String(),
-		Tokens:   running,
-		Greens:   len(greens),
-		Yellows:  len(yellows),
-		Reds:     len(reds),
-		Mistakes: len(mistakes),
-		Dropped:  dropped,
+		Query:     opts.Query,
+		Markdown:  b.String(),
+		Tokens:    running,
+		RawTokens: rawTokens,
+		Greens:    len(greens),
+		Yellows:   len(yellows),
+		Reds:      len(reds),
+		Mistakes:  len(mistakes),
+		Dropped:   dropped,
 	}
 }
 
@@ -204,22 +220,88 @@ func terms(q string) []string {
 	return out
 }
 
-// relevance scores a note against the query terms. With no terms, everything is
-// equally relevant. This is the v1 "ripgrep suffices" retrieval; FTS5 is later.
-func relevance(n *Note, qterms []string) int {
-	if len(qterms) == 0 {
-		return 1
+// ranker scores notes against the query with Okapi BM25 (term saturation + IDF
+// + length normalization), so a note doesn't win just by repeating a word and a
+// rare, discriminating term counts more than a common one. Deterministic — no
+// model, no index to persist. A small recency term breaks ties toward fresher
+// notes; an id hit is boosted. With no query it orders newest-first.
+type ranker struct {
+	idf    map[string]float64
+	avgLen float64
+	k1, b  float64
+}
+
+func rankTokens(n *Note) []string { return terms(n.ID + " " + n.Project + " " + n.Type + " " + n.Body) }
+
+func newRanker(pool []*Note, qterms []string) *ranker {
+	r := &ranker{idf: map[string]float64{}, k1: 1.5, b: 0.75}
+	nDocs := float64(len(pool))
+	if nDocs == 0 {
+		return r
 	}
-	hay := strings.ToLower(n.ID + " " + n.Project + " " + n.Type + " " + n.Body)
-	id := strings.ToLower(n.ID)
-	score := 0
-	for _, t := range qterms {
-		score += strings.Count(hay, t)
-		if strings.Contains(id, t) {
-			score += 3 // a hit in the id is worth more than one in the body
+	df := map[string]int{}
+	var totalLen float64
+	for _, n := range pool {
+		toks := rankTokens(n)
+		totalLen += float64(len(toks))
+		seen := map[string]bool{}
+		for _, t := range toks {
+			if !seen[t] {
+				df[t]++
+				seen[t] = true
+			}
 		}
 	}
-	return score
+	r.avgLen = totalLen / nDocs
+	if r.avgLen == 0 {
+		r.avgLen = 1
+	}
+	for _, t := range qterms {
+		d := float64(df[t])
+		r.idf[t] = math.Log(1 + (nDocs-d+0.5)/(d+0.5)) // BM25 IDF, always > 0
+	}
+	return r
+}
+
+func (r *ranker) score(n *Note, qterms []string, today Date) float64 {
+	if len(qterms) == 0 {
+		return recencyBonus(n, today) // no query → newest-first
+	}
+	toks := rankTokens(n)
+	tf := map[string]int{}
+	for _, t := range toks {
+		tf[t]++
+	}
+	docLen := float64(len(toks))
+	idLow := strings.ToLower(n.ID)
+	var s float64
+	for _, t := range qterms {
+		f := float64(tf[t])
+		if f == 0 {
+			continue
+		}
+		idf := r.idf[t]
+		s += idf * (f * (r.k1 + 1) / (f + r.k1*(1-r.b+r.b*docLen/r.avgLen)))
+		if strings.Contains(idLow, t) {
+			s += 2 * idf // a hit in the id is worth more than one in the body
+		}
+	}
+	if s == 0 {
+		return 0
+	}
+	return s + 0.15*recencyBonus(n, today) // small recency tiebreak, never dominates
+}
+
+// recencyBonus decays from 1 (verified today) toward 0 over ~half a year.
+func recencyBonus(n *Note, today Date) float64 {
+	if n.LastVerified.IsZero() {
+		return 0
+	}
+	days := today.DaysSince(n.LastVerified)
+	if days < 0 {
+		days = 0
+	}
+	return 1.0 / (1.0 + float64(days)/180.0)
 }
 
 // Claim returns a note's headline claim, summarized — exported for faces and

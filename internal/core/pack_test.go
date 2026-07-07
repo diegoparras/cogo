@@ -106,3 +106,57 @@ func TestPackBudgetDropsNotes(t *testing.T) {
 		t.Errorf("a red was kept while higher-trust notes were dropped:\n%s", tight.Markdown)
 	}
 }
+
+// TestPackTokenSavings: with a long-bodied note the pack summarizes and reports
+// a real saving; with only short notes it does NOT claim one (the pack adds
+// structure/color there — the value isn't fewer tokens). Honesty either way.
+func TestPackTokenSavings(t *testing.T) {
+	long := map[string]*Note{
+		"big": {ID: "big", Type: "runbook", LastVerified: packToday,
+			Evidence: obs("run.sh:1"), Check: Check{Test: "run it", Status: "passed"},
+			Body: "## Claim\nDeploy steps.\n\n" + strings.Repeat("step: do a thing, then another thing, carefully. ", 60)},
+	}
+	p := BuildPack(long, nil, PackOptions{Today: packToday})
+	if p.RawTokens <= p.Tokens {
+		t.Fatalf("a long note should compress: pack=%d raw=%d", p.Tokens, p.RawTokens)
+	}
+	if !strings.Contains(p.Markdown, "less.") {
+		t.Errorf("digest should report the saving, got:\n%s", firstLine(p.Markdown))
+	}
+
+	// Short notes: no false saving claim.
+	sp := BuildPack(packVault(), nil, PackOptions{Today: packToday})
+	if strings.Contains(sp.Markdown, "less.") {
+		t.Errorf("short notes should NOT claim a token saving (raw=%d pack=%d)", sp.RawTokens, sp.Tokens)
+	}
+}
+
+// TestSearchBM25RareTerm: a rare, discriminating term outranks a common one —
+// the note carrying the rare term should come first.
+func TestSearchBM25RareTerm(t *testing.T) {
+	vault := map[string]*Note{
+		"a": {ID: "a", Type: "bug", LastVerified: packToday, Body: "## Claim\nthe worker uses redis widely, redis redis redis"},
+		"b": {ID: "b", Type: "bug", LastVerified: packToday, Body: "## Claim\nthe kafka consumer lags"},
+		"c": {ID: "c", Type: "bug", LastVerified: packToday, Body: "## Claim\nredis is common here too, redis"},
+	}
+	// "kafka" is rare (1 doc), "redis" is common (2 docs). Query both; the rare
+	// term must lift note b above the redis-heavy notes.
+	res := Search(vault, nil, "kafka redis", "", packToday, 0, false)
+	if len(res) == 0 || res[0].ID != "b" {
+		t.Errorf("rare-term note should rank first, got order %v", ids(res))
+	}
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+func ids(res []SearchResult) []string {
+	out := make([]string, len(res))
+	for i, r := range res {
+		out[i] = r.ID
+	}
+	return out
+}
