@@ -78,6 +78,14 @@ func Caller(r *http.Request) string {
 	return v
 }
 
+// CallerCtx is Caller for code that only has the context (e.g. an MCP tool
+// handler, whose ctx derives from the HTTP request the auth gate stamped). "" if
+// unset (stdio, or auth off).
+func CallerCtx(ctx context.Context) string {
+	v, _ := ctx.Value(callerKey).(string)
+	return v
+}
+
 type flow struct {
 	verifier string
 	nonce    string

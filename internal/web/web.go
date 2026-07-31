@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/diegoparras/cogo/internal/agentdocs"
 	"github.com/diegoparras/cogo/internal/agentsmd"
@@ -26,6 +27,7 @@ import (
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/history"
+	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/savings"
@@ -121,6 +123,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/tokens", s.handleTokens)
 	mux.HandleFunc("/api/audit", s.handleAudit)
 	mux.HandleFunc("/api/artifact", s.handleArtifact)
+	mux.HandleFunc("/api/leases", s.handleLeases)
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
@@ -455,6 +458,17 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "GET or POST", http.StatusMethodNotAllowed)
 	}
+}
+
+// handleLeases lists the currently-held coordination leases (who holds what,
+// until when). Read-only visibility for the visor; agents acquire/release via
+// the MCP `lease` tool.
+func (s *Server) handleLeases(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, map[string]any{"leases": lease.Open(s.dir).List(time.Now())})
 }
 
 // handleTokens manages the issued MCP access tokens: GET lists them (no

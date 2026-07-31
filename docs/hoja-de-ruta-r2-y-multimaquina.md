@@ -261,7 +261,13 @@ En este orden, por relación entre lo que cuesta y lo que desbloquea:
 4. **Alcance de validez en la nota** —sistema operativo, commit, runtime—. Sin
    esto, la memoria compartida entre máquinas se contamina sola.
 5. **Tokens por agente.**
-6. **Leases**, cuando haya dos agentes tocando el mismo repositorio.
+6. **Leases**, cuando haya dos agentes tocando el mismo repositorio. **✅ HECHO
+   (2026-07-07)**: `internal/lease` (permisos con nombre y vencimiento en
+   `.cogo/leases.json`) + tool MCP `lease` (acquire/release/list; el holder por
+   defecto es tu identidad autenticada) + `GET /api/leases`. `acquire` falla si
+   otro lo tiene (te dice quién y hasta cuándo); expiran solos (un holder que
+   crashea no traba el vault); re-entrante para el mismo holder (renovar). Como
+   git: hace visible la colisión, no la bloquea físicamente. Verificado e2e MCP.
 
 ---
 
