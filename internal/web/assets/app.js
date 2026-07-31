@@ -25,6 +25,21 @@ function fileToBase64(file) {
     fr.readAsDataURL(file);
   });
 }
+// spinner is a small animated "working" indicator for long operations, so the UI
+// never looks hung while a model call or a slow request is in flight.
+function spinner() {
+  const s = el("span", "cogo-spin");
+  s.setAttribute("role", "status");
+  s.setAttribute("aria-label", "cargando");
+  return s;
+}
+// setWorking fills a status element with the spinner + a message.
+function setWorking(elm, text) {
+  elm.innerHTML = "";
+  elm.appendChild(spinner());
+  elm.appendChild(el("span", "cogo-working", " " + text));
+}
+
 // downloadArtifact fetches a stored artifact by hash (auth header included) and
 // saves it; the store re-verifies the hash on the way out.
 async function downloadArtifact(sha) {
@@ -306,8 +321,14 @@ function edgeLegend(edges) {
 }
 
 function render() {
-  const main = $("#main");
-  main.innerHTML = "";
+  const host = $("#main");
+  // Fresh container per render: clearing #main DETACHES the previous view, so a
+  // slow async view (one still awaiting an api() call) that resolves after you've
+  // switched tabs appends to an off-DOM node and never double-draws. The graph's
+  // RAF loop self-stops via !canvas.isConnected.
+  host.innerHTML = "";
+  const main = el("div", "view-root");
+  host.appendChild(main);
   if (state.editing) { renderEditor(main); return; }
   ({ vault: renderVault, fresh: renderFresh, pack: renderAgents, graph: renderGraph, lint: renderLint, guard: renderGuard, xray: renderVeracidad }[state.view])(main);
 }
@@ -1515,21 +1536,29 @@ async function renderLint(main) {
   main.appendChild(out);
 
   btn.addEventListener("click", async () => {
-    btn.disabled = true; status.textContent = "revisando…";
-    const r = await api("/api/lint", { method: "POST" });
-    btn.disabled = false;
-    status.textContent = r.llm_used ? ("modelo: " + r.pairs_checked + "/" + r.candidate_pairs + " pares revisados") : "checks deterministas (sin modelo)";
-    out.innerHTML = "";
-    const other = (r.issues || []).filter(is => is.kind !== "contradiction");
-    if (!other.length && !r.contradictions) { out.appendChild(el("div", "empty", "Todo limpio. Nada que revisar.")); }
-    const LABEL = { broken_dep: "Enlace roto", stale: "Vencida" };
-    other.forEach(is => {
-      const row = el("div", "lint-row lint-" + is.kind);
-      row.appendChild(el("span", "lint-tag", LABEL[is.kind] || is.kind));
-      row.appendChild(el("span", "lint-msg", is.msg));
-      out.appendChild(row);
-    });
-    loadContras(); // las contradicciones nuevas se sumaron al store
+    btn.disabled = true;
+    setWorking(status, state.llmConfigured
+      ? "revisando… comparando notas par por par con el modelo (puede tardar unos segundos)"
+      : "revisando… (checks deterministas)");
+    try {
+      const r = await api("/api/lint", { method: "POST" });
+      status.textContent = r.llm_used ? ("modelo: " + r.pairs_checked + "/" + r.candidate_pairs + " pares revisados") : "checks deterministas (sin modelo)";
+      out.innerHTML = "";
+      const other = (r.issues || []).filter(is => is.kind !== "contradiction");
+      if (!other.length && !r.contradictions) { out.appendChild(el("div", "empty", "Todo limpio. Nada que revisar.")); }
+      const LABEL = { broken_dep: "Enlace roto", stale: "Vencida" };
+      other.forEach(is => {
+        const row = el("div", "lint-row lint-" + is.kind);
+        row.appendChild(el("span", "lint-tag", LABEL[is.kind] || is.kind));
+        row.appendChild(el("span", "lint-msg", is.msg));
+        out.appendChild(row);
+      });
+      loadContras(); // las contradicciones nuevas se sumaron al store
+    } catch (e) {
+      status.textContent = "⚠ no se pudo revisar (el modelo tardó o falló). Reintentá.";
+    } finally {
+      btn.disabled = false;
+    }
   });
 }
 
@@ -1632,21 +1661,32 @@ async function renderGuard(main) {
     "contradicciones contra la transcripción (los recibos) y mide deriva contra tus líneas rojas. " +
     "No censura: te muestra, vos decidís.");
 
-  // --- mandato persistente ---
-  const m = await api("/api/mandate");
+  // --- mandato persistente (global o por proyecto) ---
   const mand = el("div", "gbox gbox-mandate");
   mand.appendChild(el("div", "gbox-lbl", "Tu mandato (queda guardado en el vault)"));
-  const goal = el("input"); goal.placeholder = "tu objetivo · ej: decidir mi carrera sin apuro"; goal.value = m.goal || "";
+  const mscope = el("select", "gbox-scope");
+  mscope.appendChild(Object.assign(el("option", null, "global · todo el vault"), { value: "" }));
+  [...$("#projsel").options].forEach(o => { if (o.value) mscope.appendChild(Object.assign(el("option", null, "proyecto: " + o.value), { value: o.value })); });
+  mscope.value = state.project || "";
+  mscope.title = "Elegí un proyecto para darle sus propias líneas rojas; si no tiene, cae al mandato global. recall(project:…) usa el que corresponda.";
+  mand.appendChild(mscope);
+  const goal = el("input"); goal.placeholder = "tu objetivo · ej: decidir mi carrera sin apuro";
   mand.appendChild(goal);
   const lines = el("textarea", "md"); lines.rows = 3;
   lines.placeholder = "tus líneas rojas, una por renglón · ej:\nno renuncio sin otra oferta firmada\nno invierto plata hoy";
-  lines.value = (m.red_lines || []).join("\n");
   mand.appendChild(lines);
+  async function loadMandate() {
+    const m = await api("/api/mandate?project=" + encodeURIComponent(mscope.value)).catch(() => ({}));
+    goal.value = m.goal || "";
+    lines.value = (m.red_lines || []).join("\n");
+  }
+  await loadMandate();
+  mscope.addEventListener("change", loadMandate);
   const mrow = el("div", "guard-mrow");
   const msave = el("button", "mini ghost", "guardar mandato");
   const mst = el("span", "lint-status");
   msave.addEventListener("click", async () => {
-    await api("/api/mandate", { method: "POST", headers: { "Content-Type": "application/json" },
+    await api("/api/mandate?project=" + encodeURIComponent(mscope.value), { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ goal: goal.value.trim(), red_lines: lines.value.split("\n").map(x => x.trim()).filter(Boolean) }) });
     mst.textContent = "guardado ✓"; setTimeout(() => mst.textContent = "", 1500);
   });
@@ -1687,9 +1727,17 @@ async function renderGuard(main) {
 
   run.addEventListener("click", async () => {
     if (!turn.value.trim()) return;
-    run.disabled = true; status.textContent = "analizando…";
-    const r = await api("/api/guard", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ turn: turn.value, transcript: parseTranscript(trans.value), steelman: steel.checked }) });
+    run.disabled = true;
+    setWorking(status, steel.checked ? "analizando… con steelman, dos llamadas al modelo (puede tardar)" : "analizando… el modelo mira la conversación");
+    let r;
+    try {
+      r = await api("/api/guard", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ turn: turn.value, transcript: parseTranscript(trans.value), steelman: steel.checked }) });
+    } catch (e) {
+      status.textContent = "⚠ no se pudo analizar (el modelo tardó o falló). Reintentá.";
+      run.disabled = false;
+      return;
+    }
     run.disabled = false; status.textContent = r.mode === "mandato" ? "medido contra tu mandato" : "modo informativo (sin mandato)";
     out.innerHTML = "";
 

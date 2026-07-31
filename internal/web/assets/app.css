@@ -57,6 +57,13 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .nc-id { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
 .nc-type { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .nc-author { font-size: 11px; color: var(--muted-2); font-family: var(--mono); }
+/* Indicador de "trabajando" para operaciones largas (lint, guard, tests) */
+.cogo-spin { display: inline-block; width: 13px; height: 13px; vertical-align: -2px;
+  border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent); border-top-color: var(--accent);
+  border-radius: 50%; animation: cogo-spin .7s linear infinite; }
+.cogo-working { color: var(--muted); font-size: 12.5px; }
+@keyframes cogo-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cogo-spin { animation-duration: 1.6s; } }
 .nc-claim { font-size: 13.5px; color: var(--muted-2); margin: 3px 0 0; line-height: 1.45; }
 .nc-reason { font-size: 11.5px; color: var(--muted); margin: 5px 0 0; font-style: italic; }
 .nc-stale { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); cursor: help; }

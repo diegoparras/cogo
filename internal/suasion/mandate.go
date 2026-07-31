@@ -16,10 +16,50 @@ type Mandate struct {
 	RedLines []string `json:"red_lines,omitempty" yaml:"red_lines,omitempty"`
 }
 
-// MandatePath is the canonical location of the persisted mandate inside a
-// vault — next to llm.json, private runtime state, never packed as a note.
+// MandatePath is the canonical location of the persisted VAULT-WIDE mandate —
+// next to llm.json, private runtime state, never packed as a note.
 func MandatePath(vaultDir string) string {
 	return filepath.Join(vaultDir, ".cogo", "mandate.json")
+}
+
+// MandatePathFor is the mandate location for a project: the global mandate when
+// project is empty, else a per-project file under .cogo/mandates/. A project can
+// declare its own red lines without touching the vault-wide ones.
+func MandatePathFor(vaultDir, project string) string {
+	if strings.TrimSpace(project) == "" {
+		return MandatePath(vaultDir)
+	}
+	return filepath.Join(vaultDir, ".cogo", "mandates", sanitizeProject(project)+".json")
+}
+
+// sanitizeProject makes a project name safe as a filename (lowercase, alnum plus
+// - and _; everything else folded to -).
+func sanitizeProject(p string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(p)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	if s := strings.Trim(b.String(), "-"); s != "" {
+		return s
+	}
+	return "project"
+}
+
+// LoadMandateResolved returns the mandate that governs a project: its own if it
+// declared one, else the vault-wide mandate. project "" resolves to the global
+// mandate directly.
+func LoadMandateResolved(vaultDir, project string) *Mandate {
+	if strings.TrimSpace(project) != "" {
+		if m := LoadMandate(MandatePathFor(vaultDir, project)); m != nil {
+			return m
+		}
+	}
+	return LoadMandate(MandatePath(vaultDir))
 }
 
 // LoadMandate reads a persisted mandate; nil when missing or unreadable — the

@@ -178,7 +178,7 @@ func newMCPServer(dir string) *mcp.Server {
 			// Delta mode: only what moved since the caller's cursor.
 			b.WriteString("# Recall — what changed\n")
 			fmt.Fprintf(&b, "_Delta since %s._\n", since)
-			if mandateChangedSince(dir, since) {
+			if mandateChangedSince(dir, in.Project, since) {
 				b.WriteString("\n⚠ The mandate changed since then — run a full `recall` (no `since`) to re-read the red lines.\n")
 			}
 			changes := history.ChangedSince(dir, since)
@@ -194,7 +194,10 @@ func newMCPServer(dir string) *mcp.Server {
 			return textResult(b.String()), nil, nil
 		}
 		b.WriteString("# Recall — do not lose these\n")
-		if m := suasion.LoadMandate(suasion.MandatePath(dir)); m != nil && (m.Goal != "" || len(m.RedLines) > 0) {
+		if in.Project != "" {
+			fmt.Fprintf(&b, "_Project: %s._\n", in.Project)
+		}
+		if m := suasion.LoadMandateResolved(dir, in.Project); m != nil && (m.Goal != "" || len(m.RedLines) > 0) {
 			b.WriteString("\n## Mandate (red lines)\n")
 			if m.Goal != "" {
 				fmt.Fprintf(&b, "- goal: %s\n", m.Goal)
@@ -204,7 +207,7 @@ func newMCPServer(dir string) *mcp.Server {
 			}
 		}
 		if vault, err := loadVault(); err == nil {
-			if c := core.BuildConstraints(vault, contradictions(), today()); c != "" {
+			if c := core.BuildConstraints(vault, contradictions(), today(), in.Project); c != "" {
 				b.WriteString("\n## Verified decisions & constraints\n")
 				b.WriteString(c)
 				b.WriteString("\n")
@@ -549,7 +552,8 @@ type packIn struct {
 }
 
 type recallIn struct {
-	Since string `json:"since,omitempty" jsonschema:"optional cursor from a previous recall (RFC3339 UTC). If set, recall returns ONLY the notes that changed since then — the delta to sync another agent (or this one, post-compaction) without re-reading everything. Omit for the full load-bearing bundle. The reply always ends with a fresh cursor to pass next time."`
+	Since   string `json:"since,omitempty" jsonschema:"optional cursor from a previous recall (RFC3339 UTC). If set, recall returns ONLY the notes that changed since then — the delta to sync another agent (or this one, post-compaction) without re-reading everything. Omit for the full load-bearing bundle. The reply always ends with a fresh cursor to pass next time."`
+	Project string `json:"project,omitempty" jsonschema:"optional project. If set, recall re-anchors on THAT project's rules only: its mandate (its own red lines, or the vault-wide ones if it declared none) and its verified decisions/constraints — no noise from other projects."`
 }
 
 type stashIn struct {
@@ -576,14 +580,14 @@ func stashBytes(in stashIn) ([]byte, error) {
 	return []byte(in.Content), nil
 }
 
-// mandateChangedSince reports whether the mandate file was written after the
-// given RFC3339 cursor — a cheap signal that the red lines may have moved.
-func mandateChangedSince(dir, since string) bool {
+// mandateChangedSince reports whether the mandate governing a project was
+// written after the given RFC3339 cursor — a cheap signal the red lines moved.
+func mandateChangedSince(dir, project, since string) bool {
 	cut, err := time.Parse(time.RFC3339, since)
 	if err != nil {
 		return false
 	}
-	fi, err := os.Stat(suasion.MandatePath(dir))
+	fi, err := os.Stat(suasion.MandatePathFor(dir, project))
 	if err != nil {
 		return false
 	}

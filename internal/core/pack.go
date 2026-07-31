@@ -160,13 +160,19 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 // a context compaction: the verified (green) decisions and constraints, terse.
 // These are the "active constraints still binding" that compaction silently
 // erodes; re-injecting them re-anchors the agent. "" if there are none.
-func BuildConstraints(vault map[string]*Note, contradictions map[string]bool, today Date) string {
+// project "" includes the whole vault; a project filters to that project's
+// load-bearing notes, so an agent re-anchors on its repo's rules without the
+// noise of the others.
+func BuildConstraints(vault map[string]*Note, contradictions map[string]bool, today Date, project string) string {
 	verdicts := EvaluateVault(vault, contradictions, today)
 	hidden := Hidden(vault)
 	var lines []string
 	for id, n := range vault {
 		if hidden[id] || verdicts[id].Color != Green {
 			continue // only verified, live notes are load-bearing
+		}
+		if project != "" && n.Project != project {
+			continue
 		}
 		if n.Type != "decision" && n.Type != "constraint" {
 			continue

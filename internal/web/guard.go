@@ -16,9 +16,11 @@ import (
 func (s *Server) mandatePath() string { return suasion.MandatePath(s.dir) }
 
 func (s *Server) handleMandate(w http.ResponseWriter, r *http.Request) {
+	// ?project=X manages that project's mandate; empty = the vault-wide one.
+	path := suasion.MandatePathFor(s.dir, r.URL.Query().Get("project"))
 	switch r.Method {
 	case http.MethodGet:
-		m := suasion.LoadMandate(s.mandatePath())
+		m := suasion.LoadMandate(path)
 		if m == nil {
 			m = &suasion.Mandate{}
 		}
@@ -29,7 +31,7 @@ func (s *Server) handleMandate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := suasion.SaveMandate(s.mandatePath(), &m); err != nil {
+		if err := suasion.SaveMandate(path, &m); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
