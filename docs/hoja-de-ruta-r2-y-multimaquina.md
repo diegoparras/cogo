@@ -259,8 +259,19 @@ En este orden, por relación entre lo que cuesta y lo que desbloquea:
    secreto) + link "descargar" en la vista de nota para las evidencias
    `artifact://`. **Punto #3 completo.**
 4. **Alcance de validez en la nota** —sistema operativo, commit, runtime—. Sin
-   esto, la memoria compartida entre máquinas se contamina sola.
-5. **Tokens por agente.**
+   esto, la memoria compartida entre máquinas se contamina sola. **✅ HECHO
+   (2026-07-07)**: `Note.Scope map[string]string` (persistido en frontmatter,
+   seteado en `capture`). `pack` acepta `env` (tu entorno) y una nota cuyo scope
+   choca sale con un **⚠ scope mismatch** ("held under os=windows — your env
+   differs (os=linux); verify"), así no llega verde a ciegas a otra máquina;
+   `open` la muestra en el frontmatter y el visor en el modal de nota.
+   `core.ScopeConflict`/`ScopeString`. Verificado e2e.
+5. **Tokens por agente.** **✅ HECHO (2026-07-07)**: los tokens con nombre ya
+   existían (gestor + auditoría con `caller`); ahora además cada nota registra su
+   **autor** (`Note.Author`, seteado desde la identidad autenticada del caller
+   —`auth.Caller`/`CallerCtx`—, preservado en edición), así en un vault
+   compartido se ve qué agente escribió cada claim. Surface en `open`, `pack`
+   ("- by: token:…") y el modal del visor.
 6. **Leases**, cuando haya dos agentes tocando el mismo repositorio. **✅ HECHO
    (2026-07-07)**: `internal/lease` (permisos con nombre y vencimiento en
    `.cogo/leases.json`) + tool MCP `lease` (acquire/release/list; el holder por

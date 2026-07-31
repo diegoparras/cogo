@@ -67,6 +67,16 @@ type Note struct {
 	CausedBy     string     `yaml:"caused_by"`
 	Status       string     `yaml:"status"` // "" (active) | archived | retracted — the lifecycle axis, orthogonal to color
 
+	// Author is who captured the note (the authenticated caller: "root",
+	// "user:<email>", "token:<label>"). On a vault shared across machines it says
+	// which agent wrote the claim.
+	Author string `yaml:"author,omitempty"`
+	// Scope records the conditions under which the claim held — os, arch, commit,
+	// runtime versions (e.g. {os: windows, go: "1.25"}). A note true on Windows can
+	// be false on Linux; recording the scope keeps it from being trusted blindly on
+	// another machine. Free-form keys; ScopeConflict compares against an env.
+	Scope map[string]string `yaml:"scope,omitempty"`
+
 	// ---- computed by COGO · do not edit ----
 	Confidence  string `yaml:"confidence"`
 	StaleAt     Date   `yaml:"stale_at"`

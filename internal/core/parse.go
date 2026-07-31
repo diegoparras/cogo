@@ -49,16 +49,18 @@ func ParseNote(data []byte) (*Note, error) {
 // Wire structs give the writer full control over field order and over omitting
 // empty optionals, independently of how Note is read.
 type fmInputs struct {
-	ID           string     `yaml:"id"`
-	Type         string     `yaml:"type"`
-	Project      string     `yaml:"project,omitempty"`
-	Evidence     []Evidence `yaml:"evidence,omitempty"`
-	Check        *Check     `yaml:"check,omitempty"`
-	LastVerified *Date      `yaml:"last_verified,omitempty"`
-	DependsOn    []string   `yaml:"depends_on,omitempty"`
-	Supersedes   string     `yaml:"supersedes,omitempty"`
-	CausedBy     string     `yaml:"caused_by,omitempty"`
-	Status       string     `yaml:"status,omitempty"`
+	ID           string            `yaml:"id"`
+	Type         string            `yaml:"type"`
+	Project      string            `yaml:"project,omitempty"`
+	Evidence     []Evidence        `yaml:"evidence,omitempty"`
+	Check        *Check            `yaml:"check,omitempty"`
+	LastVerified *Date             `yaml:"last_verified,omitempty"`
+	DependsOn    []string          `yaml:"depends_on,omitempty"`
+	Supersedes   string            `yaml:"supersedes,omitempty"`
+	CausedBy     string            `yaml:"caused_by,omitempty"`
+	Status       string            `yaml:"status,omitempty"`
+	Author       string            `yaml:"author,omitempty"`
+	Scope        map[string]string `yaml:"scope,omitempty"`
 }
 
 type fmComputed struct {
@@ -79,6 +81,8 @@ func MarshalNote(n *Note) ([]byte, error) {
 		Supersedes: n.Supersedes,
 		CausedBy:   n.CausedBy,
 		Status:     n.Status,
+		Author:     n.Author,
+		Scope:      n.Scope,
 	}
 	if n.Check != (Check{}) {
 		c := n.Check

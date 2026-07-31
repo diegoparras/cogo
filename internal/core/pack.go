@@ -29,6 +29,10 @@ type PackOptions struct {
 	Project string
 	Budget  int
 	Today   Date
+	// Env is the consuming agent's environment (os, commit, runtime…). When a
+	// note's Scope declares a conflicting condition, the pack flags it so a claim
+	// isn't trusted blind on a machine it wasn't made for. Optional.
+	Env map[string]string
 }
 
 // BuildPack grades the whole vault, selects the notes relevant to the query,
@@ -66,7 +70,7 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 			continue // a query was given but nothing matched
 		}
 		v := verdicts[n.ID]
-		block := renderBlock(n, v)
+		block := renderBlock(n, v, opts.Env)
 		cands = append(cands, cand{n: n, v: v, score: score, block: block, toks: estimateTokens(block)})
 		rawTokens += estimateTokens(n.Body)
 	}
@@ -188,18 +192,40 @@ func writeSection(b *strings.Builder, title string, blocks []string) {
 // renderBlock formats one note for its color. Green/yellow get a heading with
 // the claim and its minimal check; mistakes and reds are terse list items, and
 // reds carry the reason they can't be trusted.
-func renderBlock(n *Note, v Verdict) string {
+func renderBlock(n *Note, v Verdict, env map[string]string) string {
 	claim := claimOf(n)
+	meta := scopeMeta(n, env)
 	switch v.Color {
 	case Green:
-		return fmt.Sprintf("### %s · %s\n%s\n- check: %s\n\n", n.ID, n.Type, claim, checkLine(n))
+		return fmt.Sprintf("### %s · %s\n%s\n- check: %s\n%s\n", n.ID, n.Type, claim, checkLine(n), meta)
 	case Yellow:
-		return fmt.Sprintf("### %s · %s\n%s\n- check: %s\n- caveat: %s\n\n", n.ID, n.Type, claim, checkLine(n), v.Reason)
+		return fmt.Sprintf("### %s · %s\n%s\n- check: %s\n- caveat: %s\n%s\n", n.ID, n.Type, claim, checkLine(n), v.Reason, meta)
 	case Ungraded:
 		return fmt.Sprintf("- **%s**: %s\n", n.ID, claim)
 	default: // Red
 		return fmt.Sprintf("- **%s**: %s — _unverified: %s_\n", n.ID, claim, v.Reason)
 	}
+}
+
+// scopeMeta renders a note's author and scope for a pack block, warning loudly
+// when the scope conflicts with the consuming agent's env — the fix for a claim
+// true on one machine silently reaching green on another.
+func scopeMeta(n *Note, env map[string]string) string {
+	var lines []string
+	if n.Author != "" {
+		lines = append(lines, "- by: "+n.Author)
+	}
+	if len(n.Scope) > 0 {
+		if conflict := ScopeConflict(n.Scope, env); len(conflict) > 0 {
+			lines = append(lines, "- ⚠ scope: held under "+ScopeString(n.Scope)+" — your env differs ("+ScopeString(conflict)+"); verify before relying on this here")
+		} else {
+			lines = append(lines, "- scope: "+ScopeString(n.Scope))
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func checkLine(n *Note) string {

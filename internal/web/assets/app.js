@@ -1148,6 +1148,22 @@ async function openNoteModal(id) {
     });
     card.appendChild(ev);
   }
+  if (n.author || (n.scope && Object.keys(n.scope).length)) {
+    const meta = el("div", "nm-block");
+    if (n.author) {
+      const r = el("div", "nm-ev-row");
+      r.appendChild(el("span", "nm-ev-kind", "por"));
+      r.appendChild(el("span", "nm-ev-ref", n.author));
+      meta.appendChild(r);
+    }
+    if (n.scope && Object.keys(n.scope).length) {
+      const r = el("div", "nm-ev-row");
+      r.appendChild(el("span", "nm-ev-kind", "alcance"));
+      r.appendChild(el("span", "nm-ev-ref", Object.keys(n.scope).sort().map(k => k + "=" + n.scope[k]).join("  ")));
+      meta.appendChild(r);
+    }
+    card.appendChild(meta);
+  }
   const rels = [];
   if (n.depends_on && n.depends_on.length) rels.push(["depende de", n.depends_on.join(", ")]);
   if (n.supersedes) rels.push(["reemplaza a", n.supersedes]);

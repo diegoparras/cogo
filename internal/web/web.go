@@ -24,6 +24,7 @@ import (
 	"github.com/diegoparras/cogo/internal/agentdocs"
 	"github.com/diegoparras/cogo/internal/agentsmd"
 	"github.com/diegoparras/cogo/internal/artifact"
+	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/history"
@@ -627,7 +628,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		"evidence": n.Evidence, "check_test": n.Check.Test,
 		"depends_on": n.DependsOn, "supersedes": n.Supersedes, "caused_by": n.CausedBy,
 		"color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(),
-		"contradictions": conflicts,
+		"contradictions": conflicts, "author": n.Author, "scope": n.Scope,
 	})
 }
 
@@ -864,15 +865,16 @@ func stateOrActive(st string) string {
 
 // draft is what the editor sends: a note's inputs. COGO computes the color.
 type draft struct {
-	ID         string          `json:"id"`
-	Type       string          `json:"type"`
-	Project    string          `json:"project"`
-	Body       string          `json:"body"`
-	Evidence   []core.Evidence `json:"evidence"`
-	CheckTest  string          `json:"check_test"`
-	DependsOn  []string        `json:"depends_on"`
-	Supersedes string          `json:"supersedes"`
-	CausedBy   string          `json:"caused_by"`
+	ID         string            `json:"id"`
+	Type       string            `json:"type"`
+	Project    string            `json:"project"`
+	Body       string            `json:"body"`
+	Evidence   []core.Evidence   `json:"evidence"`
+	CheckTest  string            `json:"check_test"`
+	DependsOn  []string          `json:"depends_on"`
+	Supersedes string            `json:"supersedes"`
+	CausedBy   string            `json:"caused_by"`
+	Scope      map[string]string `json:"scope,omitempty"`
 }
 
 func (s *Server) noteFromDraft(d draft) *core.Note {
@@ -895,6 +897,7 @@ func (s *Server) noteFromDraft(d draft) *core.Note {
 		DependsOn:    cleanIDs(d.DependsOn),
 		Supersedes:   strings.TrimSpace(d.Supersedes),
 		CausedBy:     strings.TrimSpace(d.CausedBy),
+		Scope:        d.Scope,
 	}
 }
 
@@ -959,9 +962,13 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := filepath.Join(s.dir, n.ID+".md")
+	n.Author = auth.Caller(r) // who captured it (authenticated identity)
 	if existing, ok := vault[n.ID]; ok {
 		if existing.Path != "" {
 			path = existing.Path
+		}
+		if existing.Author != "" {
+			n.Author = existing.Author // preserve the original creator across edits
 		}
 		// A cosmetic edit (claim, evidence and check all unchanged) keeps the
 		// verification — fixing a typo shouldn't cost the green. A material edit

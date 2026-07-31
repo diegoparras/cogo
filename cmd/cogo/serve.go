@@ -136,7 +136,7 @@ func newMCPServer(dir string) *mcp.Server {
 		if err != nil {
 			return errResult(err), nil, nil
 		}
-		p := core.BuildPack(vault, contradictions(), core.PackOptions{Query: in.Query, Project: in.Project, Budget: in.Budget, Today: today()})
+		p := core.BuildPack(vault, contradictions(), core.PackOptions{Query: in.Query, Project: in.Project, Budget: in.Budget, Today: today(), Env: in.Env})
 		savings.Add(dir, p.RawTokens-p.Tokens, today().String())
 		return textResult(p.Markdown), nil, nil
 	})
@@ -369,6 +369,7 @@ func newMCPServer(dir string) *mcp.Server {
 			LastVerified: today(),
 			Check:        core.Check{Test: in.CheckTest, Status: "not_run"},
 			DependsOn:    in.DependsOn, Supersedes: in.Supersedes, CausedBy: in.CausedBy,
+			Scope: in.Scope,
 		}
 		for _, e := range in.Evidence {
 			note.Evidence = append(note.Evidence, core.Evidence{Kind: e.Kind, Ref: e.Ref})
@@ -387,6 +388,13 @@ func newMCPServer(dir string) *mcp.Server {
 			if ev := core.Evaluate(existing, vault, cx, today()); ev.Color == core.Green {
 				return errResult(fmt.Errorf("note %q exists and is green; not overwritten — verify it or use a new id", id)), nil, nil
 			}
+		}
+		// Author = who captured it (the authenticated caller); preserve the original
+		// creator across edits.
+		if had && existing.Author != "" {
+			note.Author = existing.Author
+		} else {
+			note.Author = auth.CallerCtx(ctx)
 		}
 		vault[id] = note
 		core.ResolveEvidence(vault, core.LoadEvidenceRoots(dir)) // resolve the new note's own refs
@@ -534,9 +542,10 @@ type xrayIn struct {
 }
 
 type packIn struct {
-	Query   string `json:"query" jsonschema:"the topic to build context for"`
-	Project string `json:"project,omitempty" jsonschema:"optional project filter"`
-	Budget  int    `json:"token_budget,omitempty" jsonschema:"approximate token ceiling; 0 means unlimited"`
+	Query   string            `json:"query" jsonschema:"the topic to build context for"`
+	Project string            `json:"project,omitempty" jsonschema:"optional project filter"`
+	Budget  int               `json:"token_budget,omitempty" jsonschema:"approximate token ceiling; 0 means unlimited"`
+	Env     map[string]string `json:"env,omitempty" jsonschema:"your current environment (os, commit, runtime…), e.g. {\"os\":\"linux\"}. Notes whose declared scope conflicts get flagged so a claim isn't trusted blind on a machine it wasn't made for."`
 }
 
 type recallIn struct {
@@ -654,15 +663,16 @@ type evidenceIn struct {
 }
 
 type captureIn struct {
-	Type       string       `json:"type" jsonschema:"one of decision|bug|runbook|architecture|constraint|command|mistake"`
-	Body       string       `json:"body" jsonschema:"the note in markdown: a Claim, optional Refutation, and a Minimal check"`
-	Project    string       `json:"project,omitempty" jsonschema:"the project this note belongs to"`
-	ID         string       `json:"id,omitempty" jsonschema:"stable id; if omitted it is derived from the claim"`
-	Evidence   []evidenceIn `json:"evidence,omitempty" jsonschema:"supporting artifacts; each needs a kind and a ref to a real artifact"`
-	CheckTest  string       `json:"check_test,omitempty" jsonschema:"the minimal test that would verify the claim"`
-	DependsOn  []string     `json:"depends_on,omitempty" jsonschema:"ids of notes this one hard-depends on; a red dependency makes this note red too"`
-	Supersedes string       `json:"supersedes,omitempty" jsonschema:"id of a note this one replaces; the old note is archived (buried)"`
-	CausedBy   string       `json:"caused_by,omitempty" jsonschema:"id of the note that caused this finding"`
+	Type       string            `json:"type" jsonschema:"one of decision|bug|runbook|architecture|constraint|command|mistake"`
+	Body       string            `json:"body" jsonschema:"the note in markdown: a Claim, optional Refutation, and a Minimal check"`
+	Project    string            `json:"project,omitempty" jsonschema:"the project this note belongs to"`
+	ID         string            `json:"id,omitempty" jsonschema:"stable id; if omitted it is derived from the claim"`
+	Evidence   []evidenceIn      `json:"evidence,omitempty" jsonschema:"supporting artifacts; each needs a kind and a ref to a real artifact"`
+	CheckTest  string            `json:"check_test,omitempty" jsonschema:"the minimal test that would verify the claim"`
+	DependsOn  []string          `json:"depends_on,omitempty" jsonschema:"ids of notes this one hard-depends on; a red dependency makes this note red too"`
+	Supersedes string            `json:"supersedes,omitempty" jsonschema:"id of a note this one replaces; the old note is archived (buried)"`
+	CausedBy   string            `json:"caused_by,omitempty" jsonschema:"id of the note that caused this finding"`
+	Scope      map[string]string `json:"scope,omitempty" jsonschema:"the conditions under which the claim holds, on a vault shared across machines — e.g. {\"os\":\"windows\",\"commit\":\"abc123\",\"go\":\"1.25\"}. A claim true here may be false elsewhere; recording the scope keeps another machine from trusting it blindly."`
 }
 
 type transcriptTurnIn struct {
