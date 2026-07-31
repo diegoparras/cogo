@@ -52,6 +52,18 @@ const artifactPrefix = "artifact://"
 // ArtifactRef builds the evidence ref for a stored artifact.
 func ArtifactRef(sha string) string { return artifactPrefix + sha }
 
+// ArtifactRefs returns the content hashes cited by a note's "artifact://"
+// evidence (empty if none). Used to garbage-collect the store after a delete.
+func ArtifactRefs(n *Note) []string {
+	var out []string
+	for i := range n.Evidence {
+		if ref := strings.TrimSpace(n.Evidence[i].Ref); strings.HasPrefix(ref, artifactPrefix) {
+			out = append(out, strings.TrimSpace(ref[len(artifactPrefix):]))
+		}
+	}
+	return out
+}
+
 // artifactStatus resolves an artifact ref: because the key IS the content hash,
 // it can only be present (resolved) or gone (broken) — it never drifts.
 func artifactStatus(sha string) string {

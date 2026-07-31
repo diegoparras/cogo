@@ -141,3 +141,38 @@ func PurgeTrash(dir, id string) error {
 	}
 	return nil
 }
+
+// ReadTrashNote reads a note currently in the trash by id.
+func ReadTrashNote(dir, id string) (*Note, error) {
+	return ReadNoteFile(filepath.Join(trashDir(dir), id+".md"))
+}
+
+// ReferencedArtifacts is the set of artifact content-hashes still cited by any
+// live note OR any note in the trash. It's the "keep" set for garbage-collecting
+// a content-addressed store after a purge: because storage is deduplicated, one
+// blob can back several notes, so only a hash referenced by nobody is safe to
+// drop. Best-effort — an unreadable note just doesn't contribute (never drops a
+// hash it couldn't rule out).
+func ReferencedArtifacts(dir string) map[string]bool {
+	keep := map[string]bool{}
+	collect := func(n *Note) {
+		for _, sha := range ArtifactRefs(n) {
+			keep[sha] = true
+		}
+	}
+	if v, err := LoadVault(dir); err == nil {
+		for _, n := range v {
+			collect(n)
+		}
+	}
+	entries, _ := os.ReadDir(trashDir(dir))
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".md") {
+			continue
+		}
+		if n, err := ReadNoteFile(filepath.Join(trashDir(dir), e.Name())); err == nil {
+			collect(n)
+		}
+	}
+	return keep
+}

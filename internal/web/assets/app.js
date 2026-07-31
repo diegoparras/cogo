@@ -15,6 +15,27 @@ function el(tag, className, text) {
   if (text != null) e.textContent = text;
   return e;
 }
+// fileToBase64 reads a File as raw base64 (no data: prefix), for uploading an
+// artifact to /api/artifact.
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).split(",")[1] || "");
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(file);
+  });
+}
+// downloadArtifact fetches a stored artifact by hash (auth header included) and
+// saves it; the store re-verifies the hash on the way out.
+async function downloadArtifact(sha) {
+  const tok = localStorage.getItem("cogo.token");
+  const res = await fetch("/api/artifact?sha=" + encodeURIComponent(sha), { headers: tok ? { Authorization: "Bearer " + tok } : {} }).catch(() => null);
+  if (!res || !res.ok) { await confirmDialog({ title: "No se pudo bajar", message: "El artefacto no está disponible (¿fue purgado?).", confirmText: "Cerrar" }); return; }
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "cogo-artifact-" + sha.slice(0, 12);
+  a.click(); URL.revokeObjectURL(a.href);
+}
 // Cabecera de vista al estilo Escriba: eyebrow + título + bajada.
 function viewHead(main, eyebrow, title, sub) {
   const h = el("div", "viewhead");
@@ -1111,7 +1132,17 @@ async function openNoteModal(id) {
     n.evidence.forEach(e => {
       const row = el("div", "nm-ev-row");
       row.appendChild(el("span", "nm-ev-kind", e.kind));
-      row.appendChild(el("span", "nm-ev-ref", e.ref));
+      const ref = (e.ref || "");
+      if (ref.startsWith("artifact://")) {
+        const sha = ref.slice("artifact://".length);
+        row.appendChild(el("span", "nm-ev-ref", "artefacto " + sha.slice(0, 12) + "…"));
+        const dl = el("a", "nm-ev-dl", "descargar");
+        dl.href = "#"; dl.title = "Baja el artefacto guardado (verifica el hash)";
+        dl.addEventListener("click", ev2 => { ev2.preventDefault(); downloadArtifact(sha); });
+        row.appendChild(dl);
+      } else {
+        row.appendChild(el("span", "nm-ev-ref", ref));
+      }
       if (e.status) { const b = el("span"); paintEvBadge(b, e.status); row.appendChild(b); }
       ev.appendChild(row);
     });
@@ -1288,9 +1319,33 @@ function renderEditor(main) {
       row.appendChild(rm);
       evWrap.appendChild(row);
     });
+    const actions = el("div", "ev-actions");
     const add = el("button", "mini ghost", "+ evidencia");
     add.addEventListener("click", () => { d.evidence.push({ kind: "file_read", ref: "" }); renderEv(); });
-    evWrap.appendChild(add);
+    actions.appendChild(add);
+    const attach = el("button", "mini ghost", "adjuntar archivo");
+    attach.title = "Sube un archivo al store por su hash y lo cita como evidencia (artifact://). Un guard de secretos corre antes de guardar.";
+    attach.addEventListener("click", () => {
+      const inp = document.createElement("input"); inp.type = "file";
+      inp.addEventListener("change", async () => {
+        const file = inp.files && inp.files[0]; if (!file) return;
+        if (file.size > 8 * 1024 * 1024) { await confirmDialog({ title: "Archivo muy grande", message: "Máximo 8 MB para un artefacto. Para algo más grande, va al repo.", confirmText: "Entendido" }); return; }
+        const b64 = await fileToBase64(file);
+        const send = redact => api("/api/artifact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content_base64: b64, content_type: file.type || "application/octet-stream", redact }) }).catch(() => null);
+        let r = await send(false);
+        if (r && r.blocked) {
+          const rules = (r.findings || []).map(f => f.rule).join(", ");
+          if (!(await confirmDialog({ title: "Posible secreto en el archivo", message: "Detecté: " + rules + ". No se guarda tal cual — un hash inmutable no se borra. ¿Guardar una copia con los secretos censurados?", confirmText: "Guardar censurado", danger: true }))) return;
+          r = await send(true);
+        }
+        if (!r || !r.ok) { await confirmDialog({ title: "No se pudo guardar", message: (r && r.error) || "Error al subir el artefacto.", confirmText: "Cerrar" }); return; }
+        d.evidence.push({ kind: "file_read", ref: r.ref });
+        renderEv(); preview();
+      });
+      inp.click();
+    });
+    actions.appendChild(attach);
+    evWrap.appendChild(actions);
   }
   renderEv();
   form.appendChild(field("Evidencia", evWrap));

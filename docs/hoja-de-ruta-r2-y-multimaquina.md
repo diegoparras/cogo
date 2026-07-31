@@ -249,8 +249,15 @@ En este orden, por relación entre lo que cuesta y lo que desbloquea:
    citar como evidencia; `ResolveEvidence` chequea la existencia en el store
    (presente → resuelto, ausente → roto), así el color se **recomputa**. Como la
    clave ES el hash, nunca driftea. Verificado end-to-end contra R2 real.
-   Pendiente de este punto (tramo 3): UI de subir archivo en el visor y que la
-   **Papelera llegue a R2 con conteo de referencias** (dedup) antes de borrar.
+   **Tramo 3 HECHO (2026-07-07)**: (a) la **Papelera llega al store con conteo de
+   referencias** — al purgar una nota, sus artefactos se borran del store solo si
+   ninguna otra nota (viva o en papelera) los sigue citando (`core.ReferencedArtifacts`);
+   como el store deduplica, un blob compartido sobrevive hasta que se purga su
+   último citador (verificado: dos notas comparten un artefacto → purgo una,
+   sobrevive; purgo la otra, se borra). (b) **UI de subida** en el visor: botón
+   "adjuntar archivo" en el editor (pasa por el guard, ofrece redactar si hay
+   secreto) + link "descargar" en la vista de nota para las evidencias
+   `artifact://`. **Punto #3 completo.**
 4. **Alcance de validez en la nota** —sistema operativo, commit, runtime—. Sin
    esto, la memoria compartida entre máquinas se contamina sola.
 5. **Tokens por agente.**

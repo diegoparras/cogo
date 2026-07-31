@@ -688,7 +688,23 @@ func (s *Server) handleTrash(w http.ResponseWriter, r *http.Request) {
 		case "restore":
 			err = core.RestoreTrash(s.dir, id)
 		case "purge":
+			// Grab the note's artifacts before it's gone, purge, then GC any that no
+			// other note (live or trashed) still cites — the store is deduplicated,
+			// so a shared blob must survive until its last citer is purged.
+			var shas []string
+			if target, e := core.ReadTrashNote(s.dir, id); e == nil {
+				shas = core.ArtifactRefs(target)
+			}
 			err = core.PurgeTrash(s.dir, id)
+			if err == nil && len(shas) > 0 {
+				keep := core.ReferencedArtifacts(s.dir)
+				store := artifact.FromEnv(s.dir)
+				for _, sha := range shas {
+					if !keep[sha] {
+						_ = store.Delete(r.Context(), sha)
+					}
+				}
+			}
 		default:
 			http.Error(w, "action must be restore or purge", http.StatusBadRequest)
 			return
