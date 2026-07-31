@@ -465,11 +465,19 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request) {
 // until when). Read-only visibility for the visor; agents acquire/release via
 // the MCP `lease` tool.
 func (s *Server) handleLeases(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "GET only", http.StatusMethodNotAllowed)
-		return
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, map[string]any{"leases": lease.Open(s.dir).List(time.Now())})
+	case http.MethodDelete: // operator override: force-release a lease by name
+		name := strings.TrimSpace(r.URL.Query().Get("name"))
+		if name == "" {
+			http.Error(w, "name required", http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "released": lease.Open(s.dir).ForceRelease(name)})
+	default:
+		http.Error(w, "GET or DELETE", http.StatusMethodNotAllowed)
 	}
-	writeJSON(w, map[string]any{"leases": lease.Open(s.dir).List(time.Now())})
 }
 
 // handleTokens manages the issued MCP access tokens: GET lists them (no
@@ -557,6 +565,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"evidence_root":  s.evRoots().Configured(),
 		"tokens":         u.Total, "token_calls": u.Calls,
 		"saved_tokens": sv.Total, "saved_packs": sv.Packs,
+		"artifact_backend": artifact.FromEnv(s.dir).Backend(),
 	})
 }
 

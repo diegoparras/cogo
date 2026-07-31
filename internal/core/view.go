@@ -12,7 +12,8 @@ type NoteView struct {
 	Reason  string `json:"reason"`
 	StaleAt string `json:"stale_at"`
 	Claim   string `json:"claim"`
-	State   string `json:"state,omitempty"` // archived|retracted|superseded; empty = active
+	State   string `json:"state,omitempty"`  // archived|retracted|superseded; empty = active
+	Author  string `json:"author,omitempty"` // who captured it (multi-agent attribution)
 }
 
 // Overview grades the whole vault and returns one NoteView per note, ordered
@@ -31,7 +32,7 @@ func Overview(vault map[string]*Note, contradictions map[string]bool, today Date
 			ID: id, Type: n.Type, Project: n.Project,
 			Color: v.Color.String(), Reason: v.Reason,
 			StaleAt: v.StaleAt.String(), Claim: summarize(claimOf(n), 200),
-			State: stateTag(state, id),
+			State: stateTag(state, id), Author: n.Author,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

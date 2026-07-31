@@ -99,6 +99,21 @@ func (s *Store) Release(name, holder string) (released bool) {
 	return false
 }
 
+// ForceRelease drops a lease regardless of who holds it — the operator override
+// from the visor, for a lease whose holder crashed or went rogue. Reports whether
+// something was removed.
+func (s *Store) ForceRelease(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.read()
+	if _, ok := m[name]; ok {
+		delete(m, name)
+		s.write(m)
+		return true
+	}
+	return false
+}
+
 // List returns the currently-held (non-expired) leases, soonest-to-expire first.
 // It also prunes expired entries from disk as a side effect.
 func (s *Store) List(now time.Time) []Lease {

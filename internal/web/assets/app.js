@@ -205,6 +205,7 @@ function initMenu() {
   $("#tokensBtn").addEventListener("click", openTokens);
   $("#trashBtn").addEventListener("click", openTrash);
   $("#auditBtn").addEventListener("click", openAudit);
+  $("#leasesBtn").addEventListener("click", openLeases);
   $("#evrootsBtn").addEventListener("click", openEvidenceRoots);
   $("#exportBtn").addEventListener("click", () => { $("#menu").classList.add("hidden"); window.location.href = "/api/export"; });
   $("#agentsBtn").addEventListener("click", openAgents);
@@ -244,6 +245,7 @@ async function loadConfig() {
   updateTokenBadge();
   $("#aboutVersion").textContent = c.version;
   $("#aboutCount").textContent = c.count;
+  $("#aboutStorage").textContent = c.artifact_backend === "r2" ? "Cloudflare R2 (por contenido)" : "disco (volumen del vault)";
   const sel = $("#projsel");
   (c.projects || []).forEach(p => { const o = el("option", null, p); o.value = p; sel.appendChild(o); });
   sel.addEventListener("change", () => { state.editing = null; state.project = sel.value; render(); });
@@ -386,6 +388,7 @@ async function renderVault(main) {
     const head = el("div", "nc-head");
     head.appendChild(el("span", "nc-id", n.id));
     head.appendChild(el("span", "nc-type", n.type + (n.project ? " · " + n.project : "")));
+    if (n.author) { const a = callerKind(n.author); head.appendChild(el("span", "nc-author", "· " + a[0])).title = "capturada por " + n.author; }
     if (n.state) head.appendChild(el("span", "nc-badge", stateLabel(n.state)));
     if (n.stale_at) {
       const f = freshnessLabel(n.stale_at);
@@ -918,6 +921,61 @@ async function openAudit() {
   x.addEventListener("click", close);
   back.addEventListener("click", e => { if (e.target === back) close(); });
   document.addEventListener("keydown", onKey);
+}
+
+// ---------- Leases (coordinación multi-agente) ----------
+// Permisos con vencimiento que los agentes toman antes de una tarea no
+// idempotente (migración, deploy) para no pisarse. El operador puede liberarlos.
+async function openLeases() {
+  $("#menu").classList.add("hidden");
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card tokens-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", "Leases · coordinación"));
+  card.appendChild(el("p", "tk-intro", "Permisos con vencimiento que los agentes toman antes de una tarea no idempotente (una migración, un deploy) para no pisarse. Expiran solos. Podés liberar uno a la fuerza si un agente quedó colgado."));
+  const list = el("div", "tk-list au-list");
+  card.appendChild(list);
+  async function refresh() {
+    const r = await api("/api/leases").catch(() => null);
+    const items = (r && r.leases) || [];
+    list.textContent = "";
+    if (!items.length) { list.appendChild(el("div", "tk-empty", "No hay leases tomados ahora.")); return; }
+    items.forEach(l => list.appendChild(leaseRow(l, refresh)));
+  }
+  await refresh();
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  const close = () => { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+}
+
+function leaseRow(l, refresh) {
+  const row = el("div", "au-row");
+  row.appendChild(el("span", "au-who au-token", l.holder || "?"));
+  const mid = el("div", "au-mid");
+  mid.appendChild(el("div", "au-act", l.name));
+  const when = el("div", "au-when");
+  let t = l.expires || "";
+  try { t = "hasta " + new Date(l.expires).toLocaleString(); } catch (_) {}
+  when.appendChild(el("span", null, t));
+  if (l.note) when.appendChild(el("span", "au-ip", l.note));
+  mid.appendChild(when);
+  row.appendChild(mid);
+  const rel = el("button", "mini ghost au-danger", "liberar");
+  rel.addEventListener("click", async () => {
+    const ok = await confirmDialog({ title: "Liberar el lease", message: "Vas a liberar «" + l.name + "» (lo tiene " + l.holder + ") a la fuerza. Si ese agente sigue trabajando, otro podría arrancar la misma tarea.", confirmText: "Liberar", danger: true });
+    if (!ok) return;
+    await api("/api/leases?name=" + encodeURIComponent(l.name), { method: "DELETE" }).catch(() => null);
+    if (refresh) await refresh();
+  });
+  row.appendChild(rel);
+  return row;
 }
 
 // callerKind mapea el prefijo del caller ("token:…"/"user:…"/"root"/"anon") a una
