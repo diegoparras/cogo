@@ -166,6 +166,8 @@ La **frescura** decae por tipo (un comando dura 30 días; una decisión de arqui
 
 Es un **solo binario Go** (imagen Docker `scratch` de ~12 MB) que es las tres cosas a la vez.
 
+> **Memoria compartida entre máquinas.** Con el MCP sobre HTTP + token, cualquier agente en cualquier máquina lee y escribe el mismo vault. `recall` es el **cursor** que lo vuelve un canal, no solo un archivo: la primera llamada devuelve el bundle que sostiene el proyecto (mandato + decisiones verdes) y un cursor; pasás ese cursor como `since` y `recall` te da **solo lo que cambió** desde entonces —sin releer todo—, más un cursor nuevo.
+
 ### Todo se maneja desde el visor (menú ⋮)
 
 Para el que no quiere tocar la terminal, cada cosa operativa vive en el menú:

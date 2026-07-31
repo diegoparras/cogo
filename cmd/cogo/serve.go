@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/contra"
@@ -128,9 +129,29 @@ func newMCPServer(dir string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "recall",
-		Description: "Re-anchor after a context compaction. Returns the load-bearing memory you must not lose: the user's mandate (red lines) and the verified decisions and constraints. Call it at the start of a session and again after any auto-compaction, so binding constraints don't silently disappear from context.",
+		Description: "Re-anchor after a context compaction, or catch up on another agent's work. With no argument it returns the load-bearing memory you must not lose (the user's mandate/red lines and the verified decisions and constraints) plus a cursor. Pass that cursor back as `since` and it returns ONLY what changed since then — the delta a second agent (or this one, post-compaction) needs to sync without re-reading the whole vault. Call it at the start of a session and again after any auto-compaction.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in recallIn) (*mcp.CallToolResult, any, error) {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
 		var b strings.Builder
+		if since := strings.TrimSpace(in.Since); since != "" {
+			// Delta mode: only what moved since the caller's cursor.
+			b.WriteString("# Recall — what changed\n")
+			fmt.Fprintf(&b, "_Delta since %s._\n", since)
+			if mandateChangedSince(dir, since) {
+				b.WriteString("\n⚠ The mandate changed since then — run a full `recall` (no `since`) to re-read the red lines.\n")
+			}
+			changes := history.ChangedSince(dir, since)
+			if len(changes) == 0 {
+				b.WriteString("\nNothing new.\n")
+			} else {
+				fmt.Fprintf(&b, "\n## %d note(s) changed\n", len(changes))
+				for _, c := range changes {
+					fmt.Fprintf(&b, "- **%s** [%s] — %s\n", c.ID, c.Color, firstLine(c.Claim))
+				}
+			}
+			fmt.Fprintf(&b, "\n---\n_cursor: %s (pass as `since` next time)_\n", now)
+			return textResult(b.String()), nil, nil
+		}
 		b.WriteString("# Recall — do not lose these\n")
 		if m := suasion.LoadMandate(suasion.MandatePath(dir)); m != nil && (m.Goal != "" || len(m.RedLines) > 0) {
 			b.WriteString("\n## Mandate (red lines)\n")
@@ -151,6 +172,7 @@ func newMCPServer(dir string) *mcp.Server {
 		if b.Len() < 40 {
 			b.WriteString("\n_No mandate declared and no verified decisions/constraints yet._\n")
 		}
+		fmt.Fprintf(&b, "\n---\n_cursor: %s (pass as `since` next time to get only what changed)_\n", now)
 		return textResult(b.String()), nil, nil
 	})
 
@@ -426,7 +448,35 @@ type packIn struct {
 	Budget  int    `json:"token_budget,omitempty" jsonschema:"approximate token ceiling; 0 means unlimited"`
 }
 
-type recallIn struct{} // no input: recall returns the whole load-bearing bundle
+type recallIn struct {
+	Since string `json:"since,omitempty" jsonschema:"optional cursor from a previous recall (RFC3339 UTC). If set, recall returns ONLY the notes that changed since then — the delta to sync another agent (or this one, post-compaction) without re-reading everything. Omit for the full load-bearing bundle. The reply always ends with a fresh cursor to pass next time."`
+}
+
+// mandateChangedSince reports whether the mandate file was written after the
+// given RFC3339 cursor — a cheap signal that the red lines may have moved.
+func mandateChangedSince(dir, since string) bool {
+	cut, err := time.Parse(time.RFC3339, since)
+	if err != nil {
+		return false
+	}
+	fi, err := os.Stat(suasion.MandatePath(dir))
+	if err != nil {
+		return false
+	}
+	return fi.ModTime().UTC().After(cut)
+}
+
+// firstLine is the note's claim trimmed to one short line for the recall delta.
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = strings.TrimSpace(s[:i])
+	}
+	if r := []rune(s); len(r) > 100 {
+		return string(r[:100]) + "…"
+	}
+	return s
+}
 
 type reflectIn struct {
 	Summary string `json:"summary" jsonschema:"a short summary of what you did and verified this session"`
