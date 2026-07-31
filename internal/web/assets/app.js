@@ -25,6 +25,104 @@ function fileToBase64(file) {
     fr.readAsDataURL(file);
   });
 }
+// buildBlockPicker arma el catálogo de piezas reutilizables sobre el editor de
+// instrucciones: presets (composiciones recomendadas), bloques curados por COGO
+// (esenciales y según el caso) y los bloques propios del usuario. Un clic inserta
+// la pieza al final del editor — así el texto canónico vive en COGO y no se
+// reescribe de memoria en cada AGENTS.md/CLAUDE.md.
+async function buildBlockPicker(host, ta, onInsert) {
+  host.textContent = "";
+  const status = el("div", "agt-bl-status");
+  host.appendChild(status);
+  setWorking(status, "cargando bloques…");
+
+  // El token no se puede recuperar (se guarda hasheado): lo pega el usuario.
+  const q = new URLSearchParams({ project: state.project || "" });
+  if (state.blockToken) q.set("token", state.blockToken);
+  const data = await api("/api/agent-blocks?" + q).catch(() => null);
+  status.textContent = "";
+  if (!data) { status.textContent = "no se pudieron cargar los bloques"; return; }
+
+  const byId = {};
+  (data.blocks || []).forEach(b => byId[b.id] = b);
+  const insert = b => {
+    const sep = ta.value.trim() ? "\n\n" : "";
+    ta.value = ta.value.replace(/\s*$/, "") + sep + b.markdown.trim() + "\n";
+    ta.scrollTop = ta.scrollHeight;
+    if (onInsert) onInsert();
+  };
+
+  // --- presets ---
+  const pr = el("div", "agt-bl-row");
+  pr.appendChild(el("span", "agt-bl-lbl", "Armado rápido"));
+  (data.presets || []).forEach(p => {
+    const c = el("button", "agt-chip agt-chip-preset", p.title);
+    c.title = p.desc + "\n\nBloques: " + p.blocks.join(", ");
+    c.addEventListener("click", async () => {
+      if (ta.value.trim() && !(await confirmDialog({ title: "Armar " + p.title, message: "Se agregan al final los bloques: " + p.blocks.join(", ") + ".", confirmText: "Agregar" }))) return;
+      p.blocks.forEach(id => { if (byId[id]) insert(byId[id]); });
+    });
+    pr.appendChild(c);
+  });
+  host.appendChild(pr);
+
+  // --- bloques, agrupados ---
+  const groups = [
+    ["Esenciales", (data.blocks || []).filter(b => b.essential)],
+    ["Según el caso", (data.blocks || []).filter(b => !b.essential && !b.custom)],
+    ["Míos", (data.blocks || []).filter(b => b.custom)],
+  ];
+  groups.forEach(([label, list]) => {
+    if (!list.length && label !== "Míos") return;
+    const row = el("div", "agt-bl-row");
+    row.appendChild(el("span", "agt-bl-lbl", label));
+    list.forEach(b => {
+      const c = el("button", "agt-chip" + (b.essential ? " agt-chip-ess" : "") + (b.custom ? " agt-chip-mine" : ""), b.title);
+      c.title = b.desc || "";
+      c.addEventListener("click", () => insert(b));
+      row.appendChild(c);
+      if (b.custom) {
+        const x = el("button", "agt-chip-x", "×");
+        x.title = "Borrar este bloque mío";
+        x.addEventListener("click", async e => {
+          e.stopPropagation();
+          if (!(await confirmDialog({ title: "Borrar bloque", message: "Se elimina «" + b.title + "» del catálogo.", confirmText: "Borrar", danger: true }))) return;
+          await api("/api/agent-blocks?id=" + encodeURIComponent(b.id), { method: "DELETE" }).catch(() => null);
+          buildBlockPicker(host, ta, onInsert);
+        });
+        row.appendChild(x);
+      }
+    });
+    if (label === "Míos") {
+      const add = el("button", "agt-chip agt-chip-add", "+ guardar bloque");
+      add.title = "Guarda el texto seleccionado en el editor (o todo) como un bloque reutilizable.";
+      add.addEventListener("click", async () => {
+        const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim() || ta.value.trim();
+        if (!sel) { await confirmDialog({ title: "Nada que guardar", message: "Escribí (o seleccioná) el texto que querés convertir en bloque reutilizable.", confirmText: "Entendido" }); return; }
+        const title = await promptDialog({ title: "Guardar como bloque", message: "Se guarda " + (ta.selectionStart !== ta.selectionEnd ? "lo SELECCIONADO" : "TODO el editor") + " como pieza reutilizable para cualquier agente.", placeholder: "ej: Convenciones del repo", confirmText: "Guardar" });
+        if (!title) return;
+        const r = await api("/api/agent-blocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, desc: "bloque propio", markdown: sel }) }).catch(() => null);
+        if (r && r.ok) buildBlockPicker(host, ta, onInsert);
+      });
+      row.appendChild(add);
+    }
+    host.appendChild(row);
+  });
+
+  // --- token para el bloque de conexión ---
+  const tk = el("div", "agt-bl-row");
+  tk.appendChild(el("span", "agt-bl-lbl", "Token"));
+  const ti = el("input", "agt-bl-token");
+  ti.placeholder = "pegá el token del agente (opcional) — va en el bloque «Conexión»";
+  ti.value = state.blockToken || "";
+  ti.title = "COGO guarda los tokens hasheados: no puede recuperarlos. Pegá el que te mostró al emitirlo (menú ⋮ → Conexiones MCP).";
+  ti.addEventListener("change", () => { state.blockToken = ti.value.trim(); buildBlockPicker(host, ta, onInsert); });
+  tk.appendChild(ti);
+  const labels = (data.token_labels || []).filter(Boolean);
+  if (labels.length) tk.appendChild(el("span", "agt-bl-hint", "emitidos: " + labels.join(", ")));
+  host.appendChild(tk);
+}
+
 // spinner is a small animated "working" indicator for long operations, so the UI
 // never looks hung while a model call or a slow request is in flight.
 function spinner() {
@@ -548,7 +646,13 @@ async function renderAgents(main) {
 
   const doc = await api("/api/agent-docs?name=" + encodeURIComponent(current));
   const ta = el("textarea", "agt-editor mono"); ta.rows = 18; ta.value = doc.content || "";
-  ta.placeholder = "Escribí o generá las instrucciones para " + current + " — botón «Plantilla COGO».";
+  ta.placeholder = "Elegí bloques arriba (o escribí a mano) para armar las instrucciones de " + current + ".";
+
+  // --- armador de bloques: piezas reutilizables que COGO recomienda ---
+  // Va ARRIBA del editor: primero elegís las piezas, abajo ves el archivo que se arma.
+  const bb = el("div", "agt-blocks");
+  main.appendChild(bb);
+  buildBlockPicker(bb, ta, () => st.textContent = "bloque insertado — acordate de guardar");
   main.appendChild(ta);
 
   const bar = el("div", "agt-bar");

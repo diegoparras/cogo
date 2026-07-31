@@ -128,6 +128,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
+	mux.HandleFunc("/api/agent-blocks", s.handleAgentBlocks)
 	mux.HandleFunc("/api/agent-docs", s.handleAgentDocs)
 }
 
@@ -212,6 +213,58 @@ func (s *Server) handleAgentsMD(w http.ResponseWriter, r *http.Request) {
 		opts.Date = s.today().String()
 	}
 	writeJSON(w, map[string]any{"filename": name, "markdown": agentsmd.Generate(opts)})
+}
+
+// handleAgentBlocks serves the reusable pieces an instruction file is composed
+// of: COGO's curated blocks (the wording stays canonical here instead of being
+// retyped into every AGENTS.md), the recommended presets, and the user's OWN
+// blocks — so a recurring instruction becomes a one-click piece too.
+//
+//	GET    ?project=&token=  → {blocks, presets}
+//	POST   {id,title,desc,markdown} → saves a custom block
+//	DELETE ?id=              → removes a custom block
+func (s *Server) handleAgentBlocks(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		opts := agentsmd.BlockOptions{
+			HTTPURL: scheme + "://" + r.Host + "/mcp",
+			Project: r.URL.Query().Get("project"),
+			Token:   r.URL.Query().Get("token"),
+		}
+		blocks := append(agentsmd.Curated(opts), agentsmd.LoadCustom(s.dir)...)
+		// Token labels help the operator pick which agent this file is for; the
+		// secret itself is hashed and unrecoverable, so it is never returned.
+		labels := []string{}
+		if s.tokens != nil {
+			for _, t := range s.tokens.List() {
+				labels = append(labels, t.Label)
+			}
+		}
+		writeJSON(w, map[string]any{"blocks": blocks, "presets": agentsmd.Presets(), "token_labels": labels})
+	case http.MethodPost:
+		var b agentsmd.Block
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := agentsmd.SaveCustom(s.dir, b); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "blocks": agentsmd.LoadCustom(s.dir)})
+	case http.MethodDelete:
+		if err := agentsmd.DeleteCustom(s.dir, r.URL.Query().Get("id")); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "blocks": agentsmd.LoadCustom(s.dir)})
+	default:
+		http.Error(w, "GET, POST or DELETE", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleExport streams the whole vault as a zip so a user can back it up or move

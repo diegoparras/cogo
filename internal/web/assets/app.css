@@ -509,6 +509,26 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .agt-new { font-family: inherit; border-style: dashed; color: var(--muted); }
 .agt-editor { width: 100%; font-size: 12.5px; line-height: 1.55; resize: vertical; min-height: 340px; }
 .agt-bar { display: flex; gap: 8px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+/* Armador de bloques: piezas reutilizables que se insertan con un clic */
+.agt-blocks { margin: 12px 0 4px; display: flex; flex-direction: column; gap: 7px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.agt-bl-row { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.agt-bl-lbl { flex: 0 0 108px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.agt-bl-status { font-size: 12.5px; color: var(--muted); }
+.agt-chip { font-size: 12px; padding: 4px 11px; border-radius: 999px; cursor: pointer;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+.agt-chip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.agt-chip-ess { border-color: color-mix(in srgb, var(--ok) 34%, var(--border)); color: var(--ok); }
+.agt-chip-ess:hover { background: color-mix(in srgb, var(--ok) 10%, var(--panel)); border-color: var(--ok); }
+.agt-chip-preset { font-weight: 600; background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); color: var(--accent); }
+.agt-chip-mine { border-style: dashed; }
+.agt-chip-add { color: var(--muted); border-style: dashed; }
+.agt-chip-x { border: none; background: transparent; color: var(--muted-2); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 4px 0 0; margin-left: -5px; border-radius: 6px; }
+.agt-chip-x:hover { color: var(--err); background: transparent; }
+.agt-bl-token { flex: 1; min-width: 220px; font-size: 12px; font-family: var(--mono); }
+.agt-bl-hint { font-size: 11px; color: var(--muted-2); }
 .agt-ins { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; }
 .agt-ins.hidden { display: none; }
 .agt-ins input { flex: 1; min-width: 200px; }
