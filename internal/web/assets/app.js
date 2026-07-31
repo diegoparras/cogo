@@ -25,12 +25,103 @@ function fileToBase64(file) {
     fr.readAsDataURL(file);
   });
 }
+// mdEditor envuelve un <textarea> con la barra de formato y la vista previa
+// dividida: el mismo editor visual en toda la app (notas, instrucciones de
+// agentes, bloques). Devuelve el contenedor; `.sync()` refresca la vista previa
+// después de un cambio hecho por código (no tipeado).
+function mdEditor(ta, onChange) {
+  const wrap = el("div", "md-editor");
+  if (!ta.classList.contains("md")) ta.classList.add("md");
+  const previewPane = el("div", "md-render md-preview");
+  const syncPrev = () => { if (wrap.classList.contains("split")) previewPane.innerHTML = mdToHtml(ta.value); };
+  const touched = () => { if (onChange) onChange(); syncPrev(); };
+  ta.addEventListener("input", touched);
+
+  const ins = (before, after, ph) => {
+    const s = ta.selectionStart, e = ta.selectionEnd, sel = ta.value.slice(s, e) || ph || "";
+    ta.value = ta.value.slice(0, s) + before + sel + after + ta.value.slice(e);
+    ta.focus(); ta.selectionStart = s + before.length; ta.selectionEnd = s + before.length + sel.length;
+    touched();
+  };
+  const linePfx = pfx => {
+    const s = ta.selectionStart, ls = ta.value.lastIndexOf("\n", s - 1) + 1;
+    ta.value = ta.value.slice(0, ls) + pfx + ta.value.slice(ls);
+    ta.focus(); ta.selectionStart = ta.selectionEnd = s + pfx.length; touched();
+  };
+  const tbRow = el("div", "md-tb-row");
+  [["B", () => ins("**", "**", "negrita"), "negrita"],
+   ["I", () => ins("*", "*", "itálica"), "itálica"],
+   ["‹›", () => ins("`", "`", "código"), "código"],
+   ["H", () => linePfx("## "), "encabezado"],
+   ["—", () => linePfx("- "), "lista"],
+   ["❝", () => linePfx("> "), "cita"],
+   ["🔗", () => ins("[", "](url)", "texto"), "link"]].forEach(([lab, fn, title]) => {
+    const btn = el("button", "md-tb", lab); btn.type = "button"; btn.title = title;
+    btn.addEventListener("click", ev => { ev.preventDefault(); fn(); });
+    tbRow.appendChild(btn);
+  });
+  tbRow.appendChild(el("span", "md-tb-sp"));
+  const prevBtn = el("button", "md-tb md-prev", "vista previa"); prevBtn.type = "button";
+  prevBtn.addEventListener("click", ev => {
+    ev.preventDefault();
+    const on = wrap.classList.toggle("split");
+    prevBtn.classList.toggle("on", on);
+    prevBtn.textContent = on ? "ocultar preview" : "vista previa";
+    syncPrev();
+  });
+  tbRow.appendChild(prevBtn);
+  wrap.appendChild(tbRow);
+  const bodyRow = el("div", "md-body-row");
+  bodyRow.appendChild(ta); bodyRow.appendChild(previewPane);
+  wrap.appendChild(bodyRow);
+  wrap.sync = syncPrev;
+  return wrap;
+}
+
+// ---- bloques marcados dentro de un .md de instrucciones ----
+// Cada bloque insertado queda envuelto en comentarios HTML (invisibles al
+// renderizar el markdown). Eso convierte al chip en un INTERRUPTOR: COGO sabe si
+// el bloque ya está, puede sacarlo, y puede re-sincronizar su texto si el
+// protocolo canónico cambió. El texto libre del usuario, fuera de las marcas, no
+// se toca nunca.
+const BLOCK_OPEN = id => `<!-- cogo:block:${id} -->`;
+const BLOCK_CLOSE = id => `<!-- /cogo:block:${id} -->`;
+
+function blockRegion(text, id) {
+  const open = BLOCK_OPEN(id), close = BLOCK_CLOSE(id);
+  const s = text.indexOf(open);
+  if (s < 0) return null;
+  const e = text.indexOf(close, s);
+  if (e < 0) return null;
+  return { start: s, end: e + close.length, inner: text.slice(s + open.length, e).trim() };
+}
+function hasBlock(text, id) { return !!blockRegion(text, id); }
+function addBlock(text, b) {
+  const sep = text.trim() ? "\n\n" : "";
+  return text.replace(/\s*$/, "") + sep + BLOCK_OPEN(b.id) + "\n" + b.markdown.trim() + "\n" + BLOCK_CLOSE(b.id) + "\n";
+}
+function removeBlock(text, id) {
+  const r = blockRegion(text, id);
+  if (!r) return text;
+  return (text.slice(0, r.start).replace(/\s*$/, "") + "\n\n" + text.slice(r.end).replace(/^\s*/, "")).trim() + "\n";
+}
+function updateBlock(text, b) {
+  const r = blockRegion(text, b.id);
+  if (!r) return text;
+  return text.slice(0, r.start) + BLOCK_OPEN(b.id) + "\n" + b.markdown.trim() + "\n" + BLOCK_CLOSE(b.id) + text.slice(r.end);
+}
+// staleBlocks: los que están incluidos pero con un texto distinto al canónico
+// (porque COGO actualizó el protocolo, o porque los editaste a mano).
+function staleBlocks(text, blocks) {
+  return blocks.filter(b => { const r = blockRegion(text, b.id); return r && r.inner !== b.markdown.trim(); });
+}
+
 // buildBlockPicker arma el catálogo de piezas reutilizables sobre el editor de
 // instrucciones: presets (composiciones recomendadas), bloques curados por COGO
 // (esenciales y según el caso) y los bloques propios del usuario. Un clic inserta
 // la pieza al final del editor — así el texto canónico vive en COGO y no se
 // reescribe de memoria en cada AGENTS.md/CLAUDE.md.
-async function buildBlockPicker(host, ta, onInsert) {
+async function buildBlockPicker(host, ta, onInsert, mdWrap) {
   host.textContent = "";
   const status = el("div", "agt-bl-status");
   host.appendChild(status);
@@ -43,68 +134,112 @@ async function buildBlockPicker(host, ta, onInsert) {
   status.textContent = "";
   if (!data) { status.textContent = "no se pudieron cargar los bloques"; return; }
 
+  const blocks = data.blocks || [];
   const byId = {};
-  (data.blocks || []).forEach(b => byId[b.id] = b);
-  const insert = b => {
-    const sep = ta.value.trim() ? "\n\n" : "";
-    ta.value = ta.value.replace(/\s*$/, "") + sep + b.markdown.trim() + "\n";
-    ta.scrollTop = ta.scrollHeight;
-    if (onInsert) onInsert();
-  };
+  blocks.forEach(b => byId[b.id] = b);
+  const refresh = () => buildBlockPicker(host, ta, onInsert, mdWrap);
+  const changed = msg => { if (mdWrap && mdWrap.sync) mdWrap.sync(); if (onInsert) onInsert(msg); refresh(); };
 
-  // --- presets ---
+  // Agregar/quitar un bloque = un interruptor. Si el texto del bloque ya aparece
+  // en el archivo pero SIN marca (pegado a mano o con la plantilla vieja), avisamos
+  // antes de duplicar en vez de agregarlo en silencio.
+  async function toggle(b) {
+    if (hasBlock(ta.value, b.id)) {
+      ta.value = removeBlock(ta.value, b.id);
+      changed("bloque quitado — acordate de guardar");
+      return;
+    }
+    const heading = (b.markdown.trim().split("\n")[0] || "").replace(/^#+\s*/, "").trim();
+    if (heading && ta.value.includes(heading)) {
+      const ok = await confirmDialog({
+        title: "Ese bloque ya parece estar",
+        message: "«" + b.title + "» ya figura en el archivo, pero sin la marca de COGO (lo pegaste a mano o viene de la plantilla vieja). Si lo agrego, va a quedar DUPLICADO.",
+        note: heading,
+        confirmText: "Agregar igual",
+        cancelText: "No agregar",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    ta.value = addBlock(ta.value, b);
+    ta.scrollTop = ta.scrollHeight;
+    changed("bloque agregado — acordate de guardar");
+  }
+
+  // --- barra de estado: cuántos hay y si quedaron desactualizados ---
+  const included = blocks.filter(b => hasBlock(ta.value, b.id));
+  const stale = staleBlocks(ta.value, blocks);
+  const head = el("div", "agt-bl-head");
+  head.appendChild(el("span", "agt-bl-count", included.length ? included.length + " bloque(s) en el archivo" : "todavía no agregaste bloques"));
+  if (stale.length) {
+    const upd = el("button", "mini ghost agt-bl-upd", "⟳ actualizar " + stale.length + " desactualizado(s)");
+    upd.title = "El texto de estos bloques cambió en COGO (o los editaste a mano):\n" + stale.map(b => "· " + b.title).join("\n");
+    upd.addEventListener("click", async () => {
+      const ok = await confirmDialog({
+        title: "Actualizar bloques",
+        message: "Se reemplaza el contenido de " + stale.length + " bloque(s) por el texto canónico de COGO. Si los editaste a mano, esos cambios se pierden.",
+        note: stale.map(b => b.title).join(", "),
+        confirmText: "Actualizar",
+      });
+      if (!ok) return;
+      stale.forEach(b => ta.value = updateBlock(ta.value, b));
+      changed("bloques actualizados — acordate de guardar");
+    });
+    head.appendChild(upd);
+  }
+  host.appendChild(head);
+
+  // --- presets: agregan los que falten (nunca duplican) ---
   const pr = el("div", "agt-bl-row");
   pr.appendChild(el("span", "agt-bl-lbl", "Armado rápido"));
   (data.presets || []).forEach(p => {
+    const faltan = p.blocks.filter(id => byId[id] && !hasBlock(ta.value, id));
     const c = el("button", "agt-chip agt-chip-preset", p.title);
-    c.title = p.desc + "\n\nBloques: " + p.blocks.join(", ");
-    c.addEventListener("click", async () => {
-      if (ta.value.trim() && !(await confirmDialog({ title: "Armar " + p.title, message: "Se agregan al final los bloques: " + p.blocks.join(", ") + ".", confirmText: "Agregar" }))) return;
-      p.blocks.forEach(id => { if (byId[id]) insert(byId[id]); });
+    c.title = p.desc + "\n\nBloques: " + p.blocks.join(", ") + (faltan.length ? "\n\nFaltan " + faltan.length : "\n\nYa están todos");
+    if (!faltan.length) c.classList.add("agt-chip-done");
+    c.addEventListener("click", () => {
+      if (!faltan.length) return;
+      faltan.forEach(id => ta.value = addBlock(ta.value, byId[id]));
+      changed(faltan.length + " bloque(s) agregados — acordate de guardar");
     });
     pr.appendChild(c);
   });
   host.appendChild(pr);
 
-  // --- bloques, agrupados ---
+  // --- bloques, agrupados; el chip es un interruptor ---
   const groups = [
-    ["Esenciales", (data.blocks || []).filter(b => b.essential)],
-    ["Según el caso", (data.blocks || []).filter(b => !b.essential && !b.custom)],
-    ["Míos", (data.blocks || []).filter(b => b.custom)],
+    ["Esenciales", blocks.filter(b => b.essential)],
+    ["Según el caso", blocks.filter(b => !b.essential && !b.custom)],
+    ["Míos", blocks.filter(b => b.custom)],
   ];
   groups.forEach(([label, list]) => {
     if (!list.length && label !== "Míos") return;
     const row = el("div", "agt-bl-row");
     row.appendChild(el("span", "agt-bl-lbl", label));
     list.forEach(b => {
-      const c = el("button", "agt-chip" + (b.essential ? " agt-chip-ess" : "") + (b.custom ? " agt-chip-mine" : ""), b.title);
-      c.title = b.desc || "";
-      c.addEventListener("click", () => insert(b));
+      const on = hasBlock(ta.value, b.id);
+      const c = el("button", "agt-chip" + (b.essential ? " agt-chip-ess" : "") + (b.custom ? " agt-chip-mine" : "") + (on ? " on" : ""));
+      c.appendChild(el("span", "agt-chip-mark", on ? "✓" : "+"));
+      c.appendChild(el("span", null, b.title));
+      c.title = (b.desc || b.title) + "\n\n" + (on ? "Está en el archivo — clic para QUITARLO." : "Clic para agregarlo al final.");
+      c.addEventListener("click", () => toggle(b));
       row.appendChild(c);
       if (b.custom) {
-        const x = el("button", "agt-chip-x", "×");
-        x.title = "Borrar este bloque mío";
-        x.addEventListener("click", async e => {
-          e.stopPropagation();
-          if (!(await confirmDialog({ title: "Borrar bloque", message: "Se elimina «" + b.title + "» del catálogo.", confirmText: "Borrar", danger: true }))) return;
-          await api("/api/agent-blocks?id=" + encodeURIComponent(b.id), { method: "DELETE" }).catch(() => null);
-          buildBlockPicker(host, ta, onInsert);
-        });
-        row.appendChild(x);
+        const ed = el("button", "agt-chip-ed", "✎");
+        ed.title = "Ver / editar / borrar este bloque tuyo";
+        ed.addEventListener("click", e => { e.stopPropagation(); editCustomBlock(b, refresh); });
+        row.appendChild(ed);
       }
     });
     if (label === "Míos") {
       const add = el("button", "agt-chip agt-chip-add", "+ guardar bloque");
-      add.title = "Guarda el texto seleccionado en el editor (o todo) como un bloque reutilizable.";
-      add.addEventListener("click", async () => {
-        const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim() || ta.value.trim();
-        if (!sel) { await confirmDialog({ title: "Nada que guardar", message: "Escribí (o seleccioná) el texto que querés convertir en bloque reutilizable.", confirmText: "Entendido" }); return; }
-        const title = await promptDialog({ title: "Guardar como bloque", message: "Se guarda " + (ta.selectionStart !== ta.selectionEnd ? "lo SELECCIONADO" : "TODO el editor") + " como pieza reutilizable para cualquier agente.", placeholder: "ej: Convenciones del repo", confirmText: "Guardar" });
-        if (!title) return;
-        const r = await api("/api/agent-blocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, desc: "bloque propio", markdown: sel }) }).catch(() => null);
-        if (r && r.ok) buildBlockPicker(host, ta, onInsert);
+      add.title = "Convierte el texto seleccionado del editor (o todo) en una pieza reutilizable, guardada en tu vault.";
+      add.addEventListener("click", () => {
+        const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+        editCustomBlock({ id: "", title: "", desc: "", markdown: sel || "" }, refresh, !sel);
       });
       row.appendChild(add);
+      row.appendChild(el("span", "agt-bl-hint", "se guardan en tu vault (.cogo/agent-blocks.json) y sirven para cualquier agente"));
     }
     host.appendChild(row);
   });
@@ -116,11 +251,66 @@ async function buildBlockPicker(host, ta, onInsert) {
   ti.placeholder = "pegá el token del agente (opcional) — va en el bloque «Conexión»";
   ti.value = state.blockToken || "";
   ti.title = "COGO guarda los tokens hasheados: no puede recuperarlos. Pegá el que te mostró al emitirlo (menú ⋮ → Conexiones MCP).";
-  ti.addEventListener("change", () => { state.blockToken = ti.value.trim(); buildBlockPicker(host, ta, onInsert); });
+  ti.addEventListener("change", () => { state.blockToken = ti.value.trim(); refresh(); });
   tk.appendChild(ti);
   const labels = (data.token_labels || []).filter(Boolean);
   if (labels.length) tk.appendChild(el("span", "agt-bl-hint", "emitidos: " + labels.join(", ")));
   host.appendChild(tk);
+}
+
+// editCustomBlock abre el editor de un bloque propio (nuevo o existente): título,
+// para qué sirve y el contenido markdown con el editor visual. Desde acá también
+// se borra — así un bloque guardado deja de ser una caja negra.
+function editCustomBlock(b, onSaved, emptyHint) {
+  const isNew = !b.id;
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card tokens-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", isNew ? "Nuevo bloque propio" : "Editar bloque"));
+  card.appendChild(el("p", "tk-intro", "Una pieza reutilizable tuya. Se guarda en el vault y aparece en el catálogo de todos los archivos de instrucciones." + (emptyHint ? " Tip: si seleccionás texto en el editor antes de crear el bloque, viene cargado." : "")));
+
+  const tIn = el("input"); tIn.placeholder = "título · ej: Convenciones del repo"; tIn.value = b.title || "";
+  card.appendChild(field("Título", tIn));
+  const dIn = el("input"); dIn.placeholder = "para qué sirve (se muestra al pasar el mouse)"; dIn.value = b.desc || "";
+  card.appendChild(field("Descripción", dIn));
+  const ta = el("textarea", "md"); ta.rows = 10; ta.value = b.markdown || "";
+  card.appendChild(field("Contenido (markdown)", mdEditor(ta, null)));
+
+  const st = el("span", "lint-status");
+  const acts = el("div", "modal-acciones");
+  if (!isNew) {
+    const del = el("button", "ghost au-danger", "Borrar");
+    del.addEventListener("click", async () => {
+      if (!(await confirmDialog({ title: "Borrar bloque", message: "Se elimina «" + b.title + "» del catálogo. Los archivos donde ya lo insertaste no cambian.", confirmText: "Borrar", danger: true }))) return;
+      await api("/api/agent-blocks?id=" + encodeURIComponent(b.id), { method: "DELETE" }).catch(() => null);
+      close(); if (onSaved) onSaved();
+    });
+    acts.appendChild(del);
+  }
+  const save = el("button", null, "Guardar");
+  save.addEventListener("click", async () => {
+    if (!tIn.value.trim() || !ta.value.trim()) { st.textContent = "hace falta título y contenido"; return; }
+    save.disabled = true;
+    const r = await api("/api/agent-blocks", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: b.id, title: tIn.value.trim(), desc: dIn.value.trim(), markdown: ta.value }) }).catch(() => null);
+    save.disabled = false;
+    if (r && r.ok) { close(); if (onSaved) onSaved(); }
+    else st.textContent = (r && r.error) || "no se pudo guardar";
+  });
+  acts.appendChild(st); acts.appendChild(save);
+  card.appendChild(acts);
+
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  function close() { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); }
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+  setTimeout(() => tIn.focus(), 60);
 }
 
 // spinner is a small animated "working" indicator for long operations, so the UI
@@ -645,15 +835,17 @@ async function renderAgents(main) {
   main.appendChild(tabs);
 
   const doc = await api("/api/agent-docs?name=" + encodeURIComponent(current));
-  const ta = el("textarea", "agt-editor mono"); ta.rows = 18; ta.value = doc.content || "";
+  const ta = el("textarea", "agt-editor mono md"); ta.rows = 18; ta.value = doc.content || "";
   ta.placeholder = "Elegí bloques arriba (o escribí a mano) para armar las instrucciones de " + current + ".";
+  // Mismo editor visual que las notas: barra de formato + vista previa dividida.
+  const mdWrap = mdEditor(ta, null);
 
   // --- armador de bloques: piezas reutilizables que COGO recomienda ---
   // Va ARRIBA del editor: primero elegís las piezas, abajo ves el archivo que se arma.
   const bb = el("div", "agt-blocks");
   main.appendChild(bb);
-  buildBlockPicker(bb, ta, () => st.textContent = "bloque insertado — acordate de guardar");
-  main.appendChild(ta);
+  buildBlockPicker(bb, ta, msg => st.textContent = msg || "bloque insertado — acordate de guardar", mdWrap);
+  main.appendChild(mdWrap);
 
   const bar = el("div", "agt-bar");
   const save = el("button", "mini", "Guardar");
@@ -681,14 +873,14 @@ async function renderAgents(main) {
     if (ta.value.trim() && !(await confirmDialog({ title: "Cargar plantilla", message: "Reemplaza el contenido actual con la plantilla del protocolo COGO para " + current + ".", confirmText: "Cargar" }))) return;
     const tool = /claude/i.test(current) ? "claude" : "";
     const r = await api("/api/agents-md" + (tool ? "?tool=" + tool : "")).catch(() => null);
-    if (r) ta.value = r.markdown;
+    if (r) { ta.value = r.markdown; mdWrap.sync(); buildBlockPicker(bb, ta, msg => st.textContent = msg, mdWrap); }
   });
   ins.addEventListener("click", () => { insRow.classList.toggle("hidden"); if (!insRow.classList.contains("hidden")) iq.focus(); });
   igo.addEventListener("click", async () => {
     igo.disabled = true;
     const p = await api("/api/pack?" + new URLSearchParams({ query: iq.value, project: state.project, budget: "0" })).catch(() => null);
     igo.disabled = false;
-    if (p) { ta.value = ta.value.replace(/\s*$/, "") + "\n\n" + p.markdown + "\n"; insRow.classList.add("hidden"); st.textContent = "contexto insertado — acordate de guardar"; }
+    if (p) { ta.value = ta.value.replace(/\s*$/, "") + "\n\n" + p.markdown + "\n"; mdWrap.sync(); insRow.classList.add("hidden"); st.textContent = "contexto insertado — acordate de guardar"; }
   });
   dl.addEventListener("click", () => {
     const blob = new Blob([ta.value], { type: "text/markdown" });
@@ -1451,51 +1643,8 @@ function renderEditor(main) {
   row1.appendChild(field("Proyecto", proj));
   form.appendChild(row1);
 
-  const mdEd = el("div", "md-editor");
   const body = el("textarea", "md"); body.value = d.body; body.setAttribute("rows", "10");
-  const previewPane = el("div", "md-render md-preview");
-  const syncPrev = () => { if (mdEd.classList.contains("split")) previewPane.innerHTML = mdToHtml(body.value); };
-  const touched = () => { d.body = body.value; preview(); syncPrev(); };
-  body.addEventListener("input", touched);
-
-  const ins = (before, after, ph) => {
-    const s = body.selectionStart, e = body.selectionEnd, sel = body.value.slice(s, e) || ph || "";
-    body.value = body.value.slice(0, s) + before + sel + after + body.value.slice(e);
-    body.focus(); body.selectionStart = s + before.length; body.selectionEnd = s + before.length + sel.length;
-    touched();
-  };
-  const linePfx = pfx => {
-    const s = body.selectionStart, ls = body.value.lastIndexOf("\n", s - 1) + 1;
-    body.value = body.value.slice(0, ls) + pfx + body.value.slice(ls);
-    body.focus(); body.selectionStart = body.selectionEnd = s + pfx.length; touched();
-  };
-  const tbRow = el("div", "md-tb-row");
-  [["B", () => ins("**", "**", "negrita"), "negrita"],
-   ["I", () => ins("*", "*", "itálica"), "itálica"],
-   ["‹›", () => ins("`", "`", "código"), "código"],
-   ["H", () => linePfx("## "), "encabezado"],
-   ["—", () => linePfx("- "), "lista"],
-   ["❝", () => linePfx("> "), "cita"],
-   ["🔗", () => ins("[", "](url)", "texto"), "link"]].forEach(([lab, fn, title]) => {
-    const btn = el("button", "md-tb", lab); btn.type = "button"; btn.title = title;
-    btn.addEventListener("click", ev => { ev.preventDefault(); fn(); });
-    tbRow.appendChild(btn);
-  });
-  tbRow.appendChild(el("span", "md-tb-sp"));
-  const prevBtn = el("button", "md-tb md-prev", "vista previa"); prevBtn.type = "button";
-  prevBtn.addEventListener("click", ev => {
-    ev.preventDefault();
-    const on = mdEd.classList.toggle("split");
-    prevBtn.classList.toggle("on", on);
-    prevBtn.textContent = on ? "ocultar preview" : "vista previa";
-    syncPrev();
-  });
-  tbRow.appendChild(prevBtn);
-
-  mdEd.appendChild(tbRow);
-  const bodyRow = el("div", "md-body-row");
-  bodyRow.appendChild(body); bodyRow.appendChild(previewPane);
-  mdEd.appendChild(bodyRow);
+  const mdEd = mdEditor(body, () => { d.body = body.value; preview(); });
   form.appendChild(field("Nota (markdown) — empezá con ## Claim", mdEd));
 
   const evWrap = el("div", "ev-wrap");

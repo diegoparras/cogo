@@ -215,7 +215,7 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .md-body-row textarea.md { width: 100%; border: 0; border-radius: 0; }
 .md-body-row textarea.md:focus { box-shadow: none; border: 0; background: var(--bg); }
 .md-preview { display: none; }
-.md-editor.split textarea.md { flex: 1; border-right: 1px solid var(--border); }
+.md-editor.split textarea.md { flex: 1 1 0; min-width: 0; border-right: 1px solid var(--border); }
 .md-editor.split .md-preview { display: block; flex: 1; padding: 11px 15px; overflow-y: auto; max-height: 360px; }
 
 /* ---- modal de nota (clic en un nodo del grafo) ---- */
@@ -524,9 +524,23 @@ canvas.graph-canvas:active { cursor: grabbing; }
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); color: var(--accent); }
 .agt-chip-mine { border-style: dashed; }
 .agt-chip-add { color: var(--muted); border-style: dashed; }
-.agt-chip-x { border: none; background: transparent; color: var(--muted-2); cursor: pointer;
-  font-size: 15px; line-height: 1; padding: 0 4px 0 0; margin-left: -5px; border-radius: 6px; }
-.agt-chip-x:hover { color: var(--err); background: transparent; }
+/* Interruptor: el chip muestra si el bloque YA está en el archivo */
+.agt-chip { display: inline-flex; align-items: center; gap: 6px; }
+.agt-chip-mark { font-size: 11px; font-weight: 700; opacity: .5; }
+.agt-chip.on { background: color-mix(in srgb, var(--ok) 13%, var(--panel));
+  border-color: color-mix(in srgb, var(--ok) 42%, var(--border)); color: var(--ok); font-weight: 600; }
+.agt-chip.on .agt-chip-mark { opacity: 1; }
+.agt-chip.on:hover { background: color-mix(in srgb, var(--err) 10%, var(--panel));
+  border-color: color-mix(in srgb, var(--err) 40%, var(--border)); color: var(--err); }
+.agt-chip-done { opacity: .5; cursor: default; }
+.agt-chip-ed { border: none; background: transparent; color: var(--muted-2); cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 0 4px 0 0; margin-left: -4px; border-radius: 6px; }
+.agt-chip-ed:hover { color: var(--accent); background: transparent; }
+.agt-bl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 8px; margin-bottom: 2px; border-bottom: 1px solid var(--border); }
+.agt-bl-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.agt-bl-upd { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 34%, var(--border)); }
+.agt-bl-upd:hover { background: color-mix(in srgb, var(--warn) 10%, var(--panel)); border-color: var(--warn); }
 .agt-bl-token { flex: 1; min-width: 220px; font-size: 12px; font-family: var(--mono); }
 .agt-bl-hint { font-size: 11px; color: var(--muted-2); }
 .agt-ins { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; }
