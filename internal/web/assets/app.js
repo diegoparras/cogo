@@ -367,9 +367,39 @@ function mdToHtml(src) {
   const lines = (src || "").replace(/\r\n/g, "\n").split("\n");
   let html = "", i = 0, list = null;
   const closeList = () => { if (list) { html += "</" + list + ">"; list = null; } };
-  const special = /^(#{1,6}\s|```|>|\s*[-*]\s|\s*\d+\.\s|-{3,}\s*$|\*{3,}\s*$)/;
+  const special = /^(#{1,6}\s|```|>|\s*[-*]\s|\s*\d+\.\s|-{3,}\s*$|\*{3,}\s*$|\s*<!--)/;
+  // Fila separadora de una tabla: |---|---| (admite alineación con :)
+  const isTableSep = s => /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(s) && s.includes("-");
+  const cells = row => {
+    let s = row.trim();
+    if (s.startsWith("|")) s = s.slice(1);
+    if (s.endsWith("|")) s = s.slice(0, -1);
+    return s.split("|").map(c => c.trim());
+  };
   while (i < lines.length) {
     const ln = lines[i];
+    // Comentarios HTML: invisibles al renderizar (así las marcas de bloque
+    // `<!-- cogo:block:… -->` no ensucian la vista previa).
+    if (/^\s*<!--/.test(ln)) {
+      closeList();
+      if (/-->\s*$/.test(ln)) { i++; continue; }
+      while (i < lines.length && !/-->/.test(lines[i])) i++;
+      i++; continue;
+    }
+    // Tablas: una fila con | seguida de la fila separadora.
+    if (ln.includes("|") && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      closeList();
+      const head = cells(ln);
+      i += 2;
+      let body = "";
+      while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) {
+        body += "<tr>" + cells(lines[i]).map(c => "<td>" + mdInline(c) + "</td>").join("") + "</tr>";
+        i++;
+      }
+      html += "<table class=\"md-table\"><thead><tr>" + head.map(c => "<th>" + mdInline(c) + "</th>").join("") +
+        "</tr></thead><tbody>" + body + "</tbody></table>";
+      continue;
+    }
     if (/^```/.test(ln)) {
       closeList(); i++;
       let code = "";
@@ -391,7 +421,11 @@ function mdToHtml(src) {
     if (/^\s*$/.test(ln)) { closeList(); i++; continue; }
     closeList();
     let para = ln; i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !special.test(lines[i])) { para += " " + lines[i]; i++; }
+    // Un párrafo termina en una línea vacía, en un bloque especial, o cuando
+    // arranca una tabla (fila + separadora) — así una tabla pegada a un párrafo
+    // no se lo traga, sin partir párrafos que solo contienen un "|".
+    const startsTable = j => j + 1 < lines.length && lines[j].includes("|") && isTableSep(lines[j + 1]);
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !special.test(lines[i]) && !startsTable(i)) { para += " " + lines[i]; i++; }
     html += "<p>" + mdInline(para) + "</p>";
   }
   closeList();

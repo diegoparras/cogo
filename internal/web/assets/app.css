@@ -200,6 +200,10 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .md-render pre code { background: none; border: 0; padding: 0; }
 .md-render blockquote { margin: 10px 0; padding: 4px 14px; border-left: 3px solid var(--border); color: var(--muted-2); }
 .md-render a { color: var(--accent); }
+.md-table { border-collapse: collapse; margin: 10px 0; font-size: 12.5px; width: 100%; display: block; overflow-x: auto; }
+.md-table th, .md-table td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+.md-table th { background: var(--card); font-weight: 600; }
+.md-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--card) 45%, transparent); }
 .md-render a.wikilink { cursor: pointer; text-decoration: none; border-bottom: 1px dashed var(--accent); }
 .md-render hr { border: 0; border-top: 1px solid var(--hairline); margin: 14px 0; }
 .md-render > :first-child { margin-top: 0; }
