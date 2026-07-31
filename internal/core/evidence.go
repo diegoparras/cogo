@@ -35,6 +35,35 @@ var (
 	lineWordRe   = regexp.MustCompile(`(?i)\s+lines?\s+\d+(-\d+)?$`)
 )
 
+// artifactExists, when set, reports whether a content-addressed artifact (an
+// "artifact://<sha256>" ref) is present in the configured store. It is injected
+// by the server (SetArtifactChecker) so core stays storage-agnostic, mirroring
+// the writeHook seam. When nil, artifact refs are left unchecked — the same
+// conservative default as any evidence COGO can't verify offline.
+var artifactExists func(sha string) bool
+
+// SetArtifactChecker installs the artifact-existence probe used to resolve
+// "artifact://" evidence. Pass nil to disable (standalone with no store).
+func SetArtifactChecker(f func(sha string) bool) { artifactExists = f }
+
+// artifactPrefix marks an evidence ref whose bytes COGO stores by content hash.
+const artifactPrefix = "artifact://"
+
+// ArtifactRef builds the evidence ref for a stored artifact.
+func ArtifactRef(sha string) string { return artifactPrefix + sha }
+
+// artifactStatus resolves an artifact ref: because the key IS the content hash,
+// it can only be present (resolved) or gone (broken) — it never drifts.
+func artifactStatus(sha string) string {
+	if artifactExists == nil {
+		return EvUnchecked
+	}
+	if artifactExists(sha) {
+		return EvResolved
+	}
+	return EvBroken
+}
+
 // ResolveEvidence annotates every evidence item in the vault with a runtime
 // Status (see the constants). roots supplies the base directory repo-relative
 // refs resolve against, per project (empty roots disables relative checking). It
@@ -94,6 +123,11 @@ func resolveRefPath(ref, root string) (status, path string) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return EvUnchecked, ""
+	}
+	// A content-addressed artifact: check the store, never the filesystem. Handled
+	// first so the locator/line-suffix logic below can't mangle the hash.
+	if strings.HasPrefix(ref, artifactPrefix) {
+		return artifactStatus(strings.TrimSpace(ref[len(artifactPrefix):])), ""
 	}
 
 	// Take the locator token: everything before a prose separator, then the first

@@ -8,6 +8,7 @@ package web
 import (
 	"archive/zip"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/diegoparras/cogo/internal/agentdocs"
 	"github.com/diegoparras/cogo/internal/agentsmd"
+	"github.com/diegoparras/cogo/internal/artifact"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/history"
@@ -28,6 +30,7 @@ import (
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
+	"github.com/diegoparras/cogo/internal/secretscan"
 	"github.com/diegoparras/cogo/internal/tokens"
 	"github.com/diegoparras/cogo/internal/xray"
 )
@@ -117,6 +120,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mandate", s.handleMandate)
 	mux.HandleFunc("/api/tokens", s.handleTokens)
 	mux.HandleFunc("/api/audit", s.handleAudit)
+	mux.HandleFunc("/api/artifact", s.handleArtifact)
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
@@ -385,6 +389,72 @@ func auditLines(b []byte) []string {
 		}
 	}
 	return out
+}
+
+// handleArtifact stores and serves content-addressed artifacts. POST stashes
+// content (JSON: content or content_base64) behind the secret guard and returns
+// its `artifact://<sha>` ref to cite as evidence; GET ?sha= streams the bytes
+// back (with integrity re-checked by the store). The store is R2 when COGO_R2_*
+// is set, else disk under the vault.
+func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request) {
+	store := artifact.FromEnv(s.dir)
+	switch r.Method {
+	case http.MethodGet:
+		sha := strings.TrimSpace(r.URL.Query().Get("sha"))
+		if sha == "" {
+			http.Error(w, "sha required", http.StatusBadRequest)
+			return
+		}
+		b, err := store.Get(r.Context(), sha)
+		if err == artifact.ErrNotFound {
+			http.Error(w, "artifact not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write(b)
+	case http.MethodPost:
+		var in struct {
+			Content       string `json:"content"`
+			ContentBase64 string `json:"content_base64"`
+			ContentType   string `json:"content_type"`
+			Redact        bool   `json:"redact"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		data := []byte(in.Content)
+		if in.ContentBase64 != "" {
+			d, err := base64.StdEncoding.DecodeString(in.ContentBase64)
+			if err != nil {
+				http.Error(w, "bad content_base64", http.StatusBadRequest)
+				return
+			}
+			data = d
+		}
+		if len(data) == 0 {
+			http.Error(w, "content required", http.StatusBadRequest)
+			return
+		}
+		out, findings, blocked := secretscan.Guard(data, in.Redact)
+		if blocked {
+			writeJSON(w, map[string]any{"ok": false, "blocked": true, "findings": findings})
+			return
+		}
+		sha, err := store.Put(r.Context(), out, in.ContentType)
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "sha": sha, "ref": core.ArtifactRef(sha), "backend": store.Backend(), "findings": findings})
+	default:
+		http.Error(w, "GET or POST", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleTokens manages the issued MCP access tokens: GET lists them (no

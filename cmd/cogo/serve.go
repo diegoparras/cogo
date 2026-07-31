@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/cogo/internal/artifact"
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
@@ -19,6 +21,7 @@ import (
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
+	"github.com/diegoparras/cogo/internal/secretscan"
 	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/tokens"
 	"github.com/diegoparras/cogo/internal/web"
@@ -96,6 +99,16 @@ func cmdServe(args []string) error {
 func newMCPServer(dir string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "cogo", Version: version}, nil)
 	scrubber := scrub.FromEnv()
+	store := artifact.FromEnv(dir) // R2 if COGO_R2_* is set, else disk under .cogo/artifacts
+	// Resolve "artifact://<sha>" evidence against the store: present → the citation
+	// holds; gone → it breaks and the color degrades. Content-addressed, so it can
+	// only exist or not — verify recomputes instead of trusting a stale claim.
+	core.SetArtifactChecker(func(sha string) bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		ok, _ := store.Has(ctx, sha)
+		return ok
+	})
 	cache := core.NewVaultCache(dir) // mtime-keyed reads: the MCP is a long-running server
 	// loadVault reads the vault and checks that evidence refs resolve, so the
 	// color an agent consumes reflects broken citations (see core.ResolveEvidence).
@@ -125,6 +138,33 @@ func newMCPServer(dir string) *mcp.Server {
 		p := core.BuildPack(vault, contradictions(), core.PackOptions{Query: in.Query, Project: in.Project, Budget: in.Budget, Today: today()})
 		savings.Add(dir, p.RawTokens-p.Tokens, today().String())
 		return textResult(p.Markdown), nil, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "stash",
+		Description: "Store an artifact by its content hash and get back a ref to cite as evidence: `artifact://<sha256>`. Use it for the things that prove a claim but rot away today — a failed command's full output, a config dump, a CSV, a small file. COGO keeps the bytes, so `verify` can later RECOMPUTE (the object exists and its hash still matches) instead of trusting a reference that has since disappeared. A secret guard runs FIRST: if the content looks like it holds credentials, stash REFUSES by default — nothing secret should become an immutable hash — so clean it, or pass redact:true to store a masked copy. `content` for text, `content_base64` for binary. Do NOT stash long documentation; that belongs in the repo.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in stashIn) (*mcp.CallToolResult, any, error) {
+		data, err := stashBytes(in)
+		if err != nil {
+			return errResult(fmt.Errorf("stash: bad content_base64: %w", err)), nil, nil
+		}
+		if len(data) == 0 {
+			return errResult(fmt.Errorf("stash needs `content` or `content_base64`")), nil, nil
+		}
+		out, findings, blocked := secretscan.Guard(data, in.Redact)
+		if blocked {
+			return textResult(fmt.Sprintf("⛔ Not stored — possible secret(s) detected: %s.\nClean the content, or call again with redact:true to store a masked copy.", secretscan.Summary(findings))), nil, nil
+		}
+		sha, err := store.Put(ctx, out, in.ContentType)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "Stored in %s. Cite it as evidence with:\n\n    %s\n", store.Backend(), core.ArtifactRef(sha))
+		if len(findings) > 0 {
+			fmt.Fprintf(&b, "\n⚠ Redacted before storing: %s\n", secretscan.Summary(findings))
+		}
+		return textResult(b.String()), nil, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -450,6 +490,22 @@ type packIn struct {
 
 type recallIn struct {
 	Since string `json:"since,omitempty" jsonschema:"optional cursor from a previous recall (RFC3339 UTC). If set, recall returns ONLY the notes that changed since then — the delta to sync another agent (or this one, post-compaction) without re-reading everything. Omit for the full load-bearing bundle. The reply always ends with a fresh cursor to pass next time."`
+}
+
+type stashIn struct {
+	Content       string `json:"content,omitempty" jsonschema:"the artifact as text (a command's output, a log, a CSV, a config dump)"`
+	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"the artifact as base64, for binary content (a PDF, a screenshot)"`
+	ContentType   string `json:"content_type,omitempty" jsonschema:"optional MIME type, e.g. text/plain or application/pdf"`
+	Redact        bool   `json:"redact,omitempty" jsonschema:"if true, store a copy with any detected secrets masked instead of refusing"`
+}
+
+// stashBytes pulls the artifact bytes from a stash request (base64 wins if both
+// are given).
+func stashBytes(in stashIn) ([]byte, error) {
+	if in.ContentBase64 != "" {
+		return base64.StdEncoding.DecodeString(in.ContentBase64)
+	}
+	return []byte(in.Content), nil
 }
 
 // mandateChangedSince reports whether the mandate file was written after the

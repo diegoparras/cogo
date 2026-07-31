@@ -217,6 +217,11 @@ Ninguna es obligatoria en local. Agrupadas por función.
 | `COGO_LLM_STRONG_API_KEY` | — | key del modelo fuerte. |
 | `COGO_EMBED_MODEL` | — | modelo de **embeddings** (ej. `text-embedding-3-small`) — prende la **búsqueda semántica** del tool `search` (por significado, no por palabra). Reusa el mismo base/key del LLM; cachea en `.cogo/embeddings.json`. Opcional. |
 | `COGO_AUDIT_MAX` | `5000` | tope de entradas del registro de auditoría (`.cogo/audit.jsonl`): se **auto-recorta** a las últimas N para no crecer sin fin. `0` = sin límite. También podés descargar/vaciar/borrar registros desde el visor (menú ⋮ → *Auditoría MCP*). |
+| `COGO_R2_ENDPOINT` | — | endpoint S3 de **Cloudflare R2** (ej. `https://<account>.r2.cloudflarestorage.com`). Prende el store de **artefactos** por contenido (`stash` / evidencia `artifact://<sha>`); sin esto, los artefactos van a disco (`<vault>/.cogo/artifacts`). |
+| `COGO_R2_BUCKET` | `cogo` | bucket de R2 para los artefactos. |
+| `COGO_R2_ACCESS_KEY_ID` | — | Access Key ID del **R2 API Token** (permiso *Object Read & Write*). |
+| `COGO_R2_SECRET_ACCESS_KEY` | — | Secret Access Key del R2 API Token. Por env/secret, **nunca** commitear. |
+| `COGO_R2_REGION` | `auto` | región S3; para R2 es `auto`. |
 
 > Podés configurar el modelo IA **desde el visor** (menú ⋮ → *Ajustes · Modelo IA*)
 > en vez de env vars: se guarda en `<vault>/.cogo/llm.json` (gitignoreado, texto

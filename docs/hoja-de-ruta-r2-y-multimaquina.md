@@ -237,9 +237,20 @@ En este orden, por relación entre lo que cuesta y lo que desbloquea:
 
 1. **El cursor en `recall`.** Barato y convierte el vault en canal entre agentes. **✅ HECHO (2026-07-07)**: `recall(since: <cursor>)` devuelve solo las notas cuyo último cambio es posterior al cursor (delta), ordenadas de más nueva a más vieja, y cada respuesta termina con un cursor fresco. Fuente: el historial por nota (`.cogo/history/<id>.jsonl`), ahora con precisión sub-segundo para que dos cambios en el mismo segundo que el cursor no se pierdan. Sin `since` = el bundle completo de siempre + cursor. Avisa además si el mandato cambió desde el cursor. Testeado (unit + e2e por handshake MCP real).
 2. **Guard antes de subir cualquier artefacto.** Antes de tocar R2, no después:
-   una credencial guardada con hash inmutable no se borra.
+   una credencial guardada con hash inmutable no se borra. **✅ HECHO (2026-07-07)**:
+   `internal/secretscan` corre antes de cada `Put` y, por defecto, **rechaza**
+   guardar si detecta un secreto (claves AWS/R2/Google/GitHub/Slack, `sk-`/`cfut_`,
+   private keys, JWT, credenciales en URL, asignaciones secreto=valor); opt-in a
+   `redact:true` para guardar una copia censurada.
 3. **R2 con clave por SHA-256**, y `verify` recalculando el hash. Es lo que
-   convierte la veracidad en algo computado.
+   convierte la veracidad en algo computado. **✅ HECHO (2026-07-07)**: store
+   content-addressed (`internal/artifact`, backend R2 + disco, SigV4 propio) +
+   tool MCP `stash` / `POST /api/artifact` que devuelven `artifact://<sha>` para
+   citar como evidencia; `ResolveEvidence` chequea la existencia en el store
+   (presente → resuelto, ausente → roto), así el color se **recomputa**. Como la
+   clave ES el hash, nunca driftea. Verificado end-to-end contra R2 real.
+   Pendiente de este punto (tramo 3): UI de subir archivo en el visor y que la
+   **Papelera llegue a R2 con conteo de referencias** (dedup) antes de borrar.
 4. **Alcance de validez en la nota** —sistema operativo, commit, runtime—. Sin
    esto, la memoria compartida entre máquinas se contamina sola.
 5. **Tokens por agente.**

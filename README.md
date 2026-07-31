@@ -161,12 +161,14 @@ La **frescura** decae por tipo (un comando dura 30 días; una decisión de arqui
 | Cara | Para quién | Cómo |
 |------|------------|------|
 | **Visor web** | todos | `cogo serve -http :8080` → navegador (Vault · Frescura · Pack · Grafo · Revisión · **Guard** · **Veracidad**) |
-| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — tools: `pack` `search` `open` `capture` `verify` `archive` `restore` `remove` `recall` `reflect` `guard` `xray` |
+| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — tools: `pack` `search` `open` `capture` `verify` `archive` `restore` `remove` `recall` `reflect` `stash` `guard` `xray` |
 | **CLI** | power users | `cogo add · pack · search · stale · verify · lint · agents` |
 
 Es un **solo binario Go** (imagen Docker `scratch` de ~12 MB) que es las tres cosas a la vez.
 
 > **Memoria compartida entre máquinas.** Con el MCP sobre HTTP + token, cualquier agente en cualquier máquina lee y escribe el mismo vault. `recall` es el **cursor** que lo vuelve un canal, no solo un archivo: la primera llamada devuelve el bundle que sostiene el proyecto (mandato + decisiones verdes) y un cursor; pasás ese cursor como `since` y `recall` te da **solo lo que cambió** desde entonces —sin releer todo—, más un cursor nuevo.
+
+> **Artefactos con dirección por contenido.** `stash` guarda un artefacto (la salida completa de un comando, un CSV, un archivo chico) bajo la clave = **SHA-256 de su contenido** y te devuelve `artifact://<sha>` para citarlo como evidencia. Como la clave ES el hash, la referencia prueba que el artefacto no cambió: `verify` **recomputa** (existe y su hash matchea → la evidencia vale; desapareció → se rompe y el color cae) en vez de confiar en una cita que se pudre. Un **guard de secretos** corre antes de guardar y, por defecto, **se niega** a inmortalizar credenciales (opt-in a redactar). Standalone guarda en disco (`.cogo/artifacts`); con `COGO_R2_*` guarda en Cloudflare R2.
 
 ### Todo se maneja desde el visor (menú ⋮)
 
