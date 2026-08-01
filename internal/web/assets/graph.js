@@ -44,6 +44,11 @@
     supersedes: { dash: [10, 6], w: 2.6, dir: true, color: "#e0913a", label: "reemplaza a" },
     caused_by: { dash: [4, 5], w: 2.3, dir: true, color: "#c07ad6", label: "causada por" },
     wikilink: { dash: [1.5, 5], w: 1.7, dir: false, color: "#8b93a3", label: "se relaciona" },
+    // Contención (carpeta → archivo) en el mapa del repositorio: es estructura,
+    // no una relación con significado, así que va como hilo tenue y SIN flecha.
+    // Si se dibujara como una dependencia, cientos de flechas azules taparían
+    // justo lo que el mapa viene a mostrar: dónde está el color.
+    contains: { dash: [], w: 1, dir: false, color: "rgba(150,160,178,.28)", label: "contiene" },
   };
   window.CogoGraphKinds = KIND; // la leyenda de aristas lo lee
 

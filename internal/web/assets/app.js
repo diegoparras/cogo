@@ -993,61 +993,211 @@ function graphModeBar(main) {
   main.appendChild(row);
 }
 
-// renderRepoMap: el árbol del repo como grafo, con cada archivo citado pintado
-// por el color de sus notas y cada carpeta contando los archivos SIN memoria.
+// renderRepoMap: el repositorio con la memoria encima. Dos lecturas de lo mismo,
+// porque sirven para cosas distintas: el GRAFO muestra la forma del proyecto y
+// dónde están las islas de conocimiento; el ÁRBOL es el navegador de siempre,
+// para cuando ya sabés qué archivo buscás. Al costado, el panel muestra lo que
+// hay adentro de lo que clickeaste (el contenido del archivo, o el listado de la
+// carpeta) y desde ahí citás una línea como evidencia.
 async function renderRepoMap(main) {
   viewHead(main, "Suite Escriba · Memoria", "Mapa del repositorio",
-    "El repo pintado con tu memoria: los archivos citados toman el color de sus notas y cada carpeta te dice cuántos quedaron sin ninguna.");
+    "El repo con tu memoria encima: los archivos citados toman el color de sus notas y el resto queda neutro. Clic en cualquiera para ver qué tiene adentro.");
   graphModeBar(main);
 
-  const bar = el("div", "viewbar");
-  // El repo puede venir en la URL (?repo=owner/name&ref=rama): así el mapa es un
-  // link compartible, no algo que solo existe en tu localStorage.
+  const st = {
+    repo: "", ref: "", vista: window.__repoVista || "grafo",
+    data: null, sel: null,
+  };
   const qs = new URLSearchParams(location.search);
+
+  // --- barra: repo, rama, vista, acciones ---
+  const bar = el("div", "viewbar");
   const ri = el("input", "repo-in"); ri.placeholder = "owner/repositorio";
   ri.value = qs.get("repo") || localStorage.getItem("cogo.repo") || "";
   const rf = el("input", "repo-ref"); rf.placeholder = "rama (opcional)";
   rf.value = qs.get("ref") || localStorage.getItem("cogo.repo.ref") || "";
   const go = el("button", "mini", "mapear");
-  const st = el("span", "lint-status");
-  bar.append(ri, rf, go, st);
+  const seg = el("div", "seg");
+  const bg = el("button", "seg-btn", "Grafo"), bt = el("button", "seg-btn", "Árbol");
+  seg.append(bg, bt);
+  const reset = el("button", "mini ghost", "recentrar");
+  const fsb = el("button", "mini ghost", "⛶ pantalla completa");
+  const status = el("span", "lint-status");
+  bar.append(ri, rf, go, el("span", "vb-spacer"), seg, reset, fsb, status);
   main.appendChild(bar);
 
   const summary = el("div", "repo-sum");
   main.appendChild(summary);
-  const wrap = el("div", "graph-wrap");
-  main.appendChild(wrap);
+
+  // --- cuerpo: lienzo/árbol a la izquierda, panel de contenido a la derecha ---
+  const view = el("div", "repo-view graph-view");
+  const left = el("div", "repo-left");
+  const panel = el("div", "repo-panel");
+  view.append(left, panel);
+  main.appendChild(view);
+
+  fsb.addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else view.requestFullscreen().catch(() => {});
+  });
+  document.addEventListener("fullscreenchange", () => {
+    fsb.textContent = document.fullscreenElement ? "⛶ salir" : "⛶ pantalla completa";
+    if (window.__gv && window.__gv.resize) setTimeout(() => window.__gv.resize(), 60);
+  });
+
+  function setVista(v) {
+    st.vista = v; window.__repoVista = v;
+    bg.classList.toggle("on", v === "grafo"); bt.classList.toggle("on", v === "arbol");
+    reset.style.display = v === "grafo" ? "" : "none";
+    draw();
+  }
+  bg.addEventListener("click", () => setVista("grafo"));
+  bt.addEventListener("click", () => setVista("arbol"));
+  reset.addEventListener("click", () => { if (window.__gv) window.__gv.reset(); });
+
+  // ---- panel lateral: qué hay adentro de lo que clickeaste ----
+  function panelVacio() {
+    panel.textContent = "";
+    panel.appendChild(el("div", "repo-ph", "Clic en un archivo o una carpeta para ver qué tiene adentro."));
+  }
+  async function verNodo(id) {
+    st.sel = id;
+    const n = (st.data.nodes || []).find(x => x.id === id);
+    if (!n) return;
+    panel.textContent = "";
+    const head = el("div", "repo-phead");
+    head.appendChild(el("span", "dot " + cls(n.color)));
+    head.appendChild(el("span", "repo-ptitle", n.id === st.data.repo.split("/")[1] ? n.id : (n.id.split("/").pop() || n.id)));
+    panel.appendChild(head);
+    panel.appendChild(el("div", "repo-ppath", n.id));
+
+    if (n.notes && n.notes.length) {
+      const nb = el("div", "repo-pnotes");
+      nb.appendChild(el("div", "repo-plbl", n.notes.length + " nota(s) citan este archivo"));
+      n.notes.forEach(x => {
+        const r = el("div", "repo-pnote " + cls(x.color));
+        r.appendChild(el("span", "dot"));
+        r.appendChild(el("span", null, x.id));
+        r.addEventListener("click", () => openNoteModal(x.id));
+        nb.appendChild(r);
+      });
+      panel.appendChild(nb);
+    }
+
+    if (n.type === "dir") {
+      const kids = (st.data.nodes || []).filter(x => parentOf(x.id) === n.id && x.id !== n.id);
+      panel.appendChild(el("div", "repo-plbl", (n.files || 0) + " archivo(s) · " + (n.blind || 0) + " sin memoria"));
+      const ul = el("div", "repo-plist");
+      kids.forEach(k => ul.appendChild(filaEntrada(k)));
+      if (!kids.length) ul.appendChild(el("div", "tk-empty", "Sin elementos para mostrar."));
+      panel.appendChild(ul);
+      return;
+    }
+
+    // archivo: traemos el contenido y lo mostramos con números de línea
+    const load = el("div", "repo-plbl"); panel.appendChild(load);
+    setWorking(load, "abriendo el archivo…");
+    const r = await apiOrError("/api/github?" + new URLSearchParams({ repo: st.repo, ref: st.ref, path: n.id, file: "1" }));
+    load.textContent = "";
+    if (!r.ok) {
+      load.textContent = "⚠ " + r.error;
+      if (r.html_url) { const a = el("a", "link", " abrir en GitHub"); a.href = r.html_url; a.target = "_blank"; load.appendChild(a); }
+      return;
+    }
+    load.textContent = (r.lines || []).length + " líneas · clic en una para citarla como evidencia";
+    const pre = el("div", "repo-code");
+    (r.lines || []).forEach((ln, i) => {
+      const row = el("div", "repo-ln");
+      row.appendChild(el("span", "repo-num", String(i + 1)));
+      row.appendChild(el("span", "repo-txt", ln || " "));
+      row.addEventListener("click", () => citar(n.id, i + 1));
+      pre.appendChild(row);
+    });
+    panel.appendChild(pre);
+  }
+  function filaEntrada(k) {
+    const row = el("div", "repo-row");
+    row.appendChild(el("span", "dot " + cls(k.color)));
+    row.appendChild(el("span", "repo-ico", k.type === "dir" ? "▸" : "·"));
+    row.appendChild(el("span", "repo-name" + (k.type === "dir" ? " dir" : ""), k.id.split("/").pop()));
+    if (k.type === "dir" && k.files) row.appendChild(el("span", "repo-cnt", k.blind + "/" + k.files + " sin memoria"));
+    row.addEventListener("click", () => verNodo(k.id));
+    return row;
+  }
+  async function citar(path, line) {
+    const ref = "github://" + st.repo + (st.ref ? "@" + st.ref : "") + "/" + path + ":" + line;
+    await navigator.clipboard.writeText(ref).catch(() => {});
+    await confirmDialog({
+      title: "Cita copiada", note: ref,
+      message: "Pegala como evidencia en una nota. Si citás una rama, COGO te avisa cuando ese archivo cambie; con un commit fijo la cita es inmutable.",
+      confirmText: "Listo", cancelText: "Cerrar",
+    });
+  }
+  const parentOf = p => { const i = p.lastIndexOf("/"); return i < 0 ? st.data.repo.split("/")[1] : p.slice(0, i); };
+
+  // ---- dibujo ----
+  function draw() {
+    left.textContent = "";
+    if (!st.data) return;
+    if (st.vista === "grafo") {
+      const wrap = el("div", "graph-wrap");
+      left.appendChild(wrap);
+      const gv = CogoGraph.mount(wrap, { nodes: st.data.nodes, edges: st.data.edges },
+        { mode: "2d", onSelect: id => verNodo(id) });
+      window.__gv = gv;
+      gv.setColorFilter(state.graphColors);
+      return;
+    }
+    // árbol: navegador clásico, carpeta por carpeta
+    const tree = el("div", "repo-tree");
+    const raiz = st.data.repo.split("/")[1];
+    const render = (dir, depth) => {
+      const kids = (st.data.nodes || []).filter(x => parentOf(x.id) === dir && x.id !== dir);
+      kids.forEach(k => {
+        const row = filaEntrada(k);
+        row.style.paddingLeft = (10 + depth * 16) + "px";
+        if (st.sel === k.id) row.classList.add("on");
+        tree.appendChild(row);
+        if (k.type === "dir" && (window.__repoOpen || {})[k.id]) render(k.id, depth + 1);
+      });
+    };
+    // en el árbol, clic en carpeta = expandir/colapsar
+    tree.addEventListener("click", e => {
+      const row = e.target.closest(".repo-row"); if (!row) return;
+    }, true);
+    render(raiz, 0);
+    left.appendChild(tree);
+  }
 
   async function load() {
-    const repo = ri.value.trim(); if (!repo) { st.textContent = "escribí un repo como owner/nombre"; return; }
-    localStorage.setItem("cogo.repo", repo); localStorage.setItem("cogo.repo.ref", rf.value.trim());
-    setWorking(st, "leyendo el repositorio…"); summary.textContent = ""; wrap.textContent = "";
-    const r = await apiOrError("/api/github/map?" + new URLSearchParams({ repo, ref: rf.value.trim() }));
-    st.textContent = "";
-    if (!r.ok) { st.textContent = "⚠ " + r.error; return; }
-    const byId = {}; (r.nodes || []).forEach(n => byId[n.id] = n);
+    st.repo = ri.value.trim(); st.ref = rf.value.trim();
+    if (!st.repo) { status.textContent = "escribí un repo como owner/nombre"; return; }
+    localStorage.setItem("cogo.repo", st.repo); localStorage.setItem("cogo.repo.ref", st.ref);
+    setWorking(status, "leyendo el repositorio…"); summary.textContent = ""; left.textContent = ""; panelVacio();
+    const r = await apiOrError("/api/github/map?" + new URLSearchParams({ repo: st.repo, ref: st.ref }));
+    status.textContent = "";
+    if (!r.ok) { status.textContent = "⚠ " + r.error; return; }
+    st.data = r;
+    // todas las carpetas arrancan expandidas en el árbol
+    window.__repoOpen = {};
+    (r.nodes || []).forEach(n => { if (n.type === "dir") window.__repoOpen[n.id] = true; });
     const files = (r.nodes || []).filter(n => n.type === "file");
+    const conMem = files.filter(n => n.notes && n.notes.length).length;
     const blind = (r.nodes || []).reduce((a, n) => a + (n.blind || 0), 0);
-    const total = (r.nodes || []).reduce((a, n) => a + (n.files || 0), 0);
+    const total = r.total_files || (r.nodes || []).reduce((a, n) => a + (n.files || 0), 0);
     summary.textContent = "";
-    summary.appendChild(el("b", null, files.length + " archivo(s) con memoria"));
+    summary.appendChild(el("b", null, conMem + " archivo(s) con memoria"));
     summary.appendChild(el("span", null, " · " + blind + " de " + total + " sin ninguna nota que los cite"));
-    if (r.truncated) summary.appendChild(el("span", "repo-trunc", " · el repo es muy grande: el mapa está recortado"));
-    const gv = CogoGraph.mount(wrap, { nodes: r.nodes, edges: r.edges }, {
-      mode: "2d",
-      onSelect: id => {
-        const n = byId[id];
-        if (!n) return;
-        if (n.type === "dir") return;
-        openFileNotes(n, repo, rf.value.trim());
-      },
-    });
-    window.__gv = gv;
+    if (r.dense) summary.appendChild(el("span", "repo-trunc", " · repo grande: el grafo muestra solo las carpetas y lo citado"));
+    if (r.truncated) summary.appendChild(el("span", "repo-trunc", " · el árbol de GitHub vino recortado"));
+    setVista(st.vista);
   }
   go.addEventListener("click", load);
   ri.addEventListener("keydown", e => { if (e.key === "Enter") load(); });
-  if (ri.value.trim()) load(); else st.textContent = "escribí un repositorio para mapearlo";
+  panelVacio();
+  if (ri.value.trim()) load(); else status.textContent = "escribí un repositorio para mapearlo";
 }
+
 
 // openFileNotes: qué sabe COGO sobre un archivo del repo, y el atajo para ir a verlo.
 function openFileNotes(node, repo, ref) {

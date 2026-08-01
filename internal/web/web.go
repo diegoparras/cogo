@@ -655,7 +655,22 @@ func (s *Server) handleGitHubMap(w http.ResponseWriter, r *http.Request) {
 		Blind   int    `json:"blind,omitempty"`   // …sin ninguna nota que los cite
 		Notes   []cite `json:"notes,omitempty"`   // notas que citan este archivo
 		Project string `json:"project,omitempty"` // reutiliza el tooltip del motor
+		Size    int    `json:"size,omitempty"`    // bytes (archivos)
+		Ext     string `json:"ext,omitempty"`     // extensión, para agrupar en el árbol
 	}
+	// Dibujar TODO el repo (no solo lo citado) es lo que hace legible el mapa: se
+	// ve la forma real del proyecto y las islas de memoria resaltan sobre lo
+	// neutro. En un repo enorme eso es ilegible e inmanejable, así que por encima
+	// del tope se cae al esqueleto (carpetas + archivos citados) y se avisa.
+	const maxNodes = 700
+	fileCount := 0
+	for _, p := range paths {
+		if p.Type != "dir" {
+			fileCount++
+		}
+	}
+	dense := fileCount > maxNodes
+
 	files, blind := map[string]int{}, map[string]int{}
 	dirs := map[string]bool{"": true}
 	var nodes []node
@@ -669,12 +684,21 @@ func (s *Server) handleGitHubMap(w http.ResponseWriter, r *http.Request) {
 			d = p.Path[:i]
 		}
 		files[d]++
-		if cs, hit := cited[p.Path]; hit {
-			nodes = append(nodes, node{ID: p.Path, Type: "file", Color: worst(cs), Notes: cs,
-				Claim: fmt.Sprintf("%d nota(s) lo citan", len(cs))})
-		} else {
+		cs, hit := cited[p.Path]
+		if !hit {
 			blind[d]++
 		}
+		if !hit && dense {
+			continue // repo grande: solo el esqueleto
+		}
+		n := node{ID: p.Path, Type: "file", Color: "ungraded", Size: p.Size, Ext: ext(p.Path)}
+		if hit {
+			n.Color, n.Notes = worst(cs), cs
+			n.Claim = fmt.Sprintf("%d nota(s) lo citan", len(cs))
+		} else {
+			n.Claim = "sin memoria: ninguna nota lo cita"
+		}
+		nodes = append(nodes, n)
 	}
 	for d := range dirs {
 		name := d
@@ -710,10 +734,11 @@ func (s *Server) handleGitHubMap(w http.ResponseWriter, r *http.Request) {
 		if !dirs[from] && from != repo {
 			continue
 		}
-		edges = append(edges, map[string]string{"from": from, "to": n.ID, "kind": "depends_on"})
+		edges = append(edges, map[string]string{"from": from, "to": n.ID, "kind": "contains"})
 	}
 	writeJSON(w, map[string]any{"ok": true, "nodes": nodes, "edges": edges,
-		"truncated": truncated, "cited": len(cited), "repo": owner + "/" + repo})
+		"truncated": truncated, "cited": len(cited), "repo": owner + "/" + repo,
+		"dense": dense, "total_files": fileCount, "ref": ref})
 }
 
 // handleTokens manages the issued MCP access tokens: GET lists them (no
@@ -1559,4 +1584,15 @@ func recommendModel(id string) bool {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// ext devuelve la extensión de un path ("go", "md", ""), para que el árbol pueda
+// agrupar y el grafo diferenciar sin inventar colores nuevos.
+func ext(p string) string {
+	i := strings.LastIndex(p, ".")
+	j := strings.LastIndex(p, "/")
+	if i < 0 || i < j || i == len(p)-1 {
+		return ""
+	}
+	return strings.ToLower(p[i+1:])
 }
