@@ -615,3 +615,16 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .repo-row.on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .repo-tree .repo-row { border-bottom: 0; }
 @media (max-width: 900px) { .repo-view { grid-template-columns: 1fr; } }
+
+/* Vista previa ampliada: el render a ancho de lectura, para revisar */
+.preview-modal { width: min(860px, 94vw); max-height: 88vh; display: flex; flex-direction: column; }
+.preview-body { overflow-y: auto; padding: 4px 2px 2px; max-width: 68ch; }
+.md-big { font-size: 12px; }
+
+/* Plan B cuando el navegador no permite la API de pantalla completa */
+.maximizado { position: fixed; inset: 0; z-index: 300; background: var(--bg);
+  padding: 16px 22px; margin: 0; overflow: auto; }
+.repo-view.maximizado { height: 100vh; }
+.repo-view.maximizado .repo-left, .repo-view.maximizado .repo-panel { height: calc(100vh - 56px); max-height: none; }
+.repo-view.maximizado .graph-wrap { height: 100%; }
+.graph-view.maximizado .graph-wrap { height: calc(100vh - 120px); }

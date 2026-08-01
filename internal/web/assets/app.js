@@ -42,6 +42,52 @@ function fileToBase64(file) {
     fr.readAsDataURL(file);
   });
 }
+// toggleMaximizar: pantalla completa real si el navegador la permite y, si no
+// (contextos embebidos, políticas de permisos), maximiza dentro de la página.
+// El botón nunca debe quedar mudo: si falla, algo tiene que pasar igual.
+async function toggleMaximizar(elm, btn) {
+  const salir = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    elm.classList.remove("maximizado");
+    if (btn) btn.textContent = "⛶ pantalla completa";
+  };
+  if (document.fullscreenElement || elm.classList.contains("maximizado")) { salir(); return; }
+  try {
+    await elm.requestFullscreen();
+  } catch (e) {
+    elm.classList.add("maximizado"); // plan B: ocupar la ventana sin la API
+  }
+  if (btn) btn.textContent = "⛶ salir";
+  const onEsc = ev => {
+    if (ev.key === "Escape" && elm.classList.contains("maximizado")) { salir(); document.removeEventListener("keydown", onEsc); }
+  };
+  document.addEventListener("keydown", onEsc);
+}
+
+// openPreviewModal muestra el markdown renderizado a ancho de lectura, sin el
+// textarea al lado: es la vista de REVISAR (cómo se va a leer la nota de
+// verdad), frente a la dividida que es la de ESCRIBIR.
+function openPreviewModal(md) {
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card preview-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", "Vista previa"));
+  const body = el("div", "md-render preview-body");
+  body.innerHTML = mdToHtml(md || "");
+  if (!(md || "").trim()) body.innerHTML = "<p><em>Todavía no escribiste nada.</em></p>";
+  card.appendChild(body);
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  const close = () => { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+}
+
 // mdEditor envuelve un <textarea> con la barra de formato y la vista previa
 // dividida: el mismo editor visual en toda la app (notas, instrucciones de
 // agentes, bloques). Devuelve el contenedor; `.sync()` refresca la vista previa
@@ -87,6 +133,13 @@ function mdEditor(ta, onChange) {
     syncPrev();
   });
   tbRow.appendChild(prevBtn);
+  // Ampliar: el markdown renderizado SOLO, a ancho de lectura. El modo dividido
+  // sirve para escribir viendo el resultado, pero deja cada mitad muy angosta —
+  // para revisar hace falta verlo como se va a leer de verdad.
+  const bigBtn = el("button", "md-tb md-big", "⛶"); bigBtn.type = "button";
+  bigBtn.title = "Ampliar la vista previa";
+  bigBtn.addEventListener("click", ev => { ev.preventDefault(); openPreviewModal(ta.value); });
+  tbRow.appendChild(bigBtn);
   wrap.appendChild(tbRow);
   const bodyRow = el("div", "md-body-row");
   bodyRow.appendChild(ta); bodyRow.appendChild(previewPane);
@@ -1036,13 +1089,9 @@ async function renderRepoMap(main) {
   view.append(left, panel);
   main.appendChild(view);
 
-  fsb.addEventListener("click", () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else view.requestFullscreen().catch(() => {});
-  });
+  fsb.addEventListener("click", () => toggleMaximizar(view, fsb));
   document.addEventListener("fullscreenchange", () => {
     fsb.textContent = document.fullscreenElement ? "⛶ salir" : "⛶ pantalla completa";
-    if (window.__gv && window.__gv.resize) setTimeout(() => window.__gv.resize(), 60);
   });
 
   function setVista(v) {
@@ -1053,7 +1102,7 @@ async function renderRepoMap(main) {
   }
   bg.addEventListener("click", () => setVista("grafo"));
   bt.addEventListener("click", () => setVista("arbol"));
-  reset.addEventListener("click", () => { if (window.__gv) window.__gv.reset(); });
+  reset.addEventListener("click", () => { if (window.__gv) window.__gv.resetView(); });
 
   // ---- panel lateral: qué hay adentro de lo que clickeaste ----
   function panelVacio() {
@@ -1272,10 +1321,7 @@ async function renderGraph(main) {
   view.appendChild(wrap);
   main.appendChild(view);
 
-  fs.addEventListener("click", () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else view.requestFullscreen().catch(() => {});
-  });
+  fs.addEventListener("click", () => toggleMaximizar(view, fs));
   const onFs = () => { fs.textContent = document.fullscreenElement ? "⛶ salir" : "⛶ pantalla completa"; };
   document.addEventListener("fullscreenchange", onFs);
 
