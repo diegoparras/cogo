@@ -701,9 +701,17 @@ function initTabs() {
 // applyHash abre la vista (o el panel) que pide el fragmento de la URL, para que
 // un link como .../#guard o .../#leases lleve directo ahí.
 const HASH_PANELS = { repo: () => openRepo(null), leases: openLeases, audit: openAudit, tokens: openTokens, trash: openTrash, instrucciones: openAgents, evroots: openEvidenceRoots };
+// Nombres viejos que siguen andando: la pestaña de agentes se llamó `pack`
+// cuando todavía mostraba el pack de contexto. Un #pack compartido de antes se
+// reescribe a #agents (con replaceState, para no ensuciar el historial).
+const HASH_ALIASES = { pack: "agents" };
 function applyHash() {
-  const h = (location.hash || "").replace(/^#/, "");
+  let h = (location.hash || "").replace(/^#/, "");
   if (!h) return;
+  if (HASH_ALIASES[h]) {
+    h = HASH_ALIASES[h];
+    history.replaceState(null, "", location.pathname + location.search + "#" + h);
+  }
   const tab = $$(".tab").find(t => t.dataset.view === h);
   if (tab) {
     state.editing = null;
@@ -808,7 +816,7 @@ function render() {
   const main = el("div", "view-root");
   host.appendChild(main);
   if (state.editing) { renderEditor(main); return; }
-  ({ vault: renderVault, fresh: renderFresh, pack: renderAgents, graph: renderGraph, lint: renderLint, guard: renderGuard, xray: renderVeracidad }[state.view])(main);
+  ({ vault: renderVault, fresh: renderFresh, agents: renderAgents, graph: renderGraph, lint: renderLint, guard: renderGuard, xray: renderVeracidad }[state.view])(main);
 }
 
 // ---------- vault ----------

@@ -8,7 +8,12 @@
 <link rel="icon" type="image/svg+xml" href="/cogo.svg?v=2">
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/escriba-ui.css">
-<link rel="stylesheet" href="/app.css">
+<!-- ?v= es obligatorio en los assets propios: se sirven desde el embed.FS del
+     binario, que no tiene ModTime, así que salen sin ETag ni Last-Modified y el
+     navegador los cachea sin manera de revalidarlos. Subí el número CADA VEZ que
+     toques app.js/app.css/graph.js: si el HTML nuevo se cruza con un JS viejo
+     cacheado (o al revés), la vista que cambió revienta hasta un Ctrl+F5. -->
+<link rel="stylesheet" href="/app.css?v=3">
 </head>
 <body>
 <header class="app-header">
@@ -93,7 +98,7 @@
     <span class="tab-row">
       <button class="tab active" data-view="vault">Vault</button>
       <button class="tab" data-view="fresh">Vigencia</button>
-      <button class="tab" data-view="pack">Agentes</button>
+      <button class="tab" data-view="agents">Agentes</button>
       <button class="tab" data-view="graph">Grafo</button>
       <button class="tab" data-view="lint">Revisión</button>
     </span>
@@ -180,7 +185,7 @@
   </div>
 </div>
 
-<script src="/graph.js"></script>
-<script src="/app.js"></script>
+<script src="/graph.js?v=3"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>

@@ -12,7 +12,6 @@ package xray
 
 import (
 	"regexp"
-	"sort"
 	"strings"
 )
 
@@ -148,16 +147,4 @@ func itoa(n int) string {
 		b = append([]byte{'-'}, b...)
 	}
 	return string(b)
-}
-
-// Markers returns the lexicon sizes, for a "what it looks for" hint in the UI.
-func Markers() map[string]int {
-	m := map[string]int{"hedges": len(hedges), "boosters": len(boosters), "observed": len(observed), "reported": len(reported), "opinion": len(opinion)}
-	// keep the map access deterministic for any future serialization
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return m
 }

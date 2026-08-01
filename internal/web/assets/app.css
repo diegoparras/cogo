@@ -188,7 +188,6 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 .xr-claim-body { min-width: 0; }
 .xr-claim-text { font-size: 13.5px; color: var(--text); line-height: 1.45; }
 .xr-claim-reason { font-size: 12.5px; color: var(--muted-2); margin-top: 4px; font-style: italic; }
-.xr-claim-meta { font-size: 11px; color: var(--muted); margin-top: 5px; text-transform: uppercase; letter-spacing: .03em; }
 
 /* ---- etiquetado humano del Guard (corpus) ---- */
 .guard-label { margin-top: 14px; padding: 13px 15px; border: 1px dashed var(--border); border-radius: var(--radius-lg); background: var(--card); }
@@ -297,16 +296,6 @@ button.danger-btn:hover { background: color-mix(in srgb, var(--err) 84%, #000); 
   padding: 2px 8px; border-radius: 999px; border: 1px solid var(--c, var(--border)); color: var(--c, var(--muted)); }
 .fresh-row .fid { font-family: var(--mono); font-size: 13px; }
 .fresh-row .fwhen { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
-
-/* ---- pack preview ---- */
-.pack-form { display: flex; gap: 8px; align-items: center; margin: 16px 0 12px; flex-wrap: wrap; }
-.pack-form input.q { flex: 1; min-width: 200px; }
-.pack-form input.b { width: 120px; }
-.pack-summary { display: flex; gap: 12px; align-items: center; margin: 4px 0 12px; font-size: 12.5px; color: var(--muted-2); flex-wrap: wrap; }
-.pack-summary .tok { font-family: var(--mono); margin-left: auto; }
-.pack-md { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
-  background: var(--card-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin: 0; color: var(--text); }
-.copy-row { display: flex; justify-content: flex-end; margin-top: 8px; }
 
 /* ---- graph ---- */
 .graph-bar { align-items: center; }
@@ -424,7 +413,6 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .scrub-note { font-size: 12px; color: var(--muted); background: var(--card-2); border: 1px solid var(--border); border-radius: 9px; padding: 8px 11px; }
 
 /* ---- revisión (lint) ---- */
-.lint-intro { color: var(--muted-2); font-size: 13.5px; margin: 16px 0 0; max-width: 640px; line-height: 1.5; }
 .lint-status { font-size: 12px; color: var(--muted); }
 .lint-hint { font-size: 12.5px; color: var(--muted); margin: 4px 0 10px; }
 .lint-out { display: flex; flex-direction: column; gap: 7px; }
@@ -434,11 +422,8 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .lint-row.lint-broken_dep, .lint-row.lint-stale { border-left-color: var(--warn); }
 .lint-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-2); flex: 0 0 auto; }
 .lint-msg { font-size: 13px; color: var(--text); font-family: var(--mono); }
-.lint-redmsg { font-size: 12.5px; color: var(--err); margin-top: 8px; }
 
 /* ---- guard (anti-manipulación) ---- */
-.guard-mandate { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 16px; padding: 13px 15px;
-  border: 1px solid var(--border); border-radius: var(--radius); background: var(--card-2); }
 .guard-mrow { display: flex; align-items: center; gap: 10px; }
 .guard-steel-row { margin: 10px 0 0; }
 .guard-out { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
