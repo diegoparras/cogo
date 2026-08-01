@@ -1140,9 +1140,28 @@ async function renderRepoMap(main) {
     panel.textContent = "";
     panel.appendChild(el("div", "repo-ph", "Clic en un archivo o una carpeta para ver qué tiene adentro."));
   }
+  // Aviso de foco: si el resto del mapa se atenúa, tiene que estar claro POR QUÉ
+  // y cómo volver — si no, parece que el grafo se rompió.
+  function marcarFoco(id) {
+    const vieja = summary.querySelector(".repo-foco");
+    if (vieja) vieja.remove();
+    if (!id) return;
+    const chip = el("span", "repo-foco");
+    chip.appendChild(el("span", null, "enfocando " + (id.split("/").pop() || id)));
+    const ver = el("button", "mini ghost", "ver todo");
+    ver.addEventListener("click", () => {
+      st.sel = null;
+      if (window.__gv && window.__gv.setSelected) window.__gv.setSelected(null);
+      marcarFoco(null);
+    });
+    chip.appendChild(ver);
+    summary.appendChild(chip);
+  }
+
   async function verNodo(id) {
     st.sel = id;
     if (window.__gv && window.__gv.setSelected) window.__gv.setSelected(id); // enfocar su rama
+    marcarFoco(id);
     const n = (st.data.nodes || []).find(x => x.id === id);
     if (!n) return;
     panel.textContent = "";

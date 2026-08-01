@@ -66,9 +66,10 @@
     let glow = {};
     function buildGlow() {
       glow = {};
-      for (const key of ["green", "yellow", "red", "ungraded"]) {
+      for (const key of ["green", "yellow", "red", "ungraded", "dir", "file"]) {
         const S = 128, c = document.createElement("canvas"); c.width = c.height = S;
-        const x = c.getContext("2d"), r = S / 2, col = hexToRgb(colorFor(T, key));
+        const x = c.getContext("2d"), r = S / 2;
+        const col = hexToRgb(key === "dir" ? T.dirNode : key === "file" ? T.fileNode : colorFor(T, key));
         const grd = x.createRadialGradient(r, r, 0, r, r, r);
         grd.addColorStop(0, rgba(col, .95)); grd.addColorStop(.18, rgba(col, .55));
         grd.addColorStop(.5, rgba(col, .16)); grd.addColorStop(1, rgba(col, 0));
@@ -238,13 +239,13 @@
         // halo
         ctx.globalAlpha = (dim ? (fuerte ? 0.03 : 0.12) : 0.9) * near;
         if (additive) ctx.globalCompositeOperation = "lighter";
-        const g = glow[({ green: "green", yellow: "yellow", red: "red" }[n.color]) || "ungraded"];
+        const g = glow[({ green: "green", yellow: "yellow", red: "red" }[n.color]) || (n.type === "dir" ? "dir" : n.type === "file" ? "file" : "ungraded")];
         const hs = rr * (additive ? 5.5 : 4.2);
         ctx.drawImage(g, n.sx - hs / 2, n.sy - hs / 2, hs, hs);
         ctx.globalCompositeOperation = "source-over";
         // core — disco plano en 2D, ESFERA sombreada en 3D
         ctx.globalAlpha = dim ? (fuerte ? 0.07 : 0.25) : 1;
-        const rgb = hexToRgb(colorFor(T, n.color));
+        const rgb = hexToRgb(colorFor(T, n.color, n.type));
         if (mode === "3d") {
           const gx = n.sx - rr * 0.34, gy = n.sy - rr * 0.4;
           const grd = ctx.createRadialGradient(gx, gy, rr * 0.08, n.sx, n.sy, rr * 1.08);
@@ -258,7 +259,7 @@
           ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(BLACK, .55); ctx.stroke();
         }
         if (n === selected) { ctx.beginPath(); ctx.arc(n.sx, n.sy, rr + 7, 0, TAU); ctx.strokeStyle = T.text; ctx.globalAlpha = .9; ctx.lineWidth = 2.2; ctx.stroke(); }
-        if (n === hovered) { ctx.beginPath(); ctx.arc(n.sx, n.sy, rr + 5, 0, TAU); ctx.strokeStyle = colorFor(T, n.color); ctx.globalAlpha = .8; ctx.lineWidth = 2; ctx.stroke(); }
+        if (n === hovered) { ctx.beginPath(); ctx.arc(n.sx, n.sy, rr + 5, 0, TAU); ctx.strokeStyle = colorFor(T, n.color, n.type); ctx.globalAlpha = .8; ctx.lineWidth = 2; ctx.stroke(); }
       }
       ctx.globalAlpha = 1;
 
