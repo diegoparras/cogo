@@ -721,3 +721,29 @@ canvas.graph-canvas:active { cursor: grabbing; }
 /* La fecha de nacimiento de la nota, un punto más apagada que el resto del
    encabezado: es contexto para comparar, no lo primero que se lee. */
 .nc-nace { color: var(--muted-2); }
+
+/* ---- selector buscable (proyecto / agente) ---- */
+.sb-wrap { position: relative; display: inline-flex; }
+.sb-btn { gap: 6px; }
+.sb-caret { font-size: 9px; opacity: .65; }
+.sb-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; min-width: 210px; max-width: 300px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 7px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.06); animation: fechasIn .13s ease-out; }
+@media (prefers-reduced-motion: reduce) { .sb-pop { animation: none; } }
+.sb-buscar { width: 100%; font-size: 12.5px; padding: 5px 9px; margin-bottom: 6px; }
+.sb-lista { max-height: 260px; overflow-y: auto; }
+.sb-op { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 6px 9px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 12.5px; cursor: pointer; }
+.sb-op:hover { background: var(--card); }
+.sb-op.on { background: var(--accent); color: var(--on-accent); }
+.sb-op-txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-op-n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+
+/* ---- insertar [[wikilink]] desde la barra del editor ---- */
+.md-wl-holder { position: relative; display: inline-flex; }
+.md-tb-wl { font-family: var(--mono); letter-spacing: -.5px; }
+.md-wl-pop { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; width: 330px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 9px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.06); }
+.md-wl-pop.abierta { display: block; }
+.md-wl-pop .bn-wrap { flex: 1 1 auto; width: 100%; }

@@ -110,7 +110,10 @@ function openPreviewModal(md) {
 // dividida: el mismo editor visual en toda la app (notas, instrucciones de
 // agentes, bloques). Devuelve el contenedor; `.sync()` refresca la vista previa
 // después de un cambio hecho por código (no tipeado).
-function mdEditor(ta, onChange) {
+// mdEditor(ta, onChange, opts) — opts.vincular = {proyecto, excluir:()=>Set}
+// enciende el botón de [[wikilink]]. Solo lo pide el editor de notas: en los
+// archivos de instrucciones de agentes un enlace a una nota no significa nada.
+function mdEditor(ta, onChange, opts) {
   const wrap = el("div", "md-editor");
   if (!ta.classList.contains("md")) ta.classList.add("md");
   const previewPane = el("div", "md-render md-preview");
@@ -141,6 +144,49 @@ function mdEditor(ta, onChange) {
     btn.addEventListener("click", ev => { ev.preventDefault(); fn(); });
     tbRow.appendChild(btn);
   });
+
+  // [[wikilink]] — escribir el id a mano es adivinar: si te equivocás de una
+  // letra, el enlace queda roto y la Revisión te lo va a marcar recién después.
+  // Acá se elige de las notas que EXISTEN, con su color a la vista.
+  if (opts && opts.vincular) {
+    const wl = el("button", "md-tb md-tb-wl", "[[ ]]");
+    wl.type = "button"; wl.title = "Enlazar otra nota ([[id]])";
+    const pop = el("div", "md-wl-pop");
+    let abierto = false, pos = 0;
+    // El cursor se guarda ANTES de abrir: al enfocar el buscador, el textarea
+    // pierde el foco y selectionStart pasa a ser 0 — el enlace terminaría
+    // insertado al principio del texto.
+    wl.addEventListener("mousedown", () => { pos = ta.selectionStart; });
+    const cerrarPop = () => { abierto = false; pop.classList.remove("abierta"); pop.textContent = ""; };
+    wl.addEventListener("click", ev => {
+      ev.preventDefault();
+      if (abierto) return cerrarPop();
+      abierto = true;
+      pop.textContent = "";
+      const bn = buscadorNotas({
+        excluir: opts.vincular.excluir ? opts.vincular.excluir() : new Set(),
+        proyecto: opts.vincular.proyecto,
+        placeholder: "enlazar una nota…",
+        onElegir: n => {
+          const t = "[[" + n.id + "]]";
+          ta.value = ta.value.slice(0, pos) + t + ta.value.slice(pos);
+          cerrarPop();
+          ta.focus();
+          ta.selectionStart = ta.selectionEnd = pos + t.length;
+          touched();
+        },
+      });
+      pop.appendChild(bn);
+      pop.classList.add("abierta");
+      const inp = bn.querySelector(".bn-input");
+      if (inp) { inp.focus(); inp.dispatchEvent(new Event("focus")); }
+    });
+    document.addEventListener("click", e => { if (abierto && !pop.contains(e.target) && e.target !== wl) cerrarPop(); }, true);
+    const holder = el("span", "md-wl-holder");
+    holder.append(wl, pop);
+    tbRow.appendChild(holder);
+  }
+
   tbRow.appendChild(el("span", "md-tb-sp"));
   const prevBtn = el("button", "md-tb md-prev", "vista previa"); prevBtn.type = "button";
   prevBtn.addEventListener("click", ev => {
@@ -882,19 +928,11 @@ async function renderVault(main) {
     });
     bar2.appendChild(colores);
 
-    const sel = (etq, valor, opciones, onch) => {
-      const s = el("select", "vault-sel");
-      s.appendChild(Object.assign(el("option", null, etq), { value: "" }));
-      opciones.forEach(o => s.appendChild(Object.assign(el("option", null, o.label), { value: o.value })));
-      s.value = valor || "";
-      s.addEventListener("change", () => onch(s.value));
-      return s;
-    };
-    bar2.appendChild(sel("proyecto: todos", state.project,
-      (facets.projects || []).map(p => ({ value: p.name, label: p.name + " (" + p.count + ")" })),
+    bar2.appendChild(selectorBuscable("proyecto: todos", state.project,
+      (facets.projects || []).map(p => ({ value: p.name, label: p.name, count: p.count, corto: "proyecto: " + p.name })),
       v => { state.project = v; const ps = $("#projsel"); if (ps) ps.value = v; recargar(true); }));
-    bar2.appendChild(sel("agente: todos", st.author,
-      (facets.authors || []).map(a => ({ value: a.name, label: callerKind(a.name)[0] + " (" + a.count + ")" })),
+    bar2.appendChild(selectorBuscable("agente: todos", st.author,
+      (facets.authors || []).map(a => ({ value: a.name, label: callerKind(a.name)[0], count: a.count, corto: "agente: " + callerKind(a.name)[0] })),
       v => { st.author = v; recargar(true); }));
 
     const orden = el("select", "vault-sel");
@@ -945,6 +983,65 @@ async function renderVault(main) {
     main.textContent = ""; renderWelcome(main); return;
   }
   await recargar(true);
+}
+
+// ---------- selector buscable (proyecto, agente) ----------
+// Un <select> con cien proyectos adentro es el mismo problema que tenían las
+// relaciones del editor: una lista que no se puede recorrer. Acá las opciones ya
+// vienen del servidor como facetas (con su conteo), así que el filtrado es local
+// — lo que hace falta no es otra consulta sino poder escribir para encontrar.
+function selectorBuscable(etiqueta, valor, opciones, onElegir) {
+  const wrap = el("div", "sb-wrap");
+  const btn = el("button", "pilltog sb-btn" + (valor ? " on" : ""));
+  const activa = opciones.find(o => o.value === valor);
+  btn.appendChild(el("span", null, activa ? activa.corto || activa.label : etiqueta));
+  btn.appendChild(el("span", "sb-caret", "▾"));
+  if (valor) {
+    const x = el("span", "fechas-x", "✕");
+    x.title = "Quitar este filtro";
+    x.addEventListener("click", e => { e.stopPropagation(); onElegir(""); });
+    btn.appendChild(x);
+  }
+  wrap.appendChild(btn);
+
+  let pop = null;
+  const cerrar = () => { if (pop) { pop.remove(); pop = null; document.removeEventListener("click", afuera, true); } };
+  const afuera = e => { if (pop && !wrap.contains(e.target)) cerrar(); };
+
+  btn.addEventListener("click", () => {
+    if (pop) return cerrar();
+    pop = el("div", "sb-pop");
+    pop.addEventListener("click", e => e.stopPropagation());
+    const buscar = el("input", "sb-buscar");
+    buscar.type = "search";
+    buscar.placeholder = "filtrar…";
+    const lista = el("div", "sb-lista");
+    // El buscador solo aparece cuando hay tantas opciones que hace falta: con
+    // cuatro proyectos, un campo de texto es un estorbo.
+    if (opciones.length > 7) pop.appendChild(buscar);
+    pop.appendChild(lista);
+
+    const pintar = () => {
+      const q = buscar.value.trim().toLowerCase();
+      lista.textContent = "";
+      const fila = (v, txt, cuenta, on) => {
+        const o = el("button", "sb-op" + (on ? " on" : ""));
+        o.appendChild(el("span", "sb-op-txt", txt));
+        if (cuenta != null) o.appendChild(el("span", "sb-op-n", String(cuenta)));
+        o.addEventListener("click", () => { cerrar(); onElegir(v); });
+        lista.appendChild(o);
+      };
+      fila("", "todos", null, !valor);
+      const vis = opciones.filter(o => !q || o.label.toLowerCase().includes(q));
+      vis.forEach(o => fila(o.value, o.label, o.count, o.value === valor));
+      if (!vis.length) lista.appendChild(el("div", "bn-vacio", "Nada coincide con «" + buscar.value.trim() + "»."));
+    };
+    buscar.addEventListener("input", pintar);
+    pintar();
+    wrap.appendChild(pop);
+    setTimeout(() => { document.addEventListener("click", afuera, true); if (opciones.length > 7) buscar.focus(); }, 0);
+  });
+  return wrap;
 }
 
 // ---------- selector de rango de fechas ----------
@@ -2638,7 +2735,14 @@ function renderEditor(main) {
   form.appendChild(row1);
 
   const body = el("textarea", "md"); body.value = d.body; body.setAttribute("rows", "10");
-  const mdEd = mdEditor(body, () => { d.body = body.value; preview(); });
+  const mdEd = mdEditor(body, () => { d.body = body.value; preview(); }, {
+    // getter, no valor: el proyecto puede cambiarse mientras se edita, y las
+    // sugerencias tienen que seguir al proyecto actual, no al de la apertura.
+    vincular: {
+      get proyecto() { return d.project; },
+      excluir: () => new Set([d.id].filter(Boolean)),
+    },
+  });
   form.appendChild(field("Nota (markdown) — empezá con ## Claim", mdEd));
 
   const evWrap = el("div", "ev-wrap");
