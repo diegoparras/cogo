@@ -388,7 +388,34 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .rel-chip-x { width: 18px; height: 18px; padding: 0; font-size: 13px; line-height: 1; border-radius: 50%;
   border: 0; background: transparent; color: var(--muted); cursor: pointer; }
 .rel-chip-x:hover { color: var(--err); background: var(--panel); }
-.rel-add, .rel-field > select { max-width: 260px; }
+.rel-una { display: flex; }
+
+/* ---- buscador de notas (relaciones del editor) ----
+   Reemplaza a los <select> que listaban todo el vault. Acá el color SÍ se ve:
+   es el dato que el campo te pide evaluar. */
+.bn-wrap { position: relative; flex: 0 1 320px; min-width: 220px; }
+.bn-input { width: 100%; font-size: 12.5px; padding: 5px 10px; }
+.bn-lista { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+  max-height: 280px; overflow-y: auto; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 11px; box-shadow: 0 10px 28px rgba(0,0,0,.13), 0 2px 5px rgba(0,0,0,.05); }
+.bn-lista.abierta { display: block; }
+.bn-grupo { font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted);
+  padding: 7px 12px 5px; }
+.bn-vacio { padding: 12px; font-size: 12.5px; color: var(--muted); }
+.bn-op { display: flex; align-items: flex-start; gap: 8px; padding: 7px 12px; cursor: pointer;
+  border-top: 1px solid var(--border); }
+.bn-lista .bn-grupo + .bn-op { border-top: 0; }
+.bn-op:hover, .bn-op.sel { background: var(--card); }
+.bn-op .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; margin-top: 5px; }
+.bn-op-txt { min-width: 0; flex: 1; }
+.bn-op-id { font-family: var(--mono); font-size: 12.5px; color: var(--text); display: flex; align-items: center; gap: 6px; }
+.bn-op-badge { font-family: var(--sans); font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.bn-op-sub { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bn-op-edad { font-size: 10.5px; color: var(--muted); flex: none; margin-top: 2px; font-variant-numeric: tabular-nums; }
+/* El chip de una relación lleva el color de ESA nota, no el de la que editás. */
+.rel-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
+.rel-alerta { flex-basis: 100%; font-size: 12px; color: var(--err); line-height: 1.5; margin-top: 2px; }
 .color-preview { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--border);
   border-left: 3px solid var(--c, var(--border)); border-radius: var(--radius); background: var(--card-2); }
 .color-preview strong { font-size: 13.5px; }

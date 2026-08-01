@@ -287,3 +287,37 @@ func TestNotesFechasYPaginado(t *testing.T) {
 		t.Errorf("falta created en la nota: %v", pag1[0])
 	}
 }
+
+// TestNotesPorIds cubre lo que reemplazó a la descarga completa del vault: el
+// editor resuelve las relaciones YA elegidas pidiendo solo esos ids.
+func TestNotesPorIds(t *testing.T) {
+	s := testServer(t)
+	for _, id := range []string{"uno", "dos", "tres"} {
+		call(s.handleCapture, "POST", "/api/capture", map[string]any{
+			"id": id, "type": "bug", "project": "x", "body": "## Claim\nnota " + id,
+			"evidence": []map[string]string{{"kind": "file_read", "ref": "x.go:1"}}})
+	}
+	notas, total, _ := notesOf(t, s, "?ids=uno,tres")
+	if total != 2 || len(notas) != 2 {
+		t.Fatalf("ids=uno,tres -> %d notas (total %d), want 2", len(notas), total)
+	}
+	got := map[string]bool{}
+	for _, n := range notas {
+		got[n["id"].(string)] = true
+		// El color es justamente el dato por el que se hace esta consulta.
+		if n["color"] == nil || n["color"] == "" {
+			t.Errorf("la nota %v vino sin color", n["id"])
+		}
+	}
+	if !got["uno"] || !got["tres"] || got["dos"] {
+		t.Errorf("devolvió las notas equivocadas: %v", got)
+	}
+	// Un id inexistente no rompe: simplemente no aparece.
+	if _, n, _ := notesOf(t, s, "?ids=no-existe"); n != 0 {
+		t.Errorf("ids inexistente -> %d, want 0", n)
+	}
+	// Espacios alrededor de las comas (los manda cualquier cliente distraído).
+	if _, n, _ := notesOf(t, s, "?ids=uno,%20dos"); n != 2 {
+		t.Errorf("ids con espacios -> %d, want 2", n)
+	}
+}

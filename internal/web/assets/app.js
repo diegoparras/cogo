@@ -1759,19 +1759,126 @@ function select(options, value, onchange) {
   return s;
 }
 
-// relField/relSelect: piezas del bloque de relaciones del editor.
+// ---------- buscador de notas (relaciones) ----------
+// Reemplaza a los <select> que listaban TODAS las notas del vault. Tres razones,
+// en orden de importancia:
+//
+//  1. Un <option> nativo no puede mostrar el color. El campo "depende de" avisa
+//     que una dependencia roja arrastra la nota a rojo, y el selector no dejaba
+//     ver cuál era roja: te hacía elegir a ciegas justo lo único que COGO tiene
+//     para decirte.
+//  2. No escala. Con miles de notas, un desplegable alfabético sin buscador es
+//     inutilizable.
+//  3. Costaba el vault entero: el editor descargaba TODAS las notas solo para
+//     llenar tres listas. Ahora pide 8 resultados por búsqueda.
+//
+// Busca contra el servidor con el mismo ranking BM25 del tool `search`.
+const BUSCA_LIMITE = 8;
+
+function buscadorNotas(opts) {
+  // opts: { excluir:Set, proyecto, onElegir(nota), placeholder }
+  const wrap = el("div", "bn-wrap");
+  const inp = el("input", "bn-input");
+  inp.type = "search";
+  inp.placeholder = opts.placeholder || "buscar una nota…";
+  inp.setAttribute("role", "combobox");
+  inp.setAttribute("aria-expanded", "false");
+  wrap.appendChild(inp);
+
+  const lista = el("div", "bn-lista");
+  lista.setAttribute("role", "listbox");
+  wrap.appendChild(lista);
+
+  let items = [], idx = -1, t = 0, pedido = 0;
+
+  const cerrar = () => { lista.classList.remove("abierta"); inp.setAttribute("aria-expanded", "false"); idx = -1; };
+  const marcar = () => {
+    [...lista.querySelectorAll(".bn-op")].forEach((o, i) => o.classList.toggle("sel", i === idx));
+    const act = lista.querySelector(".bn-op.sel");
+    if (act) act.scrollIntoView({ block: "nearest" });
+  };
+  const elegir = i => {
+    const n = items[i];
+    if (!n) return;
+    opts.onElegir(n);
+    inp.value = ""; cerrar();
+  };
+
+  async function buscar() {
+    const q = inp.value.trim();
+    const mio = ++pedido;
+    const p = new URLSearchParams();
+    if (q) p.set("q", q);
+    // Sin texto, la sugerencia útil es "lo del mismo proyecto, lo más nuevo":
+    // es de donde sale la dependencia casi siempre.
+    else if (opts.proyecto) { p.set("project", opts.proyecto); p.set("sort", "nueva"); }
+    else p.set("sort", "nueva");
+    p.set("limit", BUSCA_LIMITE + 6); // de más, porque después se descartan las ya elegidas
+    p.set("archived", "1");           // se puede depender de una archivada; se marca como tal
+    let notas;
+    try { notas = await listaNotas(p.toString()); }
+    catch (e) { pintarAviso("⚠ " + e.message); return; }
+    if (mio !== pedido) return;       // llegó tarde: ya hay una búsqueda más nueva
+    items = notas.filter(n => !opts.excluir.has(n.id)).slice(0, BUSCA_LIMITE);
+    pintar(q);
+  }
+
+  function pintarAviso(txt) {
+    lista.textContent = "";
+    lista.appendChild(el("div", "bn-vacio", txt));
+    lista.classList.add("abierta");
+  }
+
+  function pintar(q) {
+    lista.textContent = "";
+    if (!items.length) {
+      pintarAviso(q ? "Ninguna nota coincide con «" + q + "»." : "No hay otras notas todavía.");
+      return;
+    }
+    if (!q && opts.proyecto) lista.appendChild(el("div", "bn-grupo", "del proyecto " + opts.proyecto));
+    else if (!q) lista.appendChild(el("div", "bn-grupo", "las más recientes"));
+    items.forEach((n, i) => {
+      const o = el("div", "bn-op " + cls(n.color));
+      o.setAttribute("role", "option");
+      o.appendChild(el("span", "dot"));
+      const col = el("div", "bn-op-txt");
+      const l1 = el("div", "bn-op-id", n.id);
+      if (n.state) l1.appendChild(el("span", "bn-op-badge", stateLabel(n.state)));
+      col.appendChild(l1);
+      col.appendChild(el("div", "bn-op-sub", n.type + (n.project ? " · " + n.project : "") + " — " + (n.claim || "sin claim")));
+      o.appendChild(col);
+      if (n.created) o.appendChild(el("span", "bn-op-edad", edadEnDias(diasDesde(n.created)).replace("hace ", "")));
+      o.addEventListener("mousedown", e => { e.preventDefault(); elegir(i); });
+      lista.appendChild(o);
+    });
+    lista.classList.add("abierta");
+    inp.setAttribute("aria-expanded", "true");
+    idx = -1;
+  }
+
+  inp.addEventListener("input", () => { clearTimeout(t); t = setTimeout(buscar, 200); });
+  inp.addEventListener("focus", buscar);
+  inp.addEventListener("blur", () => setTimeout(cerrar, 120));
+  inp.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!items.length) return;
+      idx = e.key === "ArrowDown" ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
+      marcar();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      elegir(idx >= 0 ? idx : 0);
+    } else if (e.key === "Escape") { cerrar(); inp.blur(); }
+  });
+  return wrap;
+}
+
+// relField: etiqueta + control de una relación del editor.
 function relField(label, node) {
   const w = el("div", "rel-field");
   w.appendChild(el("label", "rel-lbl", label));
   w.appendChild(node);
   return w;
-}
-function relSelect(ids, value, onchange) {
-  const s = el("select");
-  const none = el("option", null, "— ninguna —"); none.value = ""; s.appendChild(none);
-  ids.forEach(o => { const op = el("option", null, o); op.value = o; if (o === value) op.selected = true; s.appendChild(op); });
-  s.addEventListener("change", () => onchange(s.value));
-  return s;
 }
 
 // paintEvBadge pinta el resultado del resolver de evidencia en una fila del editor.
@@ -2479,10 +2586,11 @@ async function openNoteModal(id) {
   body.querySelectorAll(".wikilink").forEach(a => a.addEventListener("click", () => { close(); openNoteModal(a.dataset.id); }));
 }
 
+// Abrir el editor ya NO descarga el vault: las relaciones se buscan contra el
+// servidor a medida que se escriben (ver buscadorNotas). Antes se traían todas
+// las notas solo para llenar tres desplegables.
 async function openEditor(id) {
   let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "", depends_on: [], supersedes: "", caused_by: "" };
-  const all = await listaNotas("archived=1&limit=all").catch(() => []);
-  state.editIds = all.map(n => n.id);
   if (id) {
     const n = await api("/api/note?id=" + encodeURIComponent(id));
     d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "" };
@@ -2596,34 +2704,82 @@ function renderEditor(main) {
   form.appendChild(field("Check mínimo", chk));
 
   // ---- relaciones (manuales) ----
-  const others = (state.editIds || []).filter(x => x !== d.id);
+  // El color de las notas ya relacionadas se resuelve en UNA consulta por id, y se
+  // cachea acá: sirve para pintar los chips y para avisar si una dependencia roja
+  // va a arrastrar esta nota a rojo.
+  const relColor = {};
+  async function cargarColores() {
+    const ids = [...d.depends_on, d.supersedes, d.caused_by].filter(Boolean);
+    if (!ids.length) return;
+    try {
+      (await listaNotas("ids=" + encodeURIComponent(ids.join(",")) + "&archived=1&limit=all"))
+        .forEach(n => relColor[n.id] = n);
+    } catch (e) { /* sin color: el chip sale neutro, no se rompe nada */ }
+  }
+
   const relWrap = el("div", "rel-wrap");
-  // depends_on: multi, con chips
+
+  // chipRel: una relación elegida, con su color a la vista.
+  function chipRel(id, quitar) {
+    const n = relColor[id];
+    const chip = el("span", "rel-chip " + cls(n && n.color));
+    chip.appendChild(el("span", "dot"));
+    chip.appendChild(el("span", null, id));
+    if (n) chip.title = n.type + (n.project ? " · " + n.project : "") + "\n" + (n.claim || "") + "\n" + n.reason;
+    const x = el("button", "rel-chip-x", "×");
+    x.setAttribute("aria-label", "quitar " + id);
+    x.addEventListener("click", quitar);
+    chip.appendChild(x);
+    return chip;
+  }
+
+  // depends_on: varias, con chips + buscador
   const depBox = el("div", "rel-deps");
   function renderDeps() {
-    depBox.innerHTML = "";
-    d.depends_on.forEach((dep, i) => {
-      const chip = el("span", "rel-chip");
-      chip.appendChild(el("span", null, dep));
-      const x = el("button", "rel-chip-x", "×");
-      x.addEventListener("click", () => { d.depends_on.splice(i, 1); renderDeps(); preview(); });
-      chip.appendChild(x);
-      depBox.appendChild(chip);
-    });
-    const avail = others.filter(o => !d.depends_on.includes(o));
-    if (avail.length) {
-      const pick = el("select", "rel-add");
-      const ph = el("option", null, "+ depende de…"); ph.value = ""; pick.appendChild(ph);
-      avail.forEach(o => { const op = el("option", null, o); op.value = o; pick.appendChild(op); });
-      pick.addEventListener("change", () => { if (pick.value) { d.depends_on.push(pick.value); renderDeps(); preview(); } });
-      depBox.appendChild(pick);
+    depBox.textContent = "";
+    d.depends_on.forEach((dep, i) => depBox.appendChild(
+      chipRel(dep, () => { d.depends_on.splice(i, 1); renderDeps(); preview(); })));
+    depBox.appendChild(buscadorNotas({
+      excluir: new Set([d.id, ...d.depends_on].filter(Boolean)),
+      proyecto: d.project,
+      placeholder: "+ depende de…",
+      onElegir: n => { relColor[n.id] = n; d.depends_on.push(n.id); renderDeps(); preview(); },
+    }));
+    // La consecuencia, donde se toma la decisión y no al guardar.
+    const rojas = d.depends_on.filter(x => relColor[x] && relColor[x].color === "red");
+    if (rojas.length) {
+      depBox.appendChild(el("div", "rel-alerta",
+        rojas.join(", ") + (rojas.length > 1 ? " están en rojo" : " está en rojo") +
+        ", así que esta nota también será roja mientras dependa de " + (rojas.length > 1 ? "ellas." : "ella.")));
     }
   }
+
+  // supersedes / caused_by: una sola, con chip o buscador
+  const repintar = [renderDeps];
+  function unaRel(campo, placeholder) {
+    const box = el("div", "rel-una");
+    const pintar = () => {
+      box.textContent = "";
+      if (d[campo]) box.appendChild(chipRel(d[campo], () => { d[campo] = ""; pintar(); preview(); }));
+      else box.appendChild(buscadorNotas({
+        excluir: new Set([d.id].filter(Boolean)),
+        proyecto: d.project,
+        placeholder: placeholder,
+        onElegir: n => { relColor[n.id] = n; d[campo] = n.id; pintar(); preview(); },
+      }));
+    };
+    pintar();
+    repintar.push(pintar);
+    return box;
+  }
+
   renderDeps();
   relWrap.appendChild(relField("Depende de (dura: si es roja, esta cae a roja)", depBox));
-  // supersedes + caused_by: single
-  relWrap.appendChild(relField("Reemplaza a (la archiva)", relSelect(others, d.supersedes, v => { d.supersedes = v; preview(); })));
-  relWrap.appendChild(relField("Causada por", relSelect(others, d.caused_by, v => { d.caused_by = v; preview(); })));
+  relWrap.appendChild(relField("Reemplaza a (la archiva)", unaRel("supersedes", "buscar la nota que reemplaza…")));
+  relWrap.appendChild(relField("Causada por", unaRel("caused_by", "buscar la nota que la causó…")));
+  // Los colores llegan después del primer dibujo: repintar es más simple que
+  // bloquear el editor entero esperando una consulta accesoria.
+  cargarColores().then(() => { if (state.editing === d) repintar.forEach(f => f()); });
   form.appendChild(field("Relaciones (opcional) — o escribí [[id]] en la nota", relWrap));
 
   form.appendChild(field("Color computado (preview en vivo)", prev));

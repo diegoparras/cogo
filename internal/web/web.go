@@ -922,6 +922,18 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	if a := q.Get("author"); a != "" {
 		keep(func(v core.NoteView) bool { return v.Author == a })
 	}
+	// ?ids=a,b,c — resuelve un puñado de notas concretas de una sola vez. Lo usa el
+	// editor para pintar las relaciones YA elegidas con su color, sin pedir una por
+	// una ni (como antes) bajarse el vault entero para encontrarlas.
+	if ids := q.Get("ids"); ids != "" {
+		set := map[string]bool{}
+		for _, x := range strings.Split(ids, ",") {
+			if x = strings.TrimSpace(x); x != "" {
+				set[x] = true
+			}
+		}
+		keep(func(v core.NoteView) bool { return set[v.ID] })
+	}
 	if c := q.Get("color"); c != "" {
 		set := map[string]bool{}
 		for _, x := range strings.Split(c, ",") {
