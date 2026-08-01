@@ -885,6 +885,9 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 		"projects": countBy(func(v core.NoteView) string { return v.Project }),
 		"authors":  countBy(func(v core.NoteView) string { return v.Author }),
 		"colors":   countBy(func(v core.NoteView) string { return v.Color }),
+		// Rango real de fechas de creación, para que el selector de fechas ofrezca
+		// el período que EXISTE en vez de un calendario infinito.
+		"dates": datesFacet(views),
 	}
 
 	// Búsqueda: reusa el ranking del tool `search` (BM25) y respeta su orden.
@@ -926,6 +929,20 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 		}
 		keep(func(v core.NoteView) bool { return set[v.Color] })
 	}
+	// Rango de fechas de CREACIÓN (YYYY-MM-DD, ambos extremos incluidos). Las
+	// fechas ISO se comparan como texto sin ambigüedad. Una nota sin historial no
+	// tiene fecha conocida: si hay filtro activo queda fuera, porque "no sé cuándo
+	// se creó" no es lo mismo que "se creó en este rango".
+	from, to := q.Get("from"), q.Get("to")
+	if from != "" || to != "" {
+		keep(func(v core.NoteView) bool {
+			if len(v.Created) < 10 {
+				return false
+			}
+			d := v.Created[:10]
+			return (from == "" || d >= from) && (to == "" || d <= to)
+		})
+	}
 
 	// Orden. El default es la opinión de COGO: primero lo que necesita atención.
 	// Por fecha se usa la verificación, que es lo que de verdad envejece.
@@ -934,13 +951,22 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 		sort.SliceStable(views, func(i, j int) bool { return views[i].Verified > views[j].Verified })
 	case "antigua":
 		sort.SliceStable(views, func(i, j int) bool { return views[i].Verified < views[j].Verified })
+	case "nueva": // por creación: la fecha que el visor ahora muestra en cada tarjeta
+		sort.SliceStable(views, func(i, j int) bool { return views[i].Created > views[j].Created })
+	case "vieja":
+		sort.SliceStable(views, func(i, j int) bool { return views[i].Created < views[j].Created })
 	}
 
 	total := len(views)
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	if limit <= 0 {
-		limit = 50
+	// "todas" es una opción explícita del paginador. Sigue siendo UNA petición: el
+	// servidor decide cuánto manda, y el navegador nunca improvisa un "traé todo".
+	limit := total
+	if q.Get("limit") != "all" {
+		limit, _ = strconv.Atoi(q.Get("limit"))
+		if limit <= 0 {
+			limit = 50
+		}
 	}
 	if offset < 0 || offset > total {
 		offset = total
@@ -956,6 +982,26 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"notes": page, "total": total, "offset": offset, "limit": limit, "facets": facets,
 	})
+}
+
+// datesFacet devuelve la fecha de creación más vieja y la más nueva del vault.
+// El selector de fechas las usa para acotarse a lo que realmente existe: ofrecer
+// un calendario abierto donde no hay notas es prometer resultados que no hay.
+func datesFacet(views []core.NoteView) map[string]any {
+	min, max := "", ""
+	for _, v := range views {
+		if len(v.Created) < 10 {
+			continue
+		}
+		d := v.Created[:10]
+		if min == "" || d < min {
+			min = d
+		}
+		if max == "" || d > max {
+			max = d
+		}
+	}
+	return map[string]any{"min": min, "max": max}
 }
 
 // archivedParam reads the "?archived=1" toggle used by views that can optionally

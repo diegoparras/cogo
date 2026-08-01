@@ -64,7 +64,7 @@ la aplicación.
 ## 4. Las pestañas, una por una
 
 - **Vault** ("bóveda"): tus notas, cada una con su color. Es la pantalla principal.
-- **Frescura**: te avisa qué notas están "venciendo" (las cosas cambian; una nota vieja deja
+- **Vigencia**: te avisa qué notas están "venciendo" (las cosas cambian; una nota vieja deja
   de ser confiable). Tiene un botón "revalidar" para renovarlas.
 - **Pack**: junta tus notas de un tema en un texto ordenado para copiar y pegárselo a una IA.
 - **Grafo**: un dibujo de cómo se relacionan tus notas. Lindo de ver, opcional.

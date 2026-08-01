@@ -25,6 +25,15 @@ async function apiOrError(path, opt) {
   try { return await res.json(); }
   catch (e) { return { ok: false, error: "respuesta inesperada del servidor" }; }
 }
+// listaNotas: /api/notes devuelve un ÍNDICE ({notes,total,facets}), no un array.
+// Todo el que solo quiera las notas pasa por acá, porque cuando cambió el
+// contrato quedaron llamadores tratando la respuesta como lista y reventaban en
+// silencio, dejando la pantalla en blanco. Un único lugar que sepa la forma.
+async function listaNotas(qs) {
+  const r = await apiOrError("/api/notes" + (qs ? "?" + qs : ""));
+  if (r.ok === false) throw new Error(r.error);
+  return r.notes || [];
+}
 const cls = c => "c-" + (c || "ungraded");
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -808,7 +817,7 @@ async function deleteNote(id) {
 // cree — con cien notas ya no encontrás nada. Lo único que NO cambia es el orden
 // por defecto: primero lo que necesita atención, que es la opinión de COGO.
 async function renderVault(main) {
-  const st = window.__vault || (window.__vault = { q: "", author: "", sort: "atencion", limit: 50 });
+  const st = window.__vault || (window.__vault = { q: "", author: "", sort: "atencion", limit: 25, from: "", to: "" });
   st.offset = 0;
 
   viewHead(main, "Suite Escriba · Memoria", "Vault", "Todo lo que sabés del proyecto, con un color de confianza que COGO computa solo: verde confiá, amarillo ojo, rojo no.");
@@ -846,6 +855,8 @@ async function renderVault(main) {
     if (st.author) p.set("author", st.author);
     if (state.vaultColors && state.vaultColors.size) p.set("color", [...state.vaultColors].join(","));
     if (st.sort !== "atencion") p.set("sort", st.sort);
+    if (st.from) p.set("from", st.from);
+    if (st.to) p.set("to", st.to);
     p.set("limit", st.limit); p.set("offset", st.offset);
     if (state.showArchived) p.set("archived", "1");
     return "/api/notes?" + p;
@@ -887,32 +898,38 @@ async function renderVault(main) {
       v => { st.author = v; recargar(true); }));
 
     const orden = el("select", "vault-sel");
-    [["atencion", "orden: atención"], ["reciente", "orden: más reciente"], ["antigua", "orden: más antigua"]]
+    [["atencion", "orden: atención"], ["nueva", "orden: creada ↓ nueva"], ["vieja", "orden: creada ↑ vieja"],
+    ["reciente", "orden: verificada ↓"], ["antigua", "orden: verificada ↑"]]
       .forEach(([v, l]) => orden.appendChild(Object.assign(el("option", null, l), { value: v })));
     orden.value = st.sort;
     orden.addEventListener("change", () => { st.sort = orden.value; recargar(true); });
     bar2.appendChild(orden);
+
+    bar2.appendChild(selectorFechas(st, facets.dates || {}, () => recargar(true)));
   }
 
+  // Con paginador, cada carga REEMPLAZA la lista (antes se acumulaba con "cargar
+  // más"). `reset` ahora solo distingue si además hay que repintar los filtros.
   async function recargar(reset) {
-    if (reset) { st.offset = 0; list.textContent = ""; }
+    if (reset) st.offset = 0;
     setWorking(cuenta, "buscando…");
     const r = await apiOrError(url());
     if (r.ok === false) { cuenta.textContent = "⚠ " + r.error; return; }
     if (reset || !bar2.children.length) pintarFiltros(r.facets || {});
+    list.textContent = "";
     (r.notes || []).forEach(n => list.appendChild(notaCard(n)));
+    const desde = r.total === 0 ? 0 : r.offset + 1;
     const hasta = Math.min(r.offset + (r.notes || []).length, r.total);
-    cuenta.textContent = r.total === 0 ? "" : "mostrando " + hasta + " de " + r.total;
+    cuenta.textContent = r.total === 0 ? "" :
+      (hasta - desde + 1 === r.total ? r.total + " nota(s)" : "mostrando " + desde + "–" + hasta + " de " + r.total);
     masWrap.textContent = "";
-    if (hasta < r.total) {
-      const mas = el("button", "mini ghost", "cargar más");
-      mas.addEventListener("click", () => { st.offset = hasta; recargar(false); });
-      masWrap.appendChild(mas);
-    }
+    if (r.total) masWrap.appendChild(paginador(st, r.total, () => recargar(false)));
     if (!r.total) {
-      list.appendChild(el("div", "empty", st.q || st.author || state.project || (state.vaultColors && state.vaultColors.size)
+      list.appendChild(el("div", "empty", st.q || st.author || state.project || st.from || st.to || (state.vaultColors && state.vaultColors.size)
         ? "Ninguna nota coincide con esos filtros." : "Todavía no hay notas."));
     }
+    // Al cambiar de página uno espera empezar arriba, no a mitad de la lista.
+    if (!reset) list.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   // Buscar mientras se escribe, sin disparar una consulta por tecla.
@@ -928,6 +945,165 @@ async function renderVault(main) {
     main.textContent = ""; renderWelcome(main); return;
   }
   await recargar(true);
+}
+
+// ---------- selector de rango de fechas ----------
+// Un calendario doble es lo primero que se le ocurre a uno, y es lo que menos se
+// usa: casi siempre uno quiere "lo último" o "lo de este año", no dos fechas
+// exactas. Así que los atajos van primero y grandes, y el rango a medida abajo
+// para el caso raro. Se acota a las fechas que EXISTEN en el vault.
+function isoLocal(d) {
+  const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+function haceDias(n) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - n); return isoLocal(d); }
+
+function selectorFechas(st, rango, onChange) {
+  const wrap = el("div", "fechas-wrap");
+  const btn = el("button", "pilltog fechas-btn" + (st.from || st.to ? " on" : ""));
+  const pintarBtn = () => {
+    btn.textContent = "";
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>';
+    btn.appendChild(el("span", null, st.etiquetaFecha || (st.from || st.to ? etiquetaRango(st) : "fechas")));
+    btn.classList.toggle("on", !!(st.from || st.to));
+    if (st.from || st.to) {
+      const x = el("span", "fechas-x", "✕");
+      x.title = "Quitar el filtro de fechas";
+      x.addEventListener("click", e => { e.stopPropagation(); st.from = st.to = ""; st.etiquetaFecha = ""; pintarBtn(); onChange(); });
+      btn.appendChild(x);
+    }
+  };
+  wrap.appendChild(btn);
+
+  let pop = null;
+  const cerrar = () => { if (pop) { pop.remove(); pop = null; document.removeEventListener("click", afuera, true); document.removeEventListener("keydown", esc); } };
+  const afuera = e => { if (pop && !wrap.contains(e.target)) cerrar(); };
+  const esc = e => { if (e.key === "Escape") cerrar(); };
+
+  const aplicar = (from, to, etiqueta) => { st.from = from; st.to = to; st.etiquetaFecha = etiqueta; cerrar(); pintarBtn(); onChange(); };
+
+  btn.addEventListener("click", () => {
+    if (pop) return cerrar();
+    pop = el("div", "fechas-pop");
+    pop.addEventListener("click", e => e.stopPropagation());
+    pop.appendChild(el("div", "fechas-tit", "Creadas en…"));
+
+    const atajos = el("div", "fechas-atajos");
+    [["Hoy", () => aplicar(haceDias(0), "", "hoy")],
+    ["Últimos 7 días", () => aplicar(haceDias(7), "", "últimos 7 días")],
+    ["Últimos 30 días", () => aplicar(haceDias(30), "", "últimos 30 días")],
+    ["Últimos 90 días", () => aplicar(haceDias(90), "", "últimos 90 días")],
+    ["Este año", () => aplicar(new Date().getFullYear() + "-01-01", "", "este año")],
+    ["Todo", () => aplicar("", "", "")]].forEach(([txt, fn]) => {
+      const b = el("button", "fechas-atajo", txt);
+      b.addEventListener("click", fn);
+      atajos.appendChild(b);
+    });
+    pop.appendChild(atajos);
+
+    pop.appendChild(el("div", "fechas-sep", "o un rango exacto"));
+    const fila = el("div", "fechas-rango");
+    const mk = (val) => {
+      const i = el("input", "fechas-input");
+      i.type = "date"; i.value = val || "";
+      if (rango.min) i.min = rango.min;
+      if (rango.max) i.max = rango.max;
+      return i;
+    };
+    const a = mk(st.from), b = mk(st.to);
+    fila.append(el("span", "fechas-lbl", "desde"), a, el("span", "fechas-lbl", "hasta"), b);
+    pop.appendChild(fila);
+    if (rango.min && rango.max) {
+      pop.appendChild(el("div", "fechas-hint", "Tus notas van del " + fechaCorta(rango.min, true) + " al " + fechaCorta(rango.max, true) + "."));
+    }
+    const ok = el("button", "mini fechas-ok", "Aplicar");
+    ok.addEventListener("click", () => {
+      if (a.value && b.value && a.value > b.value) return alert("La fecha 'desde' es posterior a la de 'hasta'.");
+      aplicar(a.value, b.value, "");
+    });
+    pop.appendChild(ok);
+
+    wrap.appendChild(pop);
+    setTimeout(() => { document.addEventListener("click", afuera, true); document.addEventListener("keydown", esc); }, 0);
+  });
+
+  pintarBtn();
+  return wrap;
+}
+
+function etiquetaRango(st) {
+  if (st.from && st.to) return fechaCorta(st.from) + " → " + fechaCorta(st.to);
+  if (st.from) return "desde " + fechaCorta(st.from);
+  return "hasta " + fechaCorta(st.to);
+}
+
+// ---------- paginador ----------
+// El "cargar más" anterior no decía dónde estabas ni cuánto faltaba, y no había
+// forma de volver. Esto es un paginador de verdad: tamaño de página elegible
+// (incluido "todas"), saltos, y la cuenta a la vista.
+function paginador(st, total, onChange) {
+  const wrap = el("div", "pager");
+  const todas = st.limit === "all";
+  const tam = todas ? total : st.limit;
+  const pagina = todas ? 1 : Math.floor(st.offset / tam) + 1;
+  const paginas = todas ? 1 : Math.max(1, Math.ceil(total / tam));
+
+  const sel = el("select", "vault-sel pager-sel");
+  [[10, "10 por página"], [25, "25 por página"], [100, "100 por página"], ["all", "todas"], ["custom", "personalizado…"]]
+    .forEach(([v, l]) => sel.appendChild(Object.assign(el("option", null, l), { value: v })));
+  const esEstandar = [10, 25, 100].includes(st.limit) || todas;
+  sel.value = esEstandar ? String(st.limit) : "custom";
+  sel.addEventListener("change", () => {
+    if (sel.value === "custom") { pintarCustom(true); return; }
+    st.limit = sel.value === "all" ? "all" : parseInt(sel.value, 10);
+    st.offset = 0; onChange();
+  });
+  wrap.appendChild(sel);
+
+  const customBox = el("span", "pager-custom");
+  wrap.appendChild(customBox);
+  function pintarCustom(foco) {
+    customBox.textContent = "";
+    const inp = el("input", "pager-num");
+    inp.type = "number"; inp.min = "1"; inp.max = "1000"; inp.value = esEstandar ? 50 : st.limit;
+    inp.setAttribute("aria-label", "notas por página");
+    const ap = el("button", "mini ghost", "ok");
+    const set = () => {
+      const v = Math.max(1, Math.min(1000, parseInt(inp.value, 10) || 25));
+      st.limit = v; st.offset = 0; onChange();
+    };
+    ap.addEventListener("click", set);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") set(); });
+    customBox.append(inp, el("span", "pager-lbl", "por página"), ap);
+    if (foco) inp.focus();
+  }
+  if (!esEstandar) pintarCustom(false);
+
+  if (!todas && paginas > 1) {
+    const nav = el("div", "pager-nav");
+    const ir = (p) => { st.offset = (p - 1) * tam; onChange(); };
+    const flecha = (txt, destino, activo, titulo) => {
+      const b = el("button", "pager-b", txt);
+      b.title = titulo; b.disabled = !activo;
+      if (activo) b.addEventListener("click", () => ir(destino));
+      return b;
+    };
+    nav.appendChild(flecha("«", 1, pagina > 1, "Primera"));
+    nav.appendChild(flecha("‹", pagina - 1, pagina > 1, "Anterior"));
+
+    const num = el("input", "pager-pag");
+    num.type = "number"; num.min = "1"; num.max = String(paginas); num.value = pagina;
+    num.setAttribute("aria-label", "número de página");
+    const saltar = () => { const p = Math.max(1, Math.min(paginas, parseInt(num.value, 10) || 1)); ir(p); };
+    num.addEventListener("keydown", e => { if (e.key === "Enter") saltar(); });
+    num.addEventListener("blur", () => { if (parseInt(num.value, 10) !== pagina) saltar(); });
+    nav.append(num, el("span", "pager-de", "de " + paginas));
+
+    nav.appendChild(flecha("›", pagina + 1, pagina < paginas, "Siguiente"));
+    nav.appendChild(flecha("»", paginas, pagina < paginas, "Última"));
+    wrap.appendChild(nav);
+  }
+  return wrap;
 }
 
 // COLORWORD_CORTO: la palabra que va en el chip de color.
@@ -947,15 +1123,26 @@ function notaCard(n) {
   head.appendChild(el("span", "nc-type", n.type + (n.project ? " · " + n.project : "")));
   if (n.author) { const a = callerKind(n.author); head.appendChild(el("span", "nc-author", "· " + a[0])).title = "capturada por " + n.author; }
   if (n.state) head.appendChild(el("span", "nc-badge", stateLabel(n.state)));
+  // Las tres fechas de una nota son distintas y contestan preguntas distintas:
+  // cuándo NACIÓ (antigüedad), cuándo se CHEQUEÓ por última vez, y hasta cuándo
+  // VALE. Se muestran las tres, en ese orden, porque triar es compararlas.
+  if (n.created) {
+    const d = diasDesde(n.created);
+    // Fecha exacta Y días exactos: "hace 4 meses" sirve para ojear, pero cuando
+    // uno compara antigüedades quiere el número, no el redondeo.
+    const c = el("span", "nc-fecha nc-nace", "creada " + fechaCorta(n.created) + " · " + edadEnDias(d));
+    c.title = "Creada el " + fechaLarga(n.created) + " (" + haceCuanto(n.created) + ")";
+    head.appendChild(c);
+  }
   if (n.verified) {
     const f = el("span", "nc-fecha", "verificada " + haceCuanto(n.verified));
-    f.title = "Verificada el " + n.verified + (n.created ? "\nCreada el " + n.created.slice(0, 10) : "");
+    f.title = "Verificada el " + fechaLarga(n.verified);
     head.appendChild(f);
   }
   if (n.stale_at) {
     const f = freshnessLabel(n.stale_at);
     const stl = el("span", "nc-stale " + f.cls, f.text);
-    stl.title = "Fresca hasta " + n.stale_at + " · después conviene revalidar (pestaña Frescura).";
+    stl.title = "Fresca hasta " + n.stale_at + " · después conviene revalidar (pestaña Vigencia).";
     head.appendChild(stl);
   }
   body.appendChild(head);
@@ -981,14 +1168,38 @@ function notaCard(n) {
   return card;
 }
 
+// ---------- fechas ----------
+// asDate acepta tanto "2026-07-31" como el RFC3339 del historial.
+function asDate(iso) { return new Date(iso.length > 10 ? iso : iso + "T00:00:00"); }
+
+function diasDesde(iso) { return Math.max(0, Math.round((new Date() - asDate(iso)) / 86400000)); }
+
+// edadEnDias: el número que pidió el usuario, sin redondear a meses ni años.
+function edadEnDias(d) { return d === 0 ? "hoy" : d === 1 ? "hace 1 día" : "hace " + d + " días"; }
+
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+// El año solo si NO es el corriente: en el 90% de los casos es ruido. `conAnio`
+// lo fuerza para los extremos de un rango, donde omitirlo en uno solo de los dos
+// se lee como una frase cortada ("del 27 jun 2025 al 1 ago.").
+function fechaCorta(iso, conAnio) {
+  const d = asDate(iso);
+  return d.getDate() + " " + MESES[d.getMonth()] + (conAnio || d.getFullYear() !== new Date().getFullYear() ? " " + d.getFullYear() : "");
+}
+function fechaLarga(iso) {
+  const d = asDate(iso);
+  const p = n => String(n).padStart(2, "0");
+  return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + (iso.length > 10 ? " " + p(d.getHours()) + ":" + p(d.getMinutes()) : "");
+}
+
 // haceCuanto: fecha en relativo ("hace 3 días"), que es como uno tría.
 function haceCuanto(iso) {
-  const d = Math.round((new Date() - new Date(iso.length > 10 ? iso : iso + "T00:00:00")) / 86400000);
+  const d = Math.round((new Date() - asDate(iso)) / 86400000);
   if (d <= 0) return "hoy";
   if (d === 1) return "ayer";
   if (d < 30) return "hace " + d + " días";
-  if (d < 365) return "hace " + Math.round(d / 30) + " meses";
-  return "hace " + Math.round(d / 365) + " años";
+  const plural = (n, sing, pl) => "hace " + n + " " + (n === 1 ? sing : pl);
+  if (d < 365) return plural(Math.round(d / 30), "mes", "meses");
+  return plural(Math.round(d / 365), "año", "años");
 }
 
 // ---------- freshness ----------
@@ -1027,7 +1238,12 @@ function freshEmptyState(total) {
 }
 
 async function renderFresh(main) {
-  const notes = (await api("/api/notes")).filter(matchesProject).filter(n => n.stale_at);
+  // El encabezado se dibuja ANTES de pedir los datos: si la consulta falla, la
+  // pantalla explica dónde estás y qué pasó, en vez de quedar en blanco.
+  viewHead(main, "Suite Escriba · Memoria", "Vigencia", "Las cosas caducan: acá están las notas vencidas o por vencer en ≤30 días. Revalidá una que ya chequeaste.");
+  let notes;
+  try { notes = (await listaNotas("limit=all")).filter(matchesProject).filter(n => n.stale_at); }
+  catch (e) { main.appendChild(el("div", "empty", "⚠ " + e.message)); return; }
   const rows = notes.map(n => {
     const days = daysUntil(n.stale_at);
     const status = days < 0 ? "vencida" : (days <= 30 ? "pronto" : "fresca");
@@ -1035,7 +1251,6 @@ async function renderFresh(main) {
   }).filter(r => r.status !== "fresca");
   rows.sort((a, b) => a.stale_at < b.stale_at ? -1 : 1);
 
-  viewHead(main, "Suite Escriba · Memoria", "Frescura", "Las cosas caducan: acá están las notas vencidas o por vencer en ≤30 días. Revalidá una que ya chequeaste.");
   if (!rows.length) { main.appendChild(freshEmptyState(notes.length)); return; }
 
   rows.forEach(r => {
@@ -2266,8 +2481,8 @@ async function openNoteModal(id) {
 
 async function openEditor(id) {
   let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "", depends_on: [], supersedes: "", caused_by: "" };
-  const all = await api("/api/notes?archived=1").catch(() => []);
-  state.editIds = (all || []).map(n => n.id);
+  const all = await listaNotas("archived=1&limit=all").catch(() => []);
+  state.editIds = all.map(n => n.id);
   if (id) {
     const n = await api("/api/note?id=" + encodeURIComponent(id));
     d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "" };

@@ -478,7 +478,7 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .pilltog.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .vb-spacer { flex: 1 1 auto; }
 
-/* Frescura — estado "todo fresco" */
+/* Vigencia — estado "todo fresco" */
 .fresh-zen { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px 30px; }
 .fresh-art { margin-bottom: 6px; }
 .fresh-zen-h { font-size: 19px; font-weight: 650; color: var(--text); }
@@ -648,3 +648,49 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .vault-cuenta { font-size: 11.5px; color: var(--muted); margin: 2px 0 10px; font-variant-numeric: tabular-nums; }
 .vault-mas { display: flex; justify-content: center; margin: 16px 0 4px; }
 .nc-fecha { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; cursor: help; }
+
+/* ---- Vault: selector de fechas y paginador ----
+   Chrome NEUTRO a propósito: en COGO el color significa confianza (el semáforo),
+   así que un control de interfaz nunca compite con él. Solo el estado activo se
+   pinta, y con el gris de acento, no con un color del semáforo. */
+.fechas-wrap { position: relative; display: inline-flex; }
+.fechas-btn { gap: 6px; }
+.fechas-x { margin-left: 4px; opacity: .7; font-size: 11px; line-height: 1; }
+.fechas-x:hover { opacity: 1; }
+
+.fechas-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; width: 268px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.06);
+  animation: fechasIn .13s ease-out; }
+@keyframes fechasIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .fechas-pop { animation: none; } }
+.fechas-tit { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em;
+  color: var(--muted); margin-bottom: 10px; }
+.fechas-atajos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fechas-atajo { font-size: 12.5px; text-align: left; padding: 7px 10px; border-radius: 9px;
+  border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; transition: all .12s; }
+.fechas-atajo:hover { border-color: var(--accent); background: var(--bg-soft, rgba(127,127,127,.07)); }
+.fechas-sep { font-size: 11px; color: var(--muted); margin: 13px 0 8px; display: flex; align-items: center; gap: 8px; }
+.fechas-sep::before, .fechas-sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.fechas-rango { display: grid; grid-template-columns: auto 1fr; gap: 6px 8px; align-items: center; }
+.fechas-lbl { font-size: 11.5px; color: var(--muted); }
+.fechas-input { font-size: 12.5px; padding: 5px 8px; width: 100%; }
+.fechas-hint { font-size: 11px; color: var(--muted); margin-top: 9px; line-height: 1.45; }
+.fechas-ok { width: 100%; margin-top: 11px; justify-content: center; }
+
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.pager-sel { min-width: 128px; }
+.pager-custom { display: inline-flex; align-items: center; gap: 6px; }
+.pager-num { width: 70px; font-size: 12.5px; padding: 5px 8px; font-variant-numeric: tabular-nums; }
+.pager-lbl { font-size: 11.5px; color: var(--muted); }
+.pager-nav { display: inline-flex; align-items: center; gap: 4px; }
+.pager-b { min-width: 30px; height: 30px; border: 1px solid var(--border); background: var(--panel);
+  border-radius: 8px; color: var(--muted-2); cursor: pointer; font-size: 13px; line-height: 1; transition: all .12s; }
+.pager-b:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.pager-b:disabled { opacity: .35; cursor: default; }
+.pager-pag { width: 52px; text-align: center; font-size: 12.5px; padding: 5px 4px;
+  font-variant-numeric: tabular-nums; }
+.pager-de { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* La fecha de nacimiento de la nota, un punto más apagada que el resto del
+   encabezado: es contexto para comparar, no lo primero que se lee. */
+.nc-nace { color: var(--muted-2); }

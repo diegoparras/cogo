@@ -3,6 +3,8 @@ package web
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/diegoparras/cogo/internal/history"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -210,5 +212,78 @@ func TestNotesIndice(t *testing.T) {
 	// las notas traen la fecha de verificación (lo que faltaba para poder triar)
 	if len(notes) > 0 && notes[0]["verified"] == "" {
 		t.Errorf("la nota debería exponer 'verified'")
+	}
+}
+
+// TestNotesFechasYPaginado cubre lo que el visor necesita para no colapsar con
+// miles de notas: el rango de fechas de creación, la faceta que lo acota, y el
+// tamaño de página (incluido "todas").
+func TestNotesFechasYPaginado(t *testing.T) {
+	s := testServer(t)
+	// La fecha de creación sale del historial, y el historial lo escribe un hook
+	// global que instala el comando `serve` (cmd/cogo/serve.go). Sin él, el test
+	// probaría un servidor que no existe en producción.
+	core.SetWriteHook(func(path string, n *core.Note) {
+		history.Record(filepath.Dir(path), n.ID, n.Confidence, n.ColorReason, core.Claim(n))
+	})
+	t.Cleanup(func() { core.SetWriteHook(nil) })
+
+	for i := 0; i < 7; i++ {
+		id := fmt.Sprintf("p-%02d", i)
+		call(s.handleCapture, "POST", "/api/capture", map[string]any{
+			"id": id, "type": "bug", "project": "x", "body": "## Claim\nnota " + id,
+			"evidence": []map[string]string{{"kind": "file_read", "ref": "x.go:1"}}})
+	}
+	notas, total, facets := notesOf(t, s, "?limit=all")
+	if total < 7 || len(notas) != total {
+		t.Fatalf("limit=all devolvió %d de %d", len(notas), total)
+	}
+
+	// La faceta de fechas tiene que existir y ser una fecha real: es lo que acota
+	// el calendario del visor.
+	fd, _ := facets["dates"].(map[string]any)
+	if fd == nil || len(fd["min"].(string)) != 10 || len(fd["max"].(string)) != 10 {
+		t.Fatalf("facets.dates = %v", facets["dates"])
+	}
+	hoy := fd["max"].(string)
+
+	// Las 7 notas se acaban de crear: hoy las incluye a todas. La nota sembrada por
+	// testServer se escribió ANTES del hook, así que no tiene historial ni fecha, y
+	// queda FUERA de cualquier rango: "no sé cuándo se creó" no es "se creó acá".
+	// Es el caso real de las notas anteriores a que COGO llevara historial.
+	if _, n, _ := notesOf(t, s, "?from="+hoy+"&limit=all"); n != 7 {
+		t.Errorf("from=hoy -> %d, want 7 (las creadas hoy; la sembrada no tiene fecha)", n)
+	}
+	sinFecha, _, _ := notesOf(t, s, "?from=2000-01-01&to="+hoy+"&limit=all")
+	if len(sinFecha) != 7 {
+		t.Errorf("un rango que abarca todo -> %d, want 7", len(sinFecha))
+	}
+	for _, x := range sinFecha {
+		if x["id"] == "redis" {
+			t.Errorf("una nota sin fecha de creación no debería entrar en un rango")
+		}
+	}
+	if _, n, _ := notesOf(t, s, "?to=2000-01-01&limit=all"); n != 0 {
+		t.Errorf("to=2000-01-01 -> %d, want 0", n)
+	}
+	if total != 8 {
+		t.Errorf("total sin filtro = %d, want 8 (las 7 + la sembrada)", total)
+	}
+	if _, n, _ := notesOf(t, s, "?from=2999-01-01&limit=all"); n != 0 {
+		t.Errorf("rango futuro -> %d, want 0", n)
+	}
+
+	// Paginado: el total NO cambia con el tamaño de página, solo la porción.
+	pag1, total1, _ := notesOf(t, s, "?limit=3&offset=0")
+	pag2, total2, _ := notesOf(t, s, "?limit=3&offset=3")
+	if len(pag1) != 3 || len(pag2) != 3 || total1 != total || total2 != total {
+		t.Fatalf("paginado: %d/%d y %d/%d", len(pag1), total1, len(pag2), total2)
+	}
+	if pag1[0]["id"] == pag2[0]["id"] {
+		t.Errorf("dos páginas devolvieron la misma primera nota: %v", pag1[0]["id"])
+	}
+	// Y la creación viaja en cada nota, que es lo que la tarjeta muestra.
+	if c, _ := pag1[0]["created"].(string); len(c) < 10 {
+		t.Errorf("falta created en la nota: %v", pag1[0])
 	}
 }
