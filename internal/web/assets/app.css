@@ -640,3 +640,11 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .repo-foco { display: inline-flex; align-items: center; gap: 8px; margin-left: 12px; padding: 2px 4px 2px 11px;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 8%, var(--panel)); font-size: 11.5px; color: var(--accent); }
+
+/* ---- Vault como índice: búsqueda, filtros, paginación ---- */
+.vault-q { flex: 1; min-width: 180px; max-width: 420px; font-size: 13px; }
+.vault-filtros { gap: 10px; flex-wrap: wrap; margin-top: -4px; }
+.vault-sel { font-size: 12.5px; padding: 5px 9px; }
+.vault-cuenta { font-size: 11.5px; color: var(--muted); margin: 2px 0 10px; font-variant-numeric: tabular-nums; }
+.vault-mas { display: flex; justify-content: center; margin: 16px 0 4px; }
+.nc-fecha { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; cursor: help; }

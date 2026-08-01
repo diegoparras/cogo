@@ -5,6 +5,7 @@
 package history
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -136,6 +137,32 @@ func lastVersion(path string) (Version, bool) {
 		}
 	}
 	return last, found
+}
+
+// CreatedAt returns when a note was first written (RFC3339, "" if unknown). El
+// historial es append-only, así que la primera línea ES la creación; se leen unos
+// pocos bytes en vez del archivo entero porque esto corre por nota en cada
+// listado del vault.
+func CreatedAt(vault, id string) string {
+	f, err := os.Open(fileFor(vault, id))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	buf := make([]byte, 320)
+	n, _ := f.Read(buf)
+	if n == 0 {
+		return ""
+	}
+	line := buf[:n]
+	if i := bytes.IndexByte(line, '\n'); i >= 0 {
+		line = line[:i]
+	}
+	var v Version
+	if json.Unmarshal(line, &v) != nil {
+		return ""
+	}
+	return v.Time
 }
 
 // Load returns a note's versions, oldest first ([] if none).

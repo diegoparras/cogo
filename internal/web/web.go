@@ -830,12 +830,132 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleNotes lista el vault como un ÍNDICE, no como un volcado: busca, filtra,
+// ordena y pagina del lado del servidor. Con un puñado de notas da igual, pero
+// una lista plana de todo deja de servir mucho antes de lo que uno cree — no se
+// encuentra nada y el navegador dibuja cientos de tarjetas que nadie mira.
+//
+//	?q=      texto (ranking BM25/semántico, el mismo del tool `search`)
+//	?project= ?author= ?color=   filtros
+//	?sort=   atencion (default, rojo primero) | reciente | antigua
+//	?limit= ?offset=             paginación (default 50)
+//	?archived=1                  incluir archivadas/retractadas
+//
+// Devuelve además las facetas (proyectos y autores con su conteo) para que la
+// barra de filtros muestre lo que hay, sin tener que traerse el vault entero.
 func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	vault, ok := s.load(w)
 	if !ok {
 		return
 	}
-	writeJSON(w, core.Overview(vault, s.contras(), s.today(), archivedParam(r)))
+	q := r.URL.Query()
+	views := core.Overview(vault, s.contras(), s.today(), archivedParam(r))
+
+	// La fecha de creación no vive en la nota: es la primera línea de su historial.
+	for i := range views {
+		views[i].Created = history.CreatedAt(s.dir, views[i].ID)
+	}
+
+	// Facetas sobre el conjunto completo (antes de filtrar): la barra tiene que
+	// ofrecer todos los proyectos y autores, no solo los del filtro activo.
+	countBy := func(get func(core.NoteView) string) []map[string]any {
+		n := map[string]int{}
+		for _, v := range views {
+			if k := get(v); k != "" {
+				n[k]++
+			}
+		}
+		keys := make([]string, 0, len(n))
+		for k := range n {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			if n[keys[i]] != n[keys[j]] {
+				return n[keys[i]] > n[keys[j]]
+			}
+			return keys[i] < keys[j]
+		})
+		out := make([]map[string]any, 0, len(keys))
+		for _, k := range keys {
+			out = append(out, map[string]any{"name": k, "count": n[k]})
+		}
+		return out
+	}
+	facets := map[string]any{
+		"projects": countBy(func(v core.NoteView) string { return v.Project }),
+		"authors":  countBy(func(v core.NoteView) string { return v.Author }),
+		"colors":   countBy(func(v core.NoteView) string { return v.Color }),
+	}
+
+	// Búsqueda: reusa el ranking del tool `search` (BM25) y respeta su orden.
+	if query := strings.TrimSpace(q.Get("q")); query != "" {
+		rank := map[string]int{}
+		for i, res := range core.Search(vault, s.contras(), query, q.Get("project"), s.today(), 0, archivedParam(r)) {
+			rank[res.ID] = i + 1
+		}
+		kept := views[:0]
+		for _, v := range views {
+			if rank[v.ID] > 0 {
+				kept = append(kept, v)
+			}
+		}
+		views = kept
+		sort.SliceStable(views, func(i, j int) bool { return rank[views[i].ID] < rank[views[j].ID] })
+	}
+
+	// Filtros simples.
+	keep := func(f func(core.NoteView) bool) {
+		out := views[:0]
+		for _, v := range views {
+			if f(v) {
+				out = append(out, v)
+			}
+		}
+		views = out
+	}
+	if p := q.Get("project"); p != "" {
+		keep(func(v core.NoteView) bool { return v.Project == p })
+	}
+	if a := q.Get("author"); a != "" {
+		keep(func(v core.NoteView) bool { return v.Author == a })
+	}
+	if c := q.Get("color"); c != "" {
+		set := map[string]bool{}
+		for _, x := range strings.Split(c, ",") {
+			set[strings.TrimSpace(x)] = true
+		}
+		keep(func(v core.NoteView) bool { return set[v.Color] })
+	}
+
+	// Orden. El default es la opinión de COGO: primero lo que necesita atención.
+	// Por fecha se usa la verificación, que es lo que de verdad envejece.
+	switch q.Get("sort") {
+	case "reciente":
+		sort.SliceStable(views, func(i, j int) bool { return views[i].Verified > views[j].Verified })
+	case "antigua":
+		sort.SliceStable(views, func(i, j int) bool { return views[i].Verified < views[j].Verified })
+	}
+
+	total := len(views)
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 || offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	page := views[offset:end]
+	if page == nil {
+		page = []core.NoteView{}
+	}
+	writeJSON(w, map[string]any{
+		"notes": page, "total": total, "offset": offset, "limit": limit, "facets": facets,
+	})
 }
 
 // archivedParam reads the "?archived=1" toggle used by views that can optionally

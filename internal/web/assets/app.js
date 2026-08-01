@@ -803,67 +803,192 @@ async function deleteNote(id) {
   render();
 }
 
+// El Vault es un ÍNDICE, no un volcado: se busca, se filtra y se pagina del lado
+// del servidor. Una lista plana de todo deja de servir mucho antes de lo que uno
+// cree — con cien notas ya no encontrás nada. Lo único que NO cambia es el orden
+// por defecto: primero lo que necesita atención, que es la opinión de COGO.
 async function renderVault(main) {
-  const notes = (await api("/api/notes" + (state.showArchived ? "?archived=1" : ""))).filter(matchesProject);
-  if (!notes.length && !state.project && !state.showArchived) { renderWelcome(main); return; }
+  const st = window.__vault || (window.__vault = { q: "", author: "", sort: "atencion", limit: 50 });
+  st.offset = 0;
+
   viewHead(main, "Suite Escriba · Memoria", "Vault", "Todo lo que sabés del proyecto, con un color de confianza que COGO computa solo: verde confiá, amarillo ojo, rojo no.");
-  const bar = el("div", "viewbar");
+
+  // --- barra 1: acción, búsqueda, archivadas ---
+  const bar1 = el("div", "viewbar");
   const addBtn = el("button", "mini", "+ Nueva nota");
   addBtn.addEventListener("click", () => openEditor(null));
-  bar.appendChild(addBtn);
-  bar.appendChild(colorFilterBar(notes, state.vaultColors, render));
-  bar.appendChild(el("span", "vb-spacer"));
+  const buscar = el("input", "vault-q");
+  buscar.type = "search";
+  buscar.placeholder = "buscar en tus notas…";
+  buscar.value = st.q;
   const arch = el("button", "pilltog" + (state.showArchived ? " on" : ""));
   arch.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7"/><path d="M10 12h4"/></svg><span>archivadas</span>';
   arch.title = state.showArchived ? "Ocultar archivadas" : "Mostrar archivadas";
   arch.addEventListener("click", () => { state.showArchived = !state.showArchived; render(); });
-  bar.appendChild(arch);
-  main.appendChild(bar);
+  bar1.append(addBtn, buscar, el("span", "vb-spacer"), arch);
+  main.appendChild(bar1);
 
-  const shown = colorVisible(notes, state.vaultColors);
-  if (!shown.length) { main.appendChild(el("div", "empty", "Ninguna nota de ese color.")); return; }
+  // --- barra 2: filtros y orden (se completa con las facetas del servidor) ---
+  const bar2 = el("div", "viewbar vault-filtros");
+  main.appendChild(bar2);
 
+  const cuenta = el("div", "vault-cuenta");
+  main.appendChild(cuenta);
   const list = el("div", "note-list");
-  shown.forEach(n => {
-    const card = el("div", "note-card " + cls(n.color) + (n.state ? " archived" : ""));
-    card.addEventListener("click", () => openEditor(n.id));
-    card.appendChild(el("span", "dot"));
-    const body = el("div", "nc-body");
-    const head = el("div", "nc-head");
-    head.appendChild(el("span", "nc-id", n.id));
-    head.appendChild(el("span", "nc-type", n.type + (n.project ? " · " + n.project : "")));
-    if (n.author) { const a = callerKind(n.author); head.appendChild(el("span", "nc-author", "· " + a[0])).title = "capturada por " + n.author; }
-    if (n.state) head.appendChild(el("span", "nc-badge", stateLabel(n.state)));
-    if (n.stale_at) {
-      const f = freshnessLabel(n.stale_at);
-      const st = el("span", "nc-stale " + f.cls, f.text);
-      st.title = "Fresca hasta " + n.stale_at + " · después conviene revalidar (pestaña Frescura).";
-      head.appendChild(st);
-    }
-    body.appendChild(head);
-    body.appendChild(el("div", "nc-claim", n.claim || "—"));
-    body.appendChild(el("div", "nc-reason", n.reason));
-
-    const acts = el("div", "nc-actions");
-    acts.addEventListener("click", e => e.stopPropagation());
-    if (n.state === "archived" || n.state === "retracted") {
-      const rb = el("button", "nc-act", "restaurar");
-      rb.addEventListener("click", () => restoreNote(n.id));
-      acts.appendChild(rb);
-    } else if (!n.state) {
-      const ab = el("button", "nc-act", "archivar");
-      ab.addEventListener("click", () => archiveNote(n.id));
-      acts.appendChild(ab);
-    }
-    const db = el("button", "nc-act danger", "borrar");
-    db.addEventListener("click", () => deleteNote(n.id));
-    acts.appendChild(db);
-    body.appendChild(acts);
-
-    card.appendChild(body);
-    list.appendChild(card);
-  });
   main.appendChild(list);
+  const masWrap = el("div", "vault-mas");
+  main.appendChild(masWrap);
+
+  function url() {
+    const p = new URLSearchParams();
+    if (st.q) p.set("q", st.q);
+    if (state.project) p.set("project", state.project);
+    if (st.author) p.set("author", st.author);
+    if (state.vaultColors && state.vaultColors.size) p.set("color", [...state.vaultColors].join(","));
+    if (st.sort !== "atencion") p.set("sort", st.sort);
+    p.set("limit", st.limit); p.set("offset", st.offset);
+    if (state.showArchived) p.set("archived", "1");
+    return "/api/notes?" + p;
+  }
+
+  // Los filtros se dibujan una vez por carga: si se reconstruyeran con cada
+  // tecleo, el foco saltaría del campo de búsqueda.
+  function pintarFiltros(facets) {
+    bar2.textContent = "";
+    // color (con su conteo real del servidor, no del pedazo que se trajo)
+    const colores = el("div", "cf-bar");
+    (facets.colors || []).forEach(c => {
+      const on = state.vaultColors && state.vaultColors.has(c.name);
+      const chip = el("button", "cf " + cls(c.name) + (on ? " on" : ""));
+      chip.appendChild(el("span", "dot"));
+      chip.appendChild(el("span", null, c.count + " " + COLORWORD_CORTO(c.name)));
+      chip.addEventListener("click", () => {
+        state.vaultColors = state.vaultColors || new Set();
+        state.vaultColors.has(c.name) ? state.vaultColors.delete(c.name) : state.vaultColors.add(c.name);
+        recargar(true);
+      });
+      colores.appendChild(chip);
+    });
+    bar2.appendChild(colores);
+
+    const sel = (etq, valor, opciones, onch) => {
+      const s = el("select", "vault-sel");
+      s.appendChild(Object.assign(el("option", null, etq), { value: "" }));
+      opciones.forEach(o => s.appendChild(Object.assign(el("option", null, o.label), { value: o.value })));
+      s.value = valor || "";
+      s.addEventListener("change", () => onch(s.value));
+      return s;
+    };
+    bar2.appendChild(sel("proyecto: todos", state.project,
+      (facets.projects || []).map(p => ({ value: p.name, label: p.name + " (" + p.count + ")" })),
+      v => { state.project = v; const ps = $("#projsel"); if (ps) ps.value = v; recargar(true); }));
+    bar2.appendChild(sel("agente: todos", st.author,
+      (facets.authors || []).map(a => ({ value: a.name, label: callerKind(a.name)[0] + " (" + a.count + ")" })),
+      v => { st.author = v; recargar(true); }));
+
+    const orden = el("select", "vault-sel");
+    [["atencion", "orden: atención"], ["reciente", "orden: más reciente"], ["antigua", "orden: más antigua"]]
+      .forEach(([v, l]) => orden.appendChild(Object.assign(el("option", null, l), { value: v })));
+    orden.value = st.sort;
+    orden.addEventListener("change", () => { st.sort = orden.value; recargar(true); });
+    bar2.appendChild(orden);
+  }
+
+  async function recargar(reset) {
+    if (reset) { st.offset = 0; list.textContent = ""; }
+    setWorking(cuenta, "buscando…");
+    const r = await apiOrError(url());
+    if (r.ok === false) { cuenta.textContent = "⚠ " + r.error; return; }
+    if (reset || !bar2.children.length) pintarFiltros(r.facets || {});
+    (r.notes || []).forEach(n => list.appendChild(notaCard(n)));
+    const hasta = Math.min(r.offset + (r.notes || []).length, r.total);
+    cuenta.textContent = r.total === 0 ? "" : "mostrando " + hasta + " de " + r.total;
+    masWrap.textContent = "";
+    if (hasta < r.total) {
+      const mas = el("button", "mini ghost", "cargar más");
+      mas.addEventListener("click", () => { st.offset = hasta; recargar(false); });
+      masWrap.appendChild(mas);
+    }
+    if (!r.total) {
+      list.appendChild(el("div", "empty", st.q || st.author || state.project || (state.vaultColors && state.vaultColors.size)
+        ? "Ninguna nota coincide con esos filtros." : "Todavía no hay notas."));
+    }
+  }
+
+  // Buscar mientras se escribe, sin disparar una consulta por tecla.
+  let t = 0;
+  buscar.addEventListener("input", () => {
+    clearTimeout(t);
+    t = setTimeout(() => { st.q = buscar.value.trim(); recargar(true); }, 260);
+  });
+
+  // Vault vacío de verdad (sin filtros): la bienvenida en vez de una lista vacía.
+  const primera = await apiOrError("/api/notes?limit=1" + (state.showArchived ? "&archived=1" : ""));
+  if (primera.ok !== false && !primera.total && !st.q && !state.project && !st.author) {
+    main.textContent = ""; renderWelcome(main); return;
+  }
+  await recargar(true);
+}
+
+// COLORWORD_CORTO: la palabra que va en el chip de color.
+function COLORWORD_CORTO(c) {
+  return { green: "verde", yellow: "amarillo", red: "rojo", ungraded: "s/grado" }[c] || c;
+}
+
+// notaCard: una nota del vault como tarjeta, con su color, su autor y CUÁNDO se
+// verificó — el dato que faltaba para poder triar sin abrir cada una.
+function notaCard(n) {
+  const card = el("div", "note-card " + cls(n.color) + (n.state ? " archived" : ""));
+  card.addEventListener("click", () => openEditor(n.id));
+  card.appendChild(el("span", "dot"));
+  const body = el("div", "nc-body");
+  const head = el("div", "nc-head");
+  head.appendChild(el("span", "nc-id", n.id));
+  head.appendChild(el("span", "nc-type", n.type + (n.project ? " · " + n.project : "")));
+  if (n.author) { const a = callerKind(n.author); head.appendChild(el("span", "nc-author", "· " + a[0])).title = "capturada por " + n.author; }
+  if (n.state) head.appendChild(el("span", "nc-badge", stateLabel(n.state)));
+  if (n.verified) {
+    const f = el("span", "nc-fecha", "verificada " + haceCuanto(n.verified));
+    f.title = "Verificada el " + n.verified + (n.created ? "\nCreada el " + n.created.slice(0, 10) : "");
+    head.appendChild(f);
+  }
+  if (n.stale_at) {
+    const f = freshnessLabel(n.stale_at);
+    const stl = el("span", "nc-stale " + f.cls, f.text);
+    stl.title = "Fresca hasta " + n.stale_at + " · después conviene revalidar (pestaña Frescura).";
+    head.appendChild(stl);
+  }
+  body.appendChild(head);
+  body.appendChild(el("div", "nc-claim", n.claim || "—"));
+  body.appendChild(el("div", "nc-reason", n.reason));
+
+  const acts = el("div", "nc-actions");
+  acts.addEventListener("click", e => e.stopPropagation());
+  if (n.state === "archived" || n.state === "retracted") {
+    const rb = el("button", "nc-act", "restaurar");
+    rb.addEventListener("click", () => restoreNote(n.id));
+    acts.appendChild(rb);
+  } else if (!n.state) {
+    const ab = el("button", "nc-act", "archivar");
+    ab.addEventListener("click", () => archiveNote(n.id));
+    acts.appendChild(ab);
+  }
+  const db = el("button", "nc-act danger", "borrar");
+  db.addEventListener("click", () => deleteNote(n.id));
+  acts.appendChild(db);
+  body.appendChild(acts);
+  card.appendChild(body);
+  return card;
+}
+
+// haceCuanto: fecha en relativo ("hace 3 días"), que es como uno tría.
+function haceCuanto(iso) {
+  const d = Math.round((new Date() - new Date(iso.length > 10 ? iso : iso + "T00:00:00")) / 86400000);
+  if (d <= 0) return "hoy";
+  if (d === 1) return "ayer";
+  if (d < 30) return "hace " + d + " días";
+  if (d < 365) return "hace " + Math.round(d / 30) + " meses";
+  return "hace " + Math.round(d / 365) + " años";
 }
 
 // ---------- freshness ----------

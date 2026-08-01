@@ -14,6 +14,10 @@ type NoteView struct {
 	Claim   string `json:"claim"`
 	State   string `json:"state,omitempty"`  // archived|retracted|superseded; empty = active
 	Author  string `json:"author,omitempty"` // who captured it (multi-agent attribution)
+	// Cuándo se verificó por última vez. La fecha de CREACIÓN no vive en la nota
+	// (está en el historial), así que la completa la cara web: ver history.CreatedAt.
+	Verified string `json:"verified,omitempty"`
+	Created  string `json:"created,omitempty"`
 }
 
 // Overview grades the whole vault and returns one NoteView per note, ordered
@@ -32,7 +36,7 @@ func Overview(vault map[string]*Note, contradictions map[string]bool, today Date
 			ID: id, Type: n.Type, Project: n.Project,
 			Color: v.Color.String(), Reason: v.Reason,
 			StaleAt: v.StaleAt.String(), Claim: summarize(claimOf(n), 200),
-			State: stateTag(state, id), Author: n.Author,
+			State: stateTag(state, id), Author: n.Author, Verified: n.LastVerified.String(),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
