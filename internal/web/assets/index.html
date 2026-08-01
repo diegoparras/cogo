@@ -84,14 +84,28 @@
   </div>
 </header>
 
+<!-- Dos ejes, no siete pestañas sueltas: la memoria (¿cuánto confío en esta
+     nota?) y la autonomía (¿este turno del modelo me empuja?). Se separan por
+     agrupación y no por color, porque acá el color significa confianza. -->
 <nav class="tabs">
-  <button class="tab active" data-view="vault">Vault</button>
-  <button class="tab" data-view="fresh">Frescura</button>
-  <button class="tab" data-view="pack">Agentes</button>
-  <button class="tab" data-view="graph">Grafo</button>
-  <button class="tab" data-view="lint">Revisión</button>
-  <button class="tab" data-view="guard">Guard</button>
-  <button class="tab" data-view="xray">Veracidad</button>
+  <span class="tab-group">
+    <span class="tab-glabel">Memoria</span>
+    <span class="tab-row">
+      <button class="tab active" data-view="vault">Vault</button>
+      <button class="tab" data-view="fresh">Frescura</button>
+      <button class="tab" data-view="pack">Agentes</button>
+      <button class="tab" data-view="graph">Grafo</button>
+      <button class="tab" data-view="lint">Revisión</button>
+    </span>
+  </span>
+  <span class="tab-div" aria-hidden="true"></span>
+  <span class="tab-group">
+    <span class="tab-glabel">Autonomía</span>
+    <span class="tab-row">
+      <button class="tab" data-view="guard">Guard</button>
+      <button class="tab" data-view="xray">Veracidad</button>
+    </span>
+  </span>
 </nav>
 
 <main id="main"></main>

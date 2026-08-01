@@ -30,8 +30,15 @@
 main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
 
 /* ---- tabs ---- */
-.tabs { display: flex; gap: 2px; padding: 8px 22px 0; border-bottom: 1px solid var(--border);
+/* Dos grupos (Memoria · Autonomía) separados por agrupación, NO por color: el
+   color en COGO significa confianza, así que un tono decorativo sería ruido. */
+.tabs { display: flex; align-items: flex-end; gap: 0; padding: 6px 22px 0; border-bottom: 1px solid var(--border);
   position: sticky; top: 55px; background: var(--bg); z-index: 9; }
+.tab-group { display: flex; flex-direction: column; }
+.tab-glabel { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em;
+  color: var(--muted); padding: 0 13px 2px; }
+.tab-row { display: flex; gap: 2px; }
+.tab-div { width: 1px; align-self: stretch; margin: 14px 14px 6px; background: var(--border); }
 .tabs .tab { background: none; color: var(--muted-2); border: 0; border-bottom: 2px solid transparent;
   border-radius: 0; padding: 9px 13px; font-weight: 600; }
 .tabs .tab:hover { background: none; color: var(--text); border-color: transparent; }
