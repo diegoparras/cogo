@@ -1142,6 +1142,7 @@ async function renderRepoMap(main) {
   }
   async function verNodo(id) {
     st.sel = id;
+    if (window.__gv && window.__gv.setSelected) window.__gv.setSelected(id); // enfocar su rama
     const n = (st.data.nodes || []).find(x => x.id === id);
     if (!n) return;
     panel.textContent = "";

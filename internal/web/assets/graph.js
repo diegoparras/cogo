@@ -95,6 +95,20 @@
     const nbr = new Map(); nodes.forEach(n => nbr.set(n, new Set([n])));
     edges.forEach(e => { nbr.get(e.a).add(e.b); nbr.get(e.b).add(e.a); });
     const radius = n => 6 + 7 * Math.sqrt(n.deg / maxDeg);
+    // Hijas y padres directos, para poder recorrer la jerarquía al seleccionar.
+    const hijos = new Map(), padres = new Map();
+    nodes.forEach(n => { hijos.set(n, []); padres.set(n, []); });
+    edges.forEach(e => { hijos.get(e.a).push(e.b); padres.get(e.b).push(e.a); });
+    // familia(n): el nodo, TODO lo que cuelga de él (una carpeta trae sus archivos
+    // y subcarpetas completas) y el camino hasta la raíz, para no perder contexto.
+    function familia(n) {
+      const set = new Set([n]);
+      const bajar = [n];
+      while (bajar.length) for (const h of hijos.get(bajar.pop())) if (!set.has(h)) { set.add(h); bajar.push(h); }
+      const subir = [n];
+      while (subir.length) for (const p of padres.get(subir.pop())) if (!set.has(p)) { set.add(p); subir.push(p); }
+      return set;
+    }
 
     // --- view state ---
     let mode = opts.mode === "3d" ? "3d" : "2d";
@@ -102,6 +116,7 @@
     let zoom = 1, panX = 0, panY = 0;      // 2D
     let yaw = 0.5, pitch = -0.35, spinY = 0, spinX = 0, autoSpin = 0.0016; // 3D
     let hovered = null, dragging = false, dragMoved = false, lastX = 0, lastY = 0;
+    let selected = null; // fijado con un clic: el enfoque no se pierde al mover el mouse
     let W = 0, H = 0, dpr = 1;
     let colorFilter = null; // Set of colors to show; null/empty = all
 
@@ -183,16 +198,19 @@
       ctx.clearRect(0, 0, W, H);
       project();
       const order = mode === "3d" ? nodes.slice().sort((a, b) => a.depth - b.depth) : nodes;
-      const focusSet = hovered ? nbr.get(hovered) : null;
+      // Con algo seleccionado el enfoque es FUERTE (lo no relacionado casi
+      // desaparece) y persiste; el hover sigue siendo una insinuación suave.
+      const focusSet = selected ? familia(selected) : (hovered ? nbr.get(hovered) : null);
+      const fuerte = !!selected;
       const dimEdge = e => focusSet && !(focusSet.has(e.a) && (e.a === hovered || e.b === hovered) || focusSet.has(e.b) && (e.b === hovered || e.a === hovered));
 
       // edges
       ctx.lineCap = "round";
       for (const e of edges) {
         const st = edgeStyle(e);
-        const touches = e.a === hovered || e.b === hovered;
+        const touches = fuerte ? (focusSet.has(e.a) && focusSet.has(e.b)) : (e.a === hovered || e.b === hovered);
         const eDim = colorFilter && (!colorFilter.has(e.a.color) || !colorFilter.has(e.b.color));
-        let ea = focusSet ? (touches ? 1 : 0.07) : (mode === "3d" ? 0.72 : 0.92);
+        let ea = focusSet ? (touches ? 1 : (fuerte ? 0.02 : 0.07)) : (mode === "3d" ? 0.72 : 0.92);
         if (eDim) ea = Math.min(ea, 0.05);
         ctx.globalAlpha = ea;
         ctx.strokeStyle = st.stroke; ctx.lineWidth = st.w; ctx.setLineDash(st.dash);
@@ -218,14 +236,14 @@
         const dim = (focusSet && !focusSet.has(n)) || (colorFilter && !colorFilter.has(n.color));
         const near = mode === "3d" ? Math.max(.35, Math.min(1, (n.depth + bounds3()) / (2 * bounds3()))) : 1;
         // halo
-        ctx.globalAlpha = (dim ? 0.12 : 0.9) * near;
+        ctx.globalAlpha = (dim ? (fuerte ? 0.03 : 0.12) : 0.9) * near;
         if (additive) ctx.globalCompositeOperation = "lighter";
         const g = glow[({ green: "green", yellow: "yellow", red: "red" }[n.color]) || "ungraded"];
         const hs = rr * (additive ? 5.5 : 4.2);
         ctx.drawImage(g, n.sx - hs / 2, n.sy - hs / 2, hs, hs);
         ctx.globalCompositeOperation = "source-over";
         // core — disco plano en 2D, ESFERA sombreada en 3D
-        ctx.globalAlpha = dim ? 0.25 : 1;
+        ctx.globalAlpha = dim ? (fuerte ? 0.07 : 0.25) : 1;
         const rgb = hexToRgb(colorFor(T, n.color));
         if (mode === "3d") {
           const gx = n.sx - rr * 0.34, gy = n.sy - rr * 0.4;
@@ -239,6 +257,7 @@
           ctx.beginPath(); ctx.arc(n.sx, n.sy, rr, 0, TAU); ctx.fillStyle = rgba(rgb, 1); ctx.fill();
           ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(BLACK, .55); ctx.stroke();
         }
+        if (n === selected) { ctx.beginPath(); ctx.arc(n.sx, n.sy, rr + 7, 0, TAU); ctx.strokeStyle = T.text; ctx.globalAlpha = .9; ctx.lineWidth = 2.2; ctx.stroke(); }
         if (n === hovered) { ctx.beginPath(); ctx.arc(n.sx, n.sy, rr + 5, 0, TAU); ctx.strokeStyle = colorFor(T, n.color); ctx.globalAlpha = .8; ctx.lineWidth = 2; ctx.stroke(); }
       }
       ctx.globalAlpha = 1;
@@ -248,10 +267,10 @@
       ctx.font = "600 11.5px ui-monospace, Consolas, monospace"; ctx.textAlign = "center";
       for (const n of order) {
         if (colorFilter && !colorFilter.has(n.color)) continue; // filtered out → no label
-        const show = showAll || n === hovered || (focusSet && focusSet.has(n));
+        const show = (fuerte ? focusSet.has(n) : (showAll || n === hovered || (focusSet && focusSet.has(n))));
         if (!show) continue;
         const dim = focusSet && !focusSet.has(n);
-        ctx.globalAlpha = dim ? 0.3 : 0.92;
+        ctx.globalAlpha = dim ? (fuerte ? 0.08 : 0.3) : 0.92;
         const label = n.id.length > 22 ? n.id.slice(0, 21) + "…" : n.id;
         ctx.fillStyle = T.text;
         ctx.fillText(label, n.sx, n.sy - radius(n) - 8);
@@ -311,7 +330,13 @@
       } else tip.classList.add("hidden");
     });
     canvas.addEventListener("mouseleave", () => { hovered = null; tip.classList.add("hidden"); });
-    canvas.addEventListener("click", e => { if (dragMoved) return; const n = hit(e.offsetX, e.offsetY); if (n && opts.onSelect) opts.onSelect(n.id); });
+    canvas.addEventListener("click", e => {
+      if (dragMoved) return;
+      const n = hit(e.offsetX, e.offsetY);
+      selected = (n && n !== selected) ? n : null; // volver a clickearlo, o el vacío, limpia
+      alpha = Math.max(alpha, 0.12);               // un pequeño reacomodo al enfocar
+      if (n && opts.onSelect) opts.onSelect(n.id);
+    });
     canvas.addEventListener("wheel", e => { e.preventDefault(); zoom = Math.max(0.3, Math.min(4, zoom * (e.deltaY < 0 ? 1.12 : 0.89))); }, { passive: false });
     function onTheme() { T = readTokens(); buildGlow(); }
     window.addEventListener("cogo-theme", onTheme);
@@ -326,6 +351,7 @@
       // cambia de tamaño pero el ResizeObserver puede no llegar a tiempo, y el
       // lienzo se queda con la medida vieja (el dibujo queda fuera de la vista).
       resize() { resize(); alpha = Math.max(alpha, 0.35); },
+      setSelected(id) { selected = id ? (byId[id] || null) : null; },
       reheat() { alpha = 1; },
       destroy: stop,
     };
