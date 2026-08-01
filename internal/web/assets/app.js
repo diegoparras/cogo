@@ -543,6 +543,7 @@ function initMenu() {
   $("#trashBtn").addEventListener("click", openTrash);
   $("#auditBtn").addEventListener("click", openAudit);
   $("#leasesBtn").addEventListener("click", openLeases);
+  $("#repoBtn").addEventListener("click", () => openRepo(null));
   $("#evrootsBtn").addEventListener("click", openEvidenceRoots);
   $("#exportBtn").addEventListener("click", () => { $("#menu").classList.add("hidden"); window.location.href = "/api/export"; });
   $("#agentsBtn").addEventListener("click", openAgents);
@@ -565,7 +566,7 @@ function initTabs() {
 
 // applyHash abre la vista (o el panel) que pide el fragmento de la URL, para que
 // un link como .../#guard o .../#leases lleve directo ahí.
-const HASH_PANELS = { leases: openLeases, audit: openAudit, tokens: openTokens, trash: openTrash, instrucciones: openAgents, evroots: openEvidenceRoots };
+const HASH_PANELS = { repo: () => openRepo(null), leases: openLeases, audit: openAudit, tokens: openTokens, trash: openTrash, instrucciones: openAgents, evroots: openEvidenceRoots };
 function applyHash() {
   const h = (location.hash || "").replace(/^#/, "");
   if (!h) return;
@@ -1295,6 +1296,119 @@ async function openAudit() {
   document.addEventListener("keydown", onKey);
 }
 
+// ---------- Explorador de repositorio ----------
+// Ver los archivos del repo SIN irse a github.com. No guarda nada: lo que COGO
+// persiste es la cita que armás desde acá. Por eso el flujo termina siempre en
+// el mismo lugar: clic en una línea → referencia `github://…` lista para usar
+// como evidencia (y si tenés el editor abierto, se inserta sola).
+async function openRepo(onPick) {
+  $("#menu").classList.add("hidden");
+  const st = { repo: localStorage.getItem("cogo.repo") || "", ref: localStorage.getItem("cogo.repo.ref") || "", path: "" };
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card repo-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", "Explorar repositorio"));
+  card.appendChild(el("p", "tk-intro", "Mirá los archivos del repo sin salir de COGO y citá una línea como evidencia. No se guarda ninguna copia: lo que queda es la cita."));
+
+  const bar = el("div", "repo-bar");
+  const ri = el("input", "repo-in"); ri.placeholder = "owner/repositorio"; ri.value = st.repo;
+  const rf = el("input", "repo-ref"); rf.placeholder = "rama o commit (opcional)"; rf.value = st.ref;
+  const go = el("button", "mini", "abrir");
+  bar.append(ri, rf, go);
+  card.appendChild(bar);
+
+  const crumbs = el("div", "repo-crumbs");
+  const list = el("div", "repo-list");
+  const status = el("div", "agt-bl-status");
+  card.append(crumbs, status, list);
+
+  function crumbTo(p) { st.path = p; load(); }
+  function drawCrumbs() {
+    crumbs.textContent = "";
+    const root = el("a", "repo-crumb", st.repo || "raíz");
+    root.addEventListener("click", () => crumbTo("")); crumbs.appendChild(root);
+    let acc = "";
+    (st.path ? st.path.split("/") : []).forEach(seg => {
+      acc = acc ? acc + "/" + seg : seg;
+      const to = acc;
+      crumbs.appendChild(el("span", "repo-sep", "/"));
+      const a = el("a", "repo-crumb", seg);
+      a.addEventListener("click", () => crumbTo(to));
+      crumbs.appendChild(a);
+    });
+  }
+
+  async function load() {
+    st.repo = ri.value.trim(); st.ref = rf.value.trim();
+    if (!st.repo) { status.textContent = "escribí un repositorio como owner/nombre"; return; }
+    localStorage.setItem("cogo.repo", st.repo); localStorage.setItem("cogo.repo.ref", st.ref);
+    drawCrumbs(); list.textContent = "";
+    setWorking(status, "leyendo el repositorio…");
+    const q = new URLSearchParams({ repo: st.repo, ref: st.ref, path: st.path });
+    const r = await api("/api/github?" + q).catch(() => null);
+    status.textContent = "";
+    if (!r || !r.ok) { status.textContent = "⚠ " + ((r && r.error) || "no se pudo leer el repositorio"); return; }
+    (r.entries || []).forEach(e => {
+      const row = el("div", "repo-row");
+      row.appendChild(el("span", "repo-ico", e.type === "dir" ? "▸" : "·"));
+      row.appendChild(el("span", "repo-name" + (e.type === "dir" ? " dir" : ""), e.name));
+      row.addEventListener("click", () => { st.path = e.path; e.type === "dir" ? load() : loadFile(); });
+      list.appendChild(row);
+    });
+    if (!(r.entries || []).length) list.appendChild(el("div", "tk-empty", "Carpeta vacía."));
+  }
+
+  async function loadFile() {
+    drawCrumbs(); list.textContent = "";
+    setWorking(status, "abriendo el archivo…");
+    const q = new URLSearchParams({ repo: st.repo, ref: st.ref, path: st.path, file: "1" });
+    const r = await api("/api/github?" + q).catch(() => null);
+    status.textContent = "";
+    if (!r || !r.ok) {
+      status.textContent = "⚠ " + ((r && r.error) || "no se pudo abrir");
+      if (r && r.html_url) { const a = el("a", "link", "abrir en GitHub"); a.href = r.html_url; a.target = "_blank"; status.appendChild(a); }
+      return;
+    }
+    const hint = el("div", "repo-hint", "Clic en una línea para citarla como evidencia.");
+    list.appendChild(hint);
+    const pre = el("div", "repo-code");
+    (r.lines || []).forEach((ln, i) => {
+      const row = el("div", "repo-ln");
+      row.appendChild(el("span", "repo-num", String(i + 1)));
+      row.appendChild(el("span", "repo-txt", ln || " "));
+      row.addEventListener("click", () => pick(i + 1));
+      pre.appendChild(row);
+    });
+    list.appendChild(pre);
+  }
+
+  async function pick(line) {
+    const ref = "github://" + st.repo + (st.ref ? "@" + st.ref : "") + "/" + st.path + ":" + line;
+    if (onPick) { onPick(ref); close(); return; }
+    await navigator.clipboard.writeText(ref).catch(() => {});
+    await confirmDialog({
+      title: "Cita copiada", note: ref,
+      message: "Pegala como referencia de evidencia en una nota. Si citás una rama, COGO va a avisarte cuando ese archivo cambie; si citás un commit fijo, la cita es inmutable.",
+      confirmText: "Listo", cancelText: "Cerrar",
+    });
+  }
+
+  go.addEventListener("click", () => { st.path = ""; load(); });
+  ri.addEventListener("keydown", e => { if (e.key === "Enter") { st.path = ""; load(); } });
+  if (st.repo) load(); else status.textContent = "escribí un repositorio para empezar";
+
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  function close() { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); }
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+}
+
 // ---------- Leases (coordinación multi-agente) ----------
 // Permisos con vencimiento que los agentes toman antes de una tarea no
 // idempotente (migración, deploy) para no pisarse. El operador puede liberarlos.
@@ -1726,6 +1840,13 @@ function renderEditor(main) {
     const add = el("button", "mini ghost", "+ evidencia");
     add.addEventListener("click", () => { d.evidence.push({ kind: "file_read", ref: "" }); renderEv(); });
     actions.appendChild(add);
+    const repo = el("button", "mini ghost", "buscar en el repo");
+    repo.title = "Explorá el repositorio y citá una línea como evidencia, sin salir de COGO.";
+    repo.addEventListener("click", () => openRepo(ref => {
+      d.evidence.push({ kind: "file_read", ref });
+      renderEv(); preview();
+    }));
+    actions.appendChild(repo);
     const attach = el("button", "mini ghost", "adjuntar archivo");
     attach.title = "Sube un archivo al store por su hash y lo cita como evidencia (artifact://). Un guard de secretos corre antes de guardar.";
     attach.addEventListener("click", () => {

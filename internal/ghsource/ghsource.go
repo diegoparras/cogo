@@ -19,15 +19,18 @@ package ghsource
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // Client talks to the GitHub REST API. The zero value is unusable; use FromEnv.
@@ -144,6 +147,129 @@ func (c *Client) FileSHA(ctx context.Context, owner, repo, ref, path string) (sh
 	}
 	c.remember(key, out.SHA, true)
 	return out.SHA, true, nil
+}
+
+// TreeEntry is one item of a repository directory listing.
+type TreeEntry struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Type string `json:"type"` // "file" | "dir"
+	Size int    `json:"size,omitempty"`
+}
+
+// Tree lists a directory of the repository so you can find the file you want to
+// cite without leaving COGO. Reading the repo is not the same as storing it: the
+// listing is fetched live and kept nowhere — what COGO persists is the citation.
+func (c *Client) Tree(ctx context.Context, owner, repo, ref, path string) ([]TreeEntry, error) {
+	if c == nil {
+		return nil, fmt.Errorf("ghsource: no client")
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/contents/%s", c.api, url.PathEscape(owner), url.PathEscape(repo), escapePath(path))
+	if ref != "" {
+		u += "?ref=" + url.QueryEscape(ref)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("no encontré ese repositorio o esa ruta")
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("sin acceso (¿repo privado sin token, o límite de rate?)")
+	}
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("github: %s", resp.Status)
+	}
+	var items []TreeEntry
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		return nil, fmt.Errorf("esa ruta es un archivo, no una carpeta")
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if (items[i].Type == "dir") != (items[j].Type == "dir") {
+			return items[i].Type == "dir" // carpetas primero
+		}
+		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
+	})
+	return items, nil
+}
+
+// FileContent fetches the file's text at a ref, so the visor can SHOW the cited
+// evidence instead of asking you to take the citation on faith. Returns the
+// decoded content, its blob SHA and the canonical GitHub URL. Binary or very
+// large files come back as an error — COGO shows source fragments, it is not a
+// file browser (that is what the repository itself is for).
+func (c *Client) FileContent(ctx context.Context, owner, repo, ref, path string) (content []byte, sha, htmlURL string, err error) {
+	if c == nil {
+		return nil, "", "", fmt.Errorf("ghsource: no client")
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/contents/%s", c.api, url.PathEscape(owner), url.PathEscape(repo), escapePath(path))
+	if ref != "" {
+		u += "?ref=" + url.QueryEscape(ref)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, "", "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, "", "", fmt.Errorf("el archivo citado no existe en el repositorio")
+	}
+	if resp.StatusCode/100 != 2 {
+		return nil, "", "", fmt.Errorf("github: %s", resp.Status)
+	}
+	var out struct {
+		SHA      string `json:"sha"`
+		Type     string `json:"type"`
+		Encoding string `json:"encoding"`
+		Content  string `json:"content"`
+		HTMLURL  string `json:"html_url"`
+		Size     int    `json:"size"`
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, "", "", err
+	}
+	if strings.HasPrefix(strings.TrimLeft(string(raw), " \t\r\n"), "[") {
+		return nil, "", "", fmt.Errorf("esa ruta es una carpeta, no un archivo citable")
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, "", "", err
+	}
+	if out.Type != "file" {
+		return nil, "", "", fmt.Errorf("esa ruta no es un archivo")
+	}
+	if out.Encoding != "base64" || out.Content == "" {
+		// GitHub omits the body for large files; the citation is still valid.
+		return nil, out.SHA, out.HTMLURL, fmt.Errorf("el archivo es demasiado grande para mostrarlo acá")
+	}
+	dec, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(out.Content, "\n", ""))
+	if err != nil {
+		return nil, out.SHA, out.HTMLURL, err
+	}
+	if !utf8.Valid(dec) {
+		return nil, out.SHA, out.HTMLURL, fmt.Errorf("el archivo es binario")
+	}
+	return dec, out.SHA, out.HTMLURL, nil
 }
 
 func (c *Client) remember(key, sha string, found bool) {

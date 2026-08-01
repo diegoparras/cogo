@@ -555,3 +555,26 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .agt-hist-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; font-size: 12.5px; color: var(--muted-2); }
 .agt-hist-t { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .agt-hist-row .nc-act { margin-left: auto; }
+
+/* Explorador de repositorio: leer el repo para poder citarlo */
+.repo-modal { max-width: 760px; }
+.repo-bar { display: flex; gap: 8px; margin: 12px 0 10px; }
+.repo-in { flex: 2; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
+.repo-ref { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
+.repo-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; font-family: var(--mono); font-size: 12px; margin-bottom: 8px; }
+.repo-crumb { color: var(--accent); cursor: pointer; }
+.repo-crumb:hover { text-decoration: underline; }
+.repo-sep { color: var(--muted-2); }
+.repo-list { max-height: 56vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+.repo-row { display: flex; align-items: center; gap: 9px; padding: 7px 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.repo-row:last-child { border-bottom: 0; }
+.repo-row:hover { background: var(--card); }
+.repo-ico { color: var(--muted-2); font-size: 11px; width: 12px; }
+.repo-name { font-family: var(--mono); font-size: 12.5px; color: var(--text); }
+.repo-name.dir { font-weight: 600; }
+.repo-hint { font-size: 11.5px; color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--card); }
+.repo-code { font-family: var(--mono); font-size: 12px; line-height: 1.6; }
+.repo-ln { display: flex; gap: 12px; padding: 0 12px; cursor: pointer; }
+.repo-ln:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.repo-num { color: var(--muted-2); text-align: right; min-width: 34px; user-select: none; font-variant-numeric: tabular-nums; }
+.repo-txt { white-space: pre-wrap; word-break: break-word; }

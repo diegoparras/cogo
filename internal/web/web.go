@@ -27,6 +27,7 @@ import (
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/ghsource"
 	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/lint"
@@ -125,6 +126,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/audit", s.handleAudit)
 	mux.HandleFunc("/api/artifact", s.handleArtifact)
 	mux.HandleFunc("/api/leases", s.handleLeases)
+	mux.HandleFunc("/api/github", s.handleGitHub)
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
@@ -531,6 +533,50 @@ func (s *Server) handleLeases(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "GET or DELETE", http.StatusMethodNotAllowed)
 	}
+}
+
+// handleGitHub is the repository explorer: it lists directories and shows files
+// so you can find what you want to cite WITHOUT leaving COGO and hunting the
+// path on github.com. Read-only and stateless — nothing of the repo is stored;
+// what COGO persists is the citation you build from here.
+//
+//	GET ?repo=owner/name&ref=&path=        → listado del directorio
+//	GET ?repo=owner/name&ref=&path=&file=1 → contenido del archivo
+func (s *Server) handleGitHub(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	full := strings.TrimSpace(r.URL.Query().Get("repo"))
+	owner, repo, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(full, "https://github.com/"), ".git"), "/")
+	if !ok || owner == "" || repo == "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "escribí el repo como owner/nombre"})
+		return
+	}
+	repo = strings.TrimSuffix(repo, "/")
+	ref := strings.TrimSpace(r.URL.Query().Get("ref"))
+	path := strings.Trim(strings.TrimSpace(r.URL.Query().Get("path")), "/")
+	gh := ghsource.FromEnv()
+
+	if r.URL.Query().Get("file") != "" {
+		content, sha, htmlURL, err := gh.FileContent(r.Context(), owner, repo, ref, path)
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "html_url": htmlURL})
+			return
+		}
+		writeJSON(w, map[string]any{
+			"ok": true, "kind": "file", "path": path, "sha": sha, "html_url": htmlURL,
+			"lines": strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n"),
+		})
+		return
+	}
+	items, err := gh.Tree(r.Context(), owner, repo, ref, path)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "kind": "dir", "path": path, "entries": items,
+		"authenticated": gh.Authenticated()})
 }
 
 // handleTokens manages the issued MCP access tokens: GET lists them (no
