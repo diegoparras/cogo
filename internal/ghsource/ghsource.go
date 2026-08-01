@@ -204,6 +204,65 @@ func (c *Client) Tree(ctx context.Context, owner, repo, ref, path string) ([]Tre
 	return items, nil
 }
 
+// FullTree returns every path of the repository at a ref in ONE request (the
+// git trees API with recursive=1), which is what makes a whole-repo map
+// affordable: walking directories would be one call per folder.
+//
+// truncated=true means the repo is bigger than what GitHub returns in a single
+// response; callers should say so rather than pretend the map is complete.
+func (c *Client) FullTree(ctx context.Context, owner, repo, ref string) (paths []TreeEntry, truncated bool, err error) {
+	if c == nil {
+		return nil, false, fmt.Errorf("ghsource: no client")
+	}
+	if ref == "" {
+		ref = "HEAD"
+	}
+	u := fmt.Sprintf("%s/repos/%s/%s/git/trees/%s?recursive=1",
+		c.api, url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(ref))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, fmt.Errorf("no encontré ese repositorio o esa rama")
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, false, fmt.Errorf("sin acceso (¿repo privado sin token, o límite de rate?)")
+	}
+	if resp.StatusCode/100 != 2 {
+		return nil, false, fmt.Errorf("github: %s", resp.Status)
+	}
+	var out struct {
+		Tree []struct {
+			Path string `json:"path"`
+			Type string `json:"type"` // "blob" | "tree"
+			Size int    `json:"size"`
+		} `json:"tree"`
+		Truncated bool `json:"truncated"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, false, err
+	}
+	for _, t := range out.Tree {
+		kind := "file"
+		if t.Type == "tree" {
+			kind = "dir"
+		}
+		paths = append(paths, TreeEntry{Name: t.Path[strings.LastIndex(t.Path, "/")+1:], Path: t.Path, Type: kind, Size: t.Size})
+	}
+	return paths, out.Truncated, nil
+}
+
 // FileContent fetches the file's text at a ref, so the visor can SHOW the cited
 // evidence instead of asking you to take the citation on faith. Returns the
 // decoded content, its blob SHA and the canonical GitHub URL. Binary or very

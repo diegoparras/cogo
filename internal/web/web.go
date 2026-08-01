@@ -127,6 +127,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/artifact", s.handleArtifact)
 	mux.HandleFunc("/api/leases", s.handleLeases)
 	mux.HandleFunc("/api/github", s.handleGitHub)
+	mux.HandleFunc("/api/github/map", s.handleGitHubMap)
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
@@ -577,6 +578,142 @@ func (s *Server) handleGitHub(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"ok": true, "kind": "dir", "path": path, "entries": items,
 		"authenticated": gh.Authenticated()})
+}
+
+// handleGitHubMap builds the repository's "confidence map": the folder tree
+// crossed with the vault's citations. Each cited file takes the color of the
+// notes that cite it (the worst one wins — a red note is the one you need to
+// see), and each folder reports how many of its files have NO memory at all.
+//
+// That last number is the point of the whole view: a file browser tells you what
+// exists, this tells you where your knowledge is solid and where you are blind.
+func (s *Server) handleGitHubMap(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	full := strings.TrimSpace(r.URL.Query().Get("repo"))
+	owner, repo, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(full, "https://github.com/"), ".git"), "/")
+	if !ok || owner == "" || repo == "" {
+		writeJSON(w, map[string]any{"ok": false, "error": "escribí el repo como owner/nombre"})
+		return
+	}
+	repo, ref := strings.TrimSuffix(repo, "/"), strings.TrimSpace(r.URL.Query().Get("ref"))
+
+	// 1. Qué archivos de ESTE repo cita el vault, y con qué color.
+	vault, okv := s.load(w)
+	if !okv {
+		return
+	}
+	verdicts := core.EvaluateVault(vault, s.contras(), s.today())
+	hidden := core.Hidden(vault)
+	type cite struct {
+		ID    string `json:"id"`
+		Color string `json:"color"`
+		Line  string `json:"line,omitempty"`
+	}
+	cited := map[string][]cite{}
+	for id, n := range vault {
+		if hidden[id] {
+			continue
+		}
+		for _, e := range n.Evidence {
+			o, rp, _, path, okr := core.ParseGitHubRef(e.Ref)
+			if !okr || !strings.EqualFold(o, owner) || !strings.EqualFold(rp, repo) {
+				continue
+			}
+			cited[path] = append(cited[path], cite{ID: id, Color: verdicts[id].Color.String()})
+		}
+	}
+
+	// 2. El árbol del repo, en una sola llamada.
+	paths, truncated, err := ghsource.FromEnv().FullTree(r.Context(), owner, repo, ref)
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+
+	// 3. Nodos: TODAS las carpetas (el esqueleto del repo) y solo los archivos
+	// citados. Dibujar cada archivo volvería el mapa ilegible en cualquier repo
+	// real; lo que importa por carpeta es cuántos quedaron sin memoria.
+	worst := func(cs []cite) string {
+		rank := map[string]int{"red": 0, "yellow": 1, "green": 2, "ungraded": 3}
+		out := "ungraded"
+		for _, c := range cs {
+			if rank[c.Color] < rank[out] {
+				out = c.Color
+			}
+		}
+		return out
+	}
+	type node struct {
+		ID      string `json:"id"`
+		Type    string `json:"type"`
+		Color   string `json:"color"`
+		Claim   string `json:"claim,omitempty"`
+		Files   int    `json:"files,omitempty"`   // archivos dentro (solo carpetas)
+		Blind   int    `json:"blind,omitempty"`   // …sin ninguna nota que los cite
+		Notes   []cite `json:"notes,omitempty"`   // notas que citan este archivo
+		Project string `json:"project,omitempty"` // reutiliza el tooltip del motor
+	}
+	files, blind := map[string]int{}, map[string]int{}
+	dirs := map[string]bool{"": true}
+	var nodes []node
+	for _, p := range paths {
+		if p.Type == "dir" {
+			dirs[p.Path] = true
+			continue
+		}
+		d := ""
+		if i := strings.LastIndex(p.Path, "/"); i >= 0 {
+			d = p.Path[:i]
+		}
+		files[d]++
+		if cs, hit := cited[p.Path]; hit {
+			nodes = append(nodes, node{ID: p.Path, Type: "file", Color: worst(cs), Notes: cs,
+				Claim: fmt.Sprintf("%d nota(s) lo citan", len(cs))})
+		} else {
+			blind[d]++
+		}
+	}
+	for d := range dirs {
+		name := d
+		if name == "" {
+			name = repo
+		}
+		color := "ungraded"
+		if files[d] > 0 && blind[d] == 0 {
+			color = "green" // toda la carpeta tiene memoria
+		} else if files[d] > blind[d] {
+			color = "yellow" // parcialmente cubierta
+		}
+		nodes = append(nodes, node{ID: name, Type: "dir", Color: color, Files: files[d], Blind: blind[d],
+			Claim: fmt.Sprintf("%d archivo(s), %d sin memoria", files[d], blind[d])})
+	}
+
+	// 4. Aristas padre → hijo.
+	edges := []map[string]string{}
+	parentOf := func(p string) string {
+		if i := strings.LastIndex(p, "/"); i >= 0 {
+			return p[:i]
+		}
+		return repo // la raíz lleva el nombre del repo
+	}
+	for _, n := range nodes {
+		if n.ID == repo {
+			continue
+		}
+		from := parentOf(n.ID)
+		if from == "" {
+			from = repo
+		}
+		if !dirs[from] && from != repo {
+			continue
+		}
+		edges = append(edges, map[string]string{"from": from, "to": n.ID, "kind": "depends_on"})
+	}
+	writeJSON(w, map[string]any{"ok": true, "nodes": nodes, "edges": edges,
+		"truncated": truncated, "cited": len(cited), "repo": owner + "/" + repo})
 }
 
 // handleTokens manages the issued MCP access tokens: GET lists them (no

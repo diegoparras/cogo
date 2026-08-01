@@ -578,3 +578,8 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .repo-ln:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .repo-num { color: var(--muted-2); text-align: right; min-width: 34px; user-select: none; font-variant-numeric: tabular-nums; }
 .repo-txt { white-space: pre-wrap; word-break: break-word; }
+.repo-sum { font-size: 12.5px; color: var(--muted); margin: 4px 0 10px; }
+.repo-sum b { color: var(--text); }
+.repo-trunc { color: var(--warn); }
+.viewbar .repo-in { flex: 0 1 220px; }
+.viewbar .repo-ref { flex: 0 1 150px; }

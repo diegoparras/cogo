@@ -8,6 +8,23 @@ const api = (p, opt) => {
   if (tok) opt.headers = Object.assign({ Authorization: "Bearer " + tok }, opt.headers);
   return fetch(p, opt).then(r => r.json());
 };
+// apiOrError es api() pero sin tragarse el motivo: devuelve SIEMPRE un objeto con
+// un mensaje que se pueda mostrar. Un `catch(() => null)` convierte "esta
+// instancia es vieja" y "no tenés acceso" en el mismo "no se pudo", que no le
+// sirve a nadie para arreglar nada.
+async function apiOrError(path, opt) {
+  opt = opt || {};
+  const tok = localStorage.getItem("cogo.token");
+  if (tok) opt.headers = Object.assign({ Authorization: "Bearer " + tok }, opt.headers);
+  let res;
+  try { res = await fetch(path, opt); }
+  catch (e) { return { ok: false, error: "no se pudo contactar al servidor de COGO" }; }
+  if (res.status === 404) return { ok: false, error: "esta instancia de COGO todavía no tiene esta función — actualizá la imagen y redeployá" };
+  if (res.status === 401 || res.status === 403) return { ok: false, error: "sesión o token sin permiso — volvé a entrar" };
+  if (!res.ok) return { ok: false, error: "el servidor respondió " + res.status };
+  try { return await res.json(); }
+  catch (e) { return { ok: false, error: "respuesta inesperada del servidor" }; }
+}
 const cls = c => "c-" + (c || "ungraded");
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -961,7 +978,119 @@ async function renderAgents(main) {
 }
 
 // ---------- graph (motor Canvas: graph.js) ----------
+// La vista Grafo tiene dos mapas: el de tus NOTAS y el del REPOSITORIO pintado
+// con la memoria. El segundo responde algo que ningún explorador de archivos
+// puede: dónde tenés conocimiento verificado y dónde estás a ciegas.
+function graphModeBar(main) {
+  const row = el("div", "viewbar");
+  const seg = el("div", "seg");
+  [["notes", "Notas"], ["repo", "Repositorio"]].forEach(([k, lab]) => {
+    const b = el("button", "seg-btn" + ((state.graphMode || "notes") === k ? " on" : ""), lab);
+    b.addEventListener("click", () => { state.graphMode = k; render(); });
+    seg.appendChild(b);
+  });
+  row.appendChild(seg);
+  main.appendChild(row);
+}
+
+// renderRepoMap: el árbol del repo como grafo, con cada archivo citado pintado
+// por el color de sus notas y cada carpeta contando los archivos SIN memoria.
+async function renderRepoMap(main) {
+  viewHead(main, "Suite Escriba · Memoria", "Mapa del repositorio",
+    "El repo pintado con tu memoria: los archivos citados toman el color de sus notas y cada carpeta te dice cuántos quedaron sin ninguna.");
+  graphModeBar(main);
+
+  const bar = el("div", "viewbar");
+  // El repo puede venir en la URL (?repo=owner/name&ref=rama): así el mapa es un
+  // link compartible, no algo que solo existe en tu localStorage.
+  const qs = new URLSearchParams(location.search);
+  const ri = el("input", "repo-in"); ri.placeholder = "owner/repositorio";
+  ri.value = qs.get("repo") || localStorage.getItem("cogo.repo") || "";
+  const rf = el("input", "repo-ref"); rf.placeholder = "rama (opcional)";
+  rf.value = qs.get("ref") || localStorage.getItem("cogo.repo.ref") || "";
+  const go = el("button", "mini", "mapear");
+  const st = el("span", "lint-status");
+  bar.append(ri, rf, go, st);
+  main.appendChild(bar);
+
+  const summary = el("div", "repo-sum");
+  main.appendChild(summary);
+  const wrap = el("div", "graph-wrap");
+  main.appendChild(wrap);
+
+  async function load() {
+    const repo = ri.value.trim(); if (!repo) { st.textContent = "escribí un repo como owner/nombre"; return; }
+    localStorage.setItem("cogo.repo", repo); localStorage.setItem("cogo.repo.ref", rf.value.trim());
+    setWorking(st, "leyendo el repositorio…"); summary.textContent = ""; wrap.textContent = "";
+    const r = await apiOrError("/api/github/map?" + new URLSearchParams({ repo, ref: rf.value.trim() }));
+    st.textContent = "";
+    if (!r.ok) { st.textContent = "⚠ " + r.error; return; }
+    const byId = {}; (r.nodes || []).forEach(n => byId[n.id] = n);
+    const files = (r.nodes || []).filter(n => n.type === "file");
+    const blind = (r.nodes || []).reduce((a, n) => a + (n.blind || 0), 0);
+    const total = (r.nodes || []).reduce((a, n) => a + (n.files || 0), 0);
+    summary.textContent = "";
+    summary.appendChild(el("b", null, files.length + " archivo(s) con memoria"));
+    summary.appendChild(el("span", null, " · " + blind + " de " + total + " sin ninguna nota que los cite"));
+    if (r.truncated) summary.appendChild(el("span", "repo-trunc", " · el repo es muy grande: el mapa está recortado"));
+    const gv = CogoGraph.mount(wrap, { nodes: r.nodes, edges: r.edges }, {
+      mode: "2d",
+      onSelect: id => {
+        const n = byId[id];
+        if (!n) return;
+        if (n.type === "dir") return;
+        openFileNotes(n, repo, rf.value.trim());
+      },
+    });
+    window.__gv = gv;
+  }
+  go.addEventListener("click", load);
+  ri.addEventListener("keydown", e => { if (e.key === "Enter") load(); });
+  if (ri.value.trim()) load(); else st.textContent = "escribí un repositorio para mapearlo";
+}
+
+// openFileNotes: qué sabe COGO sobre un archivo del repo, y el atajo para ir a verlo.
+function openFileNotes(node, repo, ref) {
+  const back = el("div", "modal-back confirm-back");
+  const card = el("div", "modal-card tokens-modal");
+  const x = el("button", "modal-x"); x.setAttribute("aria-label", "Cerrar");
+  x.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  card.appendChild(x);
+  card.appendChild(el("h2", "modal-tit", node.id.split("/").pop()));
+  card.appendChild(el("p", "tk-intro", node.id));
+  const list = el("div", "tk-list");
+  (node.notes || []).forEach(n => {
+    const row = el("div", "tk-row " + cls(n.color));
+    row.appendChild(el("span", "dot"));
+    const inf = el("div", "tk-info");
+    inf.appendChild(el("div", "tk-label", n.id));
+    inf.appendChild(el("div", "tk-meta", "clic para abrir la nota"));
+    row.appendChild(inf);
+    row.style.cursor = "pointer";
+    row.addEventListener("click", () => { close(); openNoteModal(n.id); });
+    list.appendChild(row);
+  });
+  if (!(node.notes || []).length) list.appendChild(el("div", "tk-empty", "Ninguna nota cita este archivo todavía."));
+  card.appendChild(list);
+  const acts = el("div", "modal-acciones");
+  const see = el("button", "ghost", "ver el archivo");
+  see.addEventListener("click", () => { close(); openRepo(null); });
+  acts.appendChild(see);
+  card.appendChild(acts);
+  back.appendChild(card);
+  document.body.appendChild(back);
+  requestAnimationFrame(() => back.classList.add("show"));
+  function close() { back.classList.remove("show"); setTimeout(() => back.remove(), 160); document.removeEventListener("keydown", onKey); }
+  const onKey = e => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+}
+
 async function renderGraph(main) {
+  // Un link con ?repo=owner/name pide el mapa del repositorio, no el de notas.
+  if (!state.graphMode && new URLSearchParams(location.search).get("repo")) state.graphMode = "repo";
+  if ((state.graphMode || "notes") === "repo") return renderRepoMap(main);
   const g = await api("/api/graph");
   // Un vault vacío puede devolver nodes/edges nulos (slices vacíos de Go); guardá.
   const gNodes = (g && g.nodes) || [], gEdges = (g && g.edges) || [];
@@ -972,6 +1101,7 @@ async function renderGraph(main) {
   if (!nodes.length) { main.appendChild(el("div", "empty", "Sin notas para este proyecto.")); return; }
 
   viewHead(main, "Suite Escriba · Memoria", "Grafo", "Cómo se relacionan tus notas, pintadas por confianza. Mirálo en 2D o entrá a la constelación 3D.");
+  graphModeBar(main);
   const view = el("div", "graph-view");
   const bar = el("div", "viewbar graph-bar");
   // Filtro por color EN VIVO: al togglear, atenúa las esferas que no son de ese
@@ -1347,9 +1477,9 @@ async function openRepo(onPick) {
     drawCrumbs(); list.textContent = "";
     setWorking(status, "leyendo el repositorio…");
     const q = new URLSearchParams({ repo: st.repo, ref: st.ref, path: st.path });
-    const r = await api("/api/github?" + q).catch(() => null);
+    const r = await apiOrError("/api/github?" + q);
     status.textContent = "";
-    if (!r || !r.ok) { status.textContent = "⚠ " + ((r && r.error) || "no se pudo leer el repositorio"); return; }
+    if (!r.ok) { status.textContent = "⚠ " + r.error; return; }
     (r.entries || []).forEach(e => {
       const row = el("div", "repo-row");
       row.appendChild(el("span", "repo-ico", e.type === "dir" ? "▸" : "·"));
@@ -1364,10 +1494,10 @@ async function openRepo(onPick) {
     drawCrumbs(); list.textContent = "";
     setWorking(status, "abriendo el archivo…");
     const q = new URLSearchParams({ repo: st.repo, ref: st.ref, path: st.path, file: "1" });
-    const r = await api("/api/github?" + q).catch(() => null);
+    const r = await apiOrError("/api/github?" + q);
     status.textContent = "";
-    if (!r || !r.ok) {
-      status.textContent = "⚠ " + ((r && r.error) || "no se pudo abrir");
+    if (!r.ok) {
+      status.textContent = "⚠ " + r.error;
       if (r && r.html_url) { const a = el("a", "link", "abrir en GitHub"); a.href = r.html_url; a.target = "_blank"; status.appendChild(a); }
       return;
     }
