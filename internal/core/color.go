@@ -139,11 +139,11 @@ func (e *evaluator) evaluate(id string) Verdict {
 	if !ok {
 		// A depends_on points at a note that isn't here: nothing rests safely
 		// on something we can't see.
-		return Verdict{Red, fmt.Sprintf("missing dependency note %q", id), Date{}}
+		return Verdict{Red, fmt.Sprintf("falta la nota de la que depende: %q", id), Date{}}
 	}
 	if e.inProgress[id] {
 		// A cycle in depends_on: nothing in it can be trusted above red.
-		return Verdict{Red, "dependency cycle", Date{}}
+		return Verdict{Red, "ciclo de dependencias", Date{}}
 	}
 	e.inProgress[id] = true
 	v := e.compute(n)
@@ -157,7 +157,7 @@ func (e *evaluator) evaluate(id string) Verdict {
 // pulls it down.
 func (e *evaluator) compute(n *Note) Verdict {
 	if n.Type == "mistake" {
-		return Verdict{Ungraded, "mistake: informational, not graded by confidence", Date{}}
+		return Verdict{Ungraded, "error registrado: es informativo, no se gradúa por confianza", Date{}}
 	}
 
 	w := windowDays(n.Type)
@@ -182,16 +182,16 @@ func (e *evaluator) compute(n *Note) Verdict {
 	// RED — evaluate top-down; first match that forces red wins.
 	switch {
 	case e.contradictions[n.ID]:
-		return Verdict{Red, "open hard contradiction touches the note", staleAt}
+		return Verdict{Red, "una contradicción abierta toca esta nota", staleAt}
 	case depRed != "":
-		return Verdict{Red, fmt.Sprintf("depends on red note %q", depRed), staleAt}
+		return Verdict{Red, fmt.Sprintf("depende de la nota roja %q", depRed), staleAt}
 	case tier == TierNone:
 		if hasBrokenEvidence(n.Evidence) {
-			return Verdict{Red, "referenced evidence does not resolve (broken ref)", staleAt}
+			return Verdict{Red, "la evidencia citada no resuelve (referencia rota)", staleAt}
 		}
-		return Verdict{Red, "no referenced observed/reported evidence", staleAt}
+		return Verdict{Red, "sin evidencia observada ni reportada", staleAt}
 	case e.today.After(expiry):
-		return Verdict{Red, "expired: today > last_verified + 2×window", staleAt}
+		return Verdict{Red, "expirada: pasó el doble de la ventana de frescura sin re-verificar", staleAt}
 	}
 
 	// YELLOW — not red, but something keeps it below green.
@@ -199,15 +199,15 @@ func (e *evaluator) compute(n *Note) Verdict {
 	case hasDriftedEvidence(n.Evidence):
 		return Verdict{Yellow, "la evidencia citada cambió desde la última verificación — re-verificá", staleAt}
 	case tier == TierReported || tier == TierReasoned:
-		return Verdict{Yellow, "evidence is reported/reasoned (caps at yellow)", staleAt}
+		return Verdict{Yellow, "la evidencia es reportada o razonada (tope: amarillo)", staleAt}
 	case n.Check.Status != "passed": // tier is observed here
-		return Verdict{Yellow, "observed evidence but check not passed", staleAt}
+		return Verdict{Yellow, "evidencia observada, pero el check no pasó", staleAt}
 	case e.today.After(staleAt):
-		return Verdict{Yellow, "stale: today > stale_at (but not expired)", staleAt}
+		return Verdict{Yellow, "vencida: pasó su fecha de frescura (todavía no expiró)", staleAt}
 	case depYellow != "":
-		return Verdict{Yellow, fmt.Sprintf("depends on yellow note %q", depYellow), staleAt}
+		return Verdict{Yellow, fmt.Sprintf("depende de la nota amarilla %q", depYellow), staleAt}
 	}
 
 	// GREEN — observed, check passed, fresh, every dependency green, no contradiction.
-	return Verdict{Green, "observed evidence, check passed, fresh, deps green, no contradiction", staleAt}
+	return Verdict{Green, "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción", staleAt}
 }

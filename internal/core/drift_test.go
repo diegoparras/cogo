@@ -47,7 +47,7 @@ func TestEvidenceDrift(t *testing.T) {
 	if v.Color != Yellow {
 		t.Errorf("drifted evidence should drop green to yellow, got %s", v.Color)
 	}
-	if v.Reason == "" || v.Reason == "observed evidence, check passed, fresh, deps green, no contradiction" {
+	if v.Reason == "" || v.Reason == "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción" {
 		t.Errorf("reason should name the drift, got %q", v.Reason)
 	}
 

@@ -53,7 +53,7 @@ func TestBrokenEvidenceSinksGreen(t *testing.T) {
 	if v.Color != Red {
 		t.Errorf("broken evidence should sink to red, got %s", v.Color)
 	}
-	if v.Reason != "referenced evidence does not resolve (broken ref)" {
+	if v.Reason != "la evidencia citada no resuelve (referencia rota)" {
 		t.Errorf("reason should name the broken ref, got %q", v.Reason)
 	}
 }
