@@ -58,6 +58,10 @@ estudiaron cómo llevar a una persona contra su voluntad — persuasión (Cialdi
 emocional (gaslighting, DARVO, chantaje FOG) y retórica/propaganda (Frankfurt, Grice,
 Walton). Cada técnica con su fuente real, cómo se ve *en un chat*, y su **contramedida**.
 
+Con un modelo conectado detecta el **89%** de los turnos manipulativos de un corpus ciego
+de 280 casos, sin marcar en rojo **ni uno solo** de los 132 benignos. Sin modelo, el piso
+determinista es 32% — [la tabla completa, abajo](#cuánto-detecta-los-números).
+
 Cómo funciona:
 
 1. **Declarás tu mandato**: tu objetivo y tus líneas rojas (*"no renuncio sin otra oferta
@@ -87,6 +91,51 @@ Se usa desde la pestaña **Guard** del visor, o desde cualquier agente vía el t
 [`internal/suasion/ontology/`](internal/suasion/ontology/) y el diseño en
 [`docs/motor-autonomia.md`](docs/motor-autonomia.md) (su gemelo epistémico:
 [`docs/motor-veracidad.md`](docs/motor-veracidad.md)).
+
+### Cuánto detecta (los números)
+
+Un detector que no publica su tasa de acierto te está pidiendo fe. Estos son los
+nuestros, y los podés reproducir vos.
+
+El corpus son **280 casos escritos por agentes que nunca vieron los detectores**
+—148 turnos manipulativos y 132 benignos—, así que la referencia es la intención de
+quien los escribió y no los marcadores del motor: el número no es circular. Entre
+los benignos hay 75 **trampas**: turnos honestos que *suenan* a manipulación —
+urgencia real, autoridad legítima, empatía sincera.
+
+| | sin modelo (default) | con modelo conectado |
+|---|---|---|
+| Manipulativos detectados | 47/148 (32%) | **131/148 (89%)** |
+| — sólo los **difíciles** (parafraseados) | 26/98 (27%) | 81/98 (83%) |
+| Benignos marcados 🔴 **rojo** | **0/132** | **0/132** |
+| Benignos que quedaron limpios | 121/132 (92%) | 120/132 (91%) |
+
+La fila que más nos importa es la tercera: **ningún turno benigno terminó en rojo**,
+con modelo o sin él, y las 75 trampas lo esquivaron enteras. Un detector que grita
+lobo se apaga a la semana; preferimos que se nos escape uno antes que hacerte
+desconfiar de una conversación sana.
+
+**Ahora leé bien la primera columna: el default corre al 32%.** El modelo viene
+apagado de fábrica —COGO es determinista y standalone— y en ese modo el léxico es
+un ancla barata y muy precisa, pero de alcance corto: atrapa el cliché, no la
+paráfrasis. Un 🟢 verde sin modelo significa *"no vi nada"*, **no** *"acá no hay
+nada"*. Para el 89% hay que conectar un modelo (`COGO_LLM_*`, o Ajustes → Modelo IA
+en el visor).
+
+```bash
+# columna 1 — determinista, gratis, 3 segundos
+go test ./internal/suasion/ -run TestRedTeamDeterministic -v
+
+# columna 2 — con modelo (medido con gpt-4o vía OpenRouter: 233 llamadas, ~4 min, ~USD 1,50)
+export COGO_LLM_BASE_URL=https://openrouter.ai/api/v1
+export COGO_LLM_MODEL=openai/gpt-4o
+export COGO_LLM_API_KEY=sk-or-...
+RUN_TIER1=1 go test ./internal/suasion/ -run TestRedTeamTier1 -v -timeout 45m
+```
+
+> **Próximo.** Que el Guard cruce lo que el modelo te afirma contra tus notas ya
+> verificadas: *"te está afirmando X, y tu nota verde del martes —la del log— dice
+> Y"*. Es la unión de las dos mitades de COGO y todavía no está.
 
 ### Veracidad: ¿esto es sólido o es humo?
 
