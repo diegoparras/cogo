@@ -213,6 +213,39 @@ auditar **por qué**.
 - **Tus datos son tuyos.** Las notas son archivos Markdown en una carpeta que es tuya. Borrás
   COGO y seguís teniendo todo, legible en cualquier editor de texto y versionable en git.
 
+## En qué se diferencia
+
+COGO no es la primera herramienta que guarda lo que sabés, ni siquiera la primera que lo
+verifica. Notion y Confluence permiten que una persona marque una página como verificada con
+fecha de vencimiento. Copilot Memory, de GitHub, ancla hechos a citas de código y las
+re-chequea contra la rama actual. Varios proyectos de memoria para agentes tienen un campo
+`confidence`.
+
+Siendo preciso sobre qué es lo realmente distinto:
+
+| | Notas<br>(Obsidian, Notion) | Memoria de agentes<br>(mem0, Zep, Letta…) | Copilot<br>Memory | **COGO** |
+|---|:---:|:---:|:---:|:---:|
+| Guarda lo que sabés | ✅ | ✅ | ✅ | ✅ |
+| Marca qué está verificado | a mano | — | ✅ | ✅ |
+| Lo decide el sistema, no el modelo | — | — | ✅ | ✅ |
+| **Tres niveles, no sí/no** | — | — | — | ✅ |
+| Re-chequea la evidencia | — | — | ✅ | ✅ |
+| **La duda se propaga por dependencias** | — | — | — | ✅ |
+| **Le dice al agente qué *no* usar** | — | — | — | ✅ |
+
+Las tres que sí son nuestras:
+
+- **Un color que el modelo tiene prohibido escribir.** Donde otras herramientas tienen un
+  campo de confianza, suele completarlo el propio LLM — y una vez escrito no cambia nunca
+  más. COGO lo computa desde la evidencia, y lo recomputa cada vez que mirás.
+- **Duda que se propaga.** Todos los demás resuelven las contradicciones *de a pares* y ahí
+  terminan. Un repaso de 435 trabajos sobre memoria de agentes lo nombra como problema
+  abierto: *"la supersesión es local; los registros derivados no se vuelven a examinar"*. El
+  `min()` sobre la dependencia más débil de COGO es exactamente esa pieza que falta.
+- **Cuarentena en vez de filtro.** Los otros sistemas usan la verificación para *esconderle*
+  lo dudoso al agente. COGO se lo entrega etiquetado como suposición y con la instrucción de
+  no actuar sobre eso. Esconderlo implica que el agente no sabe lo que no sabe.
+
 ## Filosofía
 
 > No saber no es una forma menor de saber. Es otra cosa, y tiene que estar a la vista.

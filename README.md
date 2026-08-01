@@ -210,6 +210,38 @@ color ships its `color_reason`, so you can always audit **why**.
 - **Your data stays yours.** Notes are Markdown files in a folder you own. Delete COGO and you
   still have everything — readable in any text editor, versionable in git.
 
+## How it compares
+
+COGO isn't the first tool to store what you know, and not even the first to verify it.
+Notion and Confluence let a human mark a page as verified with an expiry date. GitHub's
+Copilot Memory pins facts to code citations and re-checks them against the current branch.
+Several agent-memory projects carry a `confidence` field.
+
+Being precise about what's actually different:
+
+| | Notes<br>(Obsidian, Notion) | Agent memory<br>(mem0, Zep, Letta…) | Copilot<br>Memory | **COGO** |
+|---|:---:|:---:|:---:|:---:|
+| Stores what you know | ✅ | ✅ | ✅ | ✅ |
+| Marks what's verified | by hand | — | ✅ | ✅ |
+| The system decides it, not the model | — | — | ✅ | ✅ |
+| **Three levels, not yes/no** | — | — | — | ✅ |
+| Re-checks the evidence | — | — | ✅ | ✅ |
+| **Doubt propagates through dependencies** | — | — | — | ✅ |
+| **Tells the agent what *not* to use** | — | — | — | ✅ |
+
+The three that are actually ours:
+
+- **A color the model is forbidden to write.** Where other tools have a confidence field,
+  it's usually the LLM that fills it in — and once written it never changes. COGO computes
+  it from the evidence, and recomputes it every time you look.
+- **Doubt that propagates.** Everyone else resolves contradictions *pairwise* and stops
+  there. A survey of 435 papers on agent memory names this as an open problem: *"supersession
+  is local; derived records are not re-examined."* COGO's `min()` over the weakest dependency
+  is exactly that missing piece.
+- **Quarantine instead of filtering.** Other systems use verification to *hide* the doubtful
+  from the agent. COGO hands it over labeled as an assumption, with instructions not to act
+  on it. Hiding it means the agent doesn't know what it doesn't know.
+
 ## Philosophy
 
 > Not knowing is not a lesser kind of knowing. It's a different thing, and it has to be
