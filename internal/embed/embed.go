@@ -3,19 +3,16 @@
 // misses relevant memory" gap. Like the whole model layer it is OFF unless an
 // embedding model is configured; core stays deterministic and never depends on it.
 //
-// Embeddings are cached in the vault (.cogo/embeddings.json) keyed by the content
-// hash of each note's text, so only changed/new notes are re-embedded — one HTTP
-// batch call per search at most.
+// Los vectores se cachean en el vault (ver store.go: un manifiesto legible y un
+// binario con los floats) indexados por el hash del contenido de cada nota, así
+// solo se re-embebe lo que cambió — a lo sumo una llamada HTTP por búsqueda.
 package embed
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
 )
 
@@ -26,13 +23,6 @@ type Embedder interface {
 
 // Doc is one note reduced to what gets embedded: its id and a short text (claim).
 type Doc struct{ ID, Text string }
-
-type entry struct {
-	Hash string    `json:"h"`
-	Vec  []float32 `json:"v"`
-}
-
-func cachePath(dir string) string { return filepath.Join(dir, ".cogo", "embeddings.json") }
 
 func hashText(s string) string {
 	h := fnv.New64a()
@@ -45,10 +35,7 @@ func hashText(s string) string {
 // misses in one call, persists the cache, and prunes vanished notes. Returns an
 // error if the embedder fails — the caller falls back to keyword ranking.
 func Rank(ctx context.Context, dir string, docs []Doc, query string, e Embedder) ([]string, error) {
-	cache := map[string]entry{}
-	if b, err := os.ReadFile(cachePath(dir)); err == nil {
-		_ = json.Unmarshal(b, &cache)
-	}
+	st := load(dir)
 
 	var missIdx []int
 	var missText []string
@@ -56,11 +43,12 @@ func Rank(ctx context.Context, dir string, docs []Doc, query string, e Embedder)
 	for i, d := range docs {
 		present[d.ID] = true
 		h := hashText(d.Text)
-		if c, ok := cache[d.ID]; !ok || c.Hash != h || len(c.Vec) == 0 {
+		if st.hash[d.ID] != h || len(st.vec[d.ID]) == 0 {
 			missIdx = append(missIdx, i)
 			missText = append(missText, d.Text)
 		}
 	}
+	cambio := len(missText) > 0
 	if len(missText) > 0 {
 		vecs, err := e.Embed(ctx, missText)
 		if err != nil {
@@ -70,17 +58,25 @@ func Rank(ctx context.Context, dir string, docs []Doc, query string, e Embedder)
 			return nil, fmt.Errorf("embed: got %d vectors for %d texts", len(vecs), len(missText))
 		}
 		for j, idx := range missIdx {
-			cache[docs[idx].ID] = entry{Hash: hashText(docs[idx].Text), Vec: vecs[j]}
+			if st.dims == 0 {
+				st.dims = len(vecs[j])
+			}
+			if len(vecs[j]) != st.dims {
+				return nil, fmt.Errorf("embed: el modelo devolvió %d dimensiones y el caché tiene %d — borrá .cogo/embeddings.* para reconstruirlo", len(vecs[j]), st.dims)
+			}
+			st.vec[docs[idx].ID] = vecs[j]
+			st.hash[docs[idx].ID] = hashText(docs[idx].Text)
 		}
 	}
-	for id := range cache {
+	for id := range st.vec {
 		if !present[id] {
-			delete(cache, id) // note gone from the vault
+			delete(st.vec, id) // la nota ya no está en el vault
+			delete(st.hash, id)
+			cambio = true
 		}
 	}
-	if b, err := json.Marshal(cache); err == nil {
-		_ = os.MkdirAll(filepath.Join(dir, ".cogo"), 0o755)
-		_ = os.WriteFile(cachePath(dir), b, 0o644)
+	if cambio {
+		_ = save(dir, st)
 	}
 
 	qv, err := e.Embed(ctx, []string{query})
@@ -97,7 +93,7 @@ func Rank(ctx context.Context, dir string, docs []Doc, query string, e Embedder)
 	}
 	ranked := make([]scored, 0, len(docs))
 	for _, d := range docs {
-		ranked = append(ranked, scored{d.ID, cosine(qv[0], cache[d.ID].Vec)})
+		ranked = append(ranked, scored{d.ID, cosine(qv[0], st.vec[d.ID])})
 	}
 	sort.Slice(ranked, func(i, j int) bool {
 		if ranked[i].s != ranked[j].s {
