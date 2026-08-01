@@ -124,6 +124,10 @@
     function resize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       W = container.clientWidth; H = container.clientHeight;
+      // Si el layout todavía no resolvió (pasa al entrar a pantalla completa),
+      // clientWidth/Height pueden venir en 0. Medir el rectángulo real antes de
+      // dibujar con medidas que dejarían el lienzo vacío.
+      if (W < 2 || H < 2) { const r = container.getBoundingClientRect(); W = Math.round(r.width) || W; H = Math.round(r.height) || H; }
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
       canvas.style.width = W + "px"; canvas.style.height = H + "px";
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -171,7 +175,9 @@
         let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
         for (const n of nodes) { if (n.x < minx) minx = n.x; if (n.x > maxx) maxx = n.x; if (n.y < miny) miny = n.y; if (n.y > maxy) maxy = n.y; }
         const gw = Math.max(1, maxx - minx), gh = Math.max(1, maxy - miny);
-        const s = Math.min((W - 120) / gw, (H - 120) / gh) * zoom;
+        // El margen de 120 px no puede volver la escala negativa en un lienzo
+        // chico: eso invertía el dibujo y lo mandaba fuera de la vista.
+        const s = Math.max(0.05, Math.min((Math.max(W - 120, W * 0.5)) / gw, (Math.max(H - 120, H * 0.5)) / gh)) * zoom;
         const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
         for (const n of nodes) { n.sx = W / 2 + (n.x - cx) * s + panX; n.sy = H / 2 + (n.y - cy) * s + panY; n.ss = s; n.depth = 1; }
       } else {

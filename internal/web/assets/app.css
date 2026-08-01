@@ -597,7 +597,8 @@ canvas.graph-canvas:active { cursor: grabbing; }
    alto que sobra — mismo comportamiento que el grafo de notas. */
 .repo-shell:fullscreen, .repo-shell.maximizado { background: var(--bg); padding: 14px 22px; height: 100vh;
   display: flex; flex-direction: column; gap: 6px; }
-.repo-shell:fullscreen .repo-view, .repo-shell.maximizado .repo-view { flex: 1; min-height: 0; }
+.repo-shell:fullscreen .repo-view, .repo-shell.maximizado .repo-view {
+  flex: 1; min-height: 0; align-items: stretch; grid-template-rows: minmax(0, 1fr); }
 .repo-shell:fullscreen .repo-left, .repo-shell.maximizado .repo-left,
 .repo-shell:fullscreen .repo-panel, .repo-shell.maximizado .repo-panel { height: 100%; max-height: none; }
 .repo-shell:fullscreen .graph-wrap, .repo-shell.maximizado .graph-wrap { height: 100%; }
@@ -630,9 +631,6 @@ canvas.graph-canvas:active { cursor: grabbing; }
 /* Plan B cuando el navegador no permite la API de pantalla completa */
 .maximizado { position: fixed; inset: 0; z-index: 300; background: var(--bg);
   padding: 16px 22px; margin: 0; overflow: auto; }
-.repo-view.maximizado { height: 100vh; }
-.repo-view.maximizado .repo-left, .repo-view.maximizado .repo-panel { height: calc(100vh - 56px); max-height: none; }
-.repo-view.maximizado .graph-wrap { height: 100%; }
 .graph-view.maximizado .graph-wrap { height: calc(100vh - 120px); }
 
 /* Iconos de carpeta/archivo: trazo neutro, el color lo lleva el punto */
