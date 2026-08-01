@@ -322,6 +322,10 @@
       setMode(m) { mode = m === "3d" ? "3d" : "2d"; zoom = 1; panX = panY = 0; alpha = Math.max(alpha, 0.5); },
       setColorFilter(set) { colorFilter = (set && set.size) ? new Set(set) : null; },
       resetView() { zoom = 1; panX = panY = 0; yaw = 0.5; pitch = -0.35; spinY = spinX = 0; alpha = 1; },
+      // Redimensionar a pedido: al entrar/salir de pantalla completa el contenedor
+      // cambia de tamaño pero el ResizeObserver puede no llegar a tiempo, y el
+      // lienzo se queda con la medida vieja (el dibujo queda fuera de la vista).
+      resize() { resize(); alpha = Math.max(alpha, 0.35); },
       reheat() { alpha = 1; },
       destroy: stop,
     };

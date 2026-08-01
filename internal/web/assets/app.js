@@ -51,15 +51,24 @@ async function toggleMaximizar(elm, btn) {
     elm.classList.remove("maximizado");
     if (btn) btn.textContent = "⛶ pantalla completa";
   };
-  if (document.fullscreenElement || elm.classList.contains("maximizado")) { salir(); return; }
+  // el lienzo del grafo necesita saber que cambió el tamaño disponible
+  // La transición de pantalla completa nativa tarda más que un cambio de clase,
+  // así que se reajusta varias veces y además al evento del navegador.
+  const reajustar = () => {
+    const r = () => { if (window.__gv && window.__gv.resize) window.__gv.resize(); };
+    [60, 180, 400, 700].forEach(ms => setTimeout(r, ms));
+    document.addEventListener("fullscreenchange", r, { once: true });
+  };
+  if (document.fullscreenElement || elm.classList.contains("maximizado")) { salir(); reajustar(); return; }
   try {
     await elm.requestFullscreen();
   } catch (e) {
     elm.classList.add("maximizado"); // plan B: ocupar la ventana sin la API
   }
   if (btn) btn.textContent = "⛶ salir";
+  reajustar();
   const onEsc = ev => {
-    if (ev.key === "Escape" && elm.classList.contains("maximizado")) { salir(); document.removeEventListener("keydown", onEsc); }
+    if (ev.key === "Escape" && elm.classList.contains("maximizado")) { salir(); reajustar(); document.removeEventListener("keydown", onEsc); }
   };
   document.addEventListener("keydown", onEsc);
 }
