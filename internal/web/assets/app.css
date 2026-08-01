@@ -593,9 +593,15 @@ canvas.graph-canvas:active { cursor: grabbing; }
 
 /* ---- Mapa del repositorio: grafo + navegador + panel de contenido ---- */
 .repo-view { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 14px; align-items: start; }
-.repo-view:fullscreen { background: var(--bg); padding: 16px 22px; height: 100vh; }
-.repo-view:fullscreen .repo-left, .repo-view:fullscreen .repo-panel { height: calc(100vh - 56px); }
-.repo-view:fullscreen .graph-wrap { height: 100%; }
+/* Pantalla completa: el shell trae la barra y el resumen, y el cuerpo ocupa el
+   alto que sobra — mismo comportamiento que el grafo de notas. */
+.repo-shell:fullscreen, .repo-shell.maximizado { background: var(--bg); padding: 14px 22px; height: 100vh;
+  display: flex; flex-direction: column; gap: 6px; }
+.repo-shell:fullscreen .repo-view, .repo-shell.maximizado .repo-view { flex: 1; min-height: 0; }
+.repo-shell:fullscreen .repo-left, .repo-shell.maximizado .repo-left,
+.repo-shell:fullscreen .repo-panel, .repo-shell.maximizado .repo-panel { height: 100%; max-height: none; }
+.repo-shell:fullscreen .graph-wrap, .repo-shell.maximizado .graph-wrap { height: 100%; }
+.repo-shell:fullscreen .repo-tree, .repo-shell.maximizado .repo-tree { max-height: none; height: 100%; }
 .repo-left { min-width: 0; }
 .repo-tree { border: 1px solid var(--border); border-radius: 12px; background: var(--panel);
   max-height: clamp(360px, 66vh, 620px); overflow-y: auto; }
@@ -628,3 +634,8 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .repo-view.maximizado .repo-left, .repo-view.maximizado .repo-panel { height: calc(100vh - 56px); max-height: none; }
 .repo-view.maximizado .graph-wrap { height: 100%; }
 .graph-view.maximizado .graph-wrap { height: calc(100vh - 120px); }
+
+/* Iconos de carpeta/archivo: trazo neutro, el color lo lleva el punto */
+.repo-svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--muted); }
+.repo-svg.dir { color: var(--muted-2); }
+.repo-row { align-items: center; }

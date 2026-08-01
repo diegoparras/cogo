@@ -1046,6 +1046,24 @@ function graphModeBar(main) {
   main.appendChild(row);
 }
 
+// icono: carpeta o documento, en trazo neutro. El color lo lleva SIEMPRE el
+// punto de confianza que va al lado; el icono solo dice de qué tipo es.
+function icono(k) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("class", "repo-svg");
+  svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.8"); svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  const p = document.createElementNS(NS, "path");
+  p.setAttribute("d", k.type === "dir"
+    ? "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+    : "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5");
+  svg.appendChild(p);
+  if (k.type === "dir") svg.classList.add("dir");
+  return svg;
+}
+
 // renderRepoMap: el repositorio con la memoria encima. Dos lecturas de lo mismo,
 // porque sirven para cosas distintas: el GRAFO muestra la forma del proyecto y
 // dónde están las islas de conocimiento; el ÁRBOL es el navegador de siempre,
@@ -1057,11 +1075,13 @@ async function renderRepoMap(main) {
     "El repo con tu memoria encima: los archivos citados toman el color de sus notas y el resto queda neutro. Clic en cualquiera para ver qué tiene adentro.");
   graphModeBar(main);
 
+  const qs = new URLSearchParams(location.search);
   const st = {
-    repo: "", ref: "", vista: window.__repoVista || "grafo",
+    repo: "", ref: "",
+    // la vista se recuerda entre visitas y puede venir en el link (?vista=arbol)
+    vista: qs.get("vista") || localStorage.getItem("cogo.repo.vista") || "grafo",
     data: null, sel: null,
   };
-  const qs = new URLSearchParams(location.search);
 
   // --- barra: repo, rama, vista, acciones ---
   const bar = el("div", "viewbar");
@@ -1077,25 +1097,27 @@ async function renderRepoMap(main) {
   const fsb = el("button", "mini ghost", "⛶ pantalla completa");
   const status = el("span", "lint-status");
   bar.append(ri, rf, go, el("span", "vb-spacer"), seg, reset, fsb, status);
-  main.appendChild(bar);
 
   const summary = el("div", "repo-sum");
-  main.appendChild(summary);
 
   // --- cuerpo: lienzo/árbol a la izquierda, panel de contenido a la derecha ---
-  const view = el("div", "repo-view graph-view");
+  // El shell incluye la barra y el resumen: es lo que se maximiza, así en
+  // pantalla completa seguís teniendo los controles (igual que el grafo de notas).
+  const shell = el("div", "repo-shell");
+  const view = el("div", "repo-view");
   const left = el("div", "repo-left");
   const panel = el("div", "repo-panel");
   view.append(left, panel);
-  main.appendChild(view);
+  shell.append(bar, summary, view);
+  main.appendChild(shell);
 
-  fsb.addEventListener("click", () => toggleMaximizar(view, fsb));
+  fsb.addEventListener("click", () => toggleMaximizar(shell, fsb));
   document.addEventListener("fullscreenchange", () => {
     fsb.textContent = document.fullscreenElement ? "⛶ salir" : "⛶ pantalla completa";
   });
 
   function setVista(v) {
-    st.vista = v; window.__repoVista = v;
+    st.vista = v; localStorage.setItem("cogo.repo.vista", v);
     bg.classList.toggle("on", v === "grafo"); bt.classList.toggle("on", v === "arbol");
     reset.style.display = v === "grafo" ? "" : "none";
     draw();
@@ -1167,7 +1189,7 @@ async function renderRepoMap(main) {
   function filaEntrada(k) {
     const row = el("div", "repo-row");
     row.appendChild(el("span", "dot " + cls(k.color)));
-    row.appendChild(el("span", "repo-ico", k.type === "dir" ? "▸" : "·"));
+    row.appendChild(icono(k));
     row.appendChild(el("span", "repo-name" + (k.type === "dir" ? " dir" : ""), k.id.split("/").pop()));
     if (k.type === "dir" && k.files) row.appendChild(el("span", "repo-cnt", k.blind + "/" + k.files + " sin memoria"));
     row.addEventListener("click", () => verNodo(k.id));
