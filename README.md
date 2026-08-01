@@ -1,317 +1,238 @@
 <h1 align="center">COGO</h1>
 
-<p align="center"><b>La memoria con semáforo de confianza para construir software con IA<br>+ el guardián que radiografía lo que un modelo te dice.</b></p>
+<p align="center">
+  <b>Memory with a confidence traffic light — for you and your AI agents.<br>
+  Plus the guard that x-rays what a model is telling you.</b>
+</p>
 
-<p align="center">Cada cosa que sabés de tu proyecto, con un color que dice cuánto podés confiar en ella.<br>Y cada turno de un LLM, con un color que dice cuánto te está empujando.</p>
+<p align="center">
+  Every fact you know about your project, colored by how much you can trust it.<br>
+  Every turn a model takes, measured by how hard it's pushing you.
+</p>
+
+<p align="center">
+  <a href="https://github.com/diegoparras/cogo/actions/workflows/docker.yml"><img alt="CI" src="https://github.com/diegoparras/cogo/actions/workflows/docker.yml/badge.svg"></a>
+  <img alt="Go 1.25" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white">
+  <img alt="MIT" src="https://img.shields.io/badge/license-MIT-black">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-stdio%20%2B%20HTTP-6E56CF">
+  <img alt="cosign signed" src="https://img.shields.io/badge/image-cosign%20signed-2ea44f">
+</p>
+
+<p align="center"><sub><b><a href="README.es.md">🇦🇷 Leer en español</a></b> · part of the <b>Escriba Suite</b></sub></p>
 
 ---
 
-## El problema
+## The problem
 
-Cuando construís software —vos o un agente de IA (Claude Code, Cursor, Copilot)— vas
-juntando "verdades": *"la base está en tal host"*, *"el bug lo causa X"*, *"decidimos Y"*.
-Con el tiempo se **pudren**: algunas nunca se verificaron, otras quedaron viejas, otras
-eran una corazonada. El problema es que **todas parecen igual de ciertas** — y entonces
-actuás (o el agente actúa) sobre una suposición creyendo que es un hecho.
+When you build software — you, or an agent like Claude Code, Cursor or Copilot — you
+accumulate "truths": *the database is on that host*, *the bug is caused by X*, *we decided Y*.
 
-## Qué hace COGO
+Over time they **rot**. Some were never verified. Some went stale. Some were a hunch someone
+typed at 2am. And here's the part that actually hurts:
 
-COGO guarda ese conocimiento como **notas Markdown**, y a cada nota le pone un
-**color de confianza que él mismo calcula**:
+> **They all look equally true.**
+
+So you act on a guess believing it's a fact. Worse: your agent does — confidently, and at
+machine speed.
+
+## What COGO does
+
+COGO stores that knowledge as **plain Markdown notes** and gives each one a **confidence color
+that COGO computes itself**:
 
 | | | |
 |---|---|---|
-| 🟢 | **verde** | verificado — podés confiar |
-| 🟡 | **amarillo** | probable — falta confirmarlo |
-| 🔴 | **rojo** | suposición — no te fíes |
+| 🟢 | **green** | verified — rely on it |
+| 🟡 | **yellow** | probable — not confirmed yet |
+| 🔴 | **red** | assumption — do not rely on it |
 
-El color **no lo elegís vos**: COGO lo deriva de cuatro cosas — ¿hay **evidencia**?, ¿se
-**verificó**?, ¿está **fresco** (las cosas caducan)?, ¿**depende** de algo dudoso? Por eso
-es auditable y no miente: nadie puede pintar una nota de verde "porque sí".
+**You never pick the color.** COGO derives it from four things: is there **evidence**? was it
+**checked**? is it **fresh** (facts expire)? does it **depend** on something shaky? That's why
+it can't be gamed — nobody gets to paint a note green because they feel good about it.
 
-## Cómo se ve en la práctica
+It lives in a computed block that agents are forbidden to write:
 
-Estás debuggeando:
-
-1. Anotás *"el worker no llega a Redis"* — es una corazonada, sin evidencia → 🔴 **roja**.
-2. Mirás los logs, encontrás la prueba, la sumás como evidencia → 🟡 **amarilla** (tenés
-   evidencia, pero todavía no corriste el test que lo confirma).
-3. Corrés el test, da bien, apretás **"verificar"** → 🟢 **verde**.
-4. La semana que viene le pedís ayuda a Claude. Claude lee tus notas, ve que la de Redis
-   está **verde** (la usa como hecho) y otra está **roja** (no se apoya en ella). No pierde
-   tiempo re-investigando ni actúa sobre la corazonada.
-
-Eso es COGO: **una memoria con semáforo de confianza, para vos y para tus herramientas de IA.**
-
-## Guard: la radiografía anti-manipulación
-
-La otra mitad de COGO. Cuando chateás con un LLM —cualquiera— no tenés forma de saber si
-esa respuesta tan segura es lógica de verdad o **humo**, ni de darte cuenta cuando la
-conversación te va **llevando de a poco a algo que no estabas dispuesto a hacer**. Eso
-tiene nombre: es el *jailbreak al humano*.
-
-**Guard lee cada turno del modelo con el manual del adversario en la mano.** Adentro trae
-una **ontología de 108 técnicas de manipulación** destiladas de las 6 disciplinas que
-estudiaron cómo llevar a una persona contra su voluntad — persuasión (Cialdini, Kahneman),
-**interrogatorio policial y militar** (técnica Reid, Army FM 2-22.3, Scharff), negociación
-(Harvard, Voss), **coerción y reforma del pensamiento** (Lifton, Biderman), manipulación
-emocional (gaslighting, DARVO, chantaje FOG) y retórica/propaganda (Frankfurt, Grice,
-Walton). Cada técnica con su fuente real, cómo se ve *en un chat*, y su **contramedida**.
-
-Con un modelo conectado detecta el **89%** de los turnos manipulativos de un corpus ciego
-de 280 casos, sin marcar en rojo **ni uno solo** de los 132 benignos. Sin modelo, el piso
-determinista es 32% — [la tabla completa, abajo](#cuánto-detecta-los-números).
-
-Cómo funciona:
-
-1. **Declarás tu mandato**: tu objetivo y tus líneas rojas (*"no renuncio sin otra oferta
-   firmada"*). Queda guardado en el vault. Sin mandato, manipulación y persuasión legítima
-   son indistinguibles — COGO entonces solo nombra técnicas, sin veredicto.
-2. Pegás el turno (y la conversación previa) → **radiografía coloreada**: 🟢 sin señales,
-   🟡 persuasión presente, 🔴 hay *mecánica* — el turno empuja sobre tu línea roja, o hay
-   **recibos**.
-3. **Los recibos** son la superpotencia: como COGO ve la transcripción, cuando el modelo
-   niega lo que dijo (*"yo nunca dije que renuncies"*) COGO encuentra el turno donde SÍ lo
-   dijo y te muestra **las dos citas, lado a lado**. El gaslighting deja de ser tu palabra
-   contra la suya.
-4. Cada táctica detectada llega con sus **preguntas críticas** y su contramedida — el motor
-   **no censura al modelo: te inocula a vos**. Te muestra, vos decidís.
-
-La regla de hierro: **ningún modelo dicta "te están manipulando"**. Los dientes son
-deterministas (marcadores, recibos, trayectoria); los modelos solo *proponen* — y toda
-propuesta se verifica contra el texto literal o se descarta. El *porqué* de esta regla —el
-marco de la **alteridad arquitectónica**, común a los dos motores— está en
-[`docs/fundamento-teorico.md`](docs/fundamento-teorico.md). Con un modelo conectado se
-suman dos tiers opcionales: propuestas estructurales (el falso binario de Reid, que ningún
-diccionario ve) y el **steelman adversario** — otro modelo argumentando a propósito el lado
-que el turno no te mostró.
-
-Se usa desde la pestaña **Guard** del visor, o desde cualquier agente vía el tool MCP
-`guard`. La ontología completa vive en
-[`internal/suasion/ontology/`](internal/suasion/ontology/) y el diseño en
-[`docs/motor-autonomia.md`](docs/motor-autonomia.md) (su gemelo epistémico:
-[`docs/motor-veracidad.md`](docs/motor-veracidad.md)).
-
-### Cuánto detecta (los números)
-
-Un detector que no publica su tasa de acierto te está pidiendo fe. Estos son los
-nuestros, y los podés reproducir vos.
-
-El corpus son **280 casos escritos por agentes que nunca vieron los detectores**
-—148 turnos manipulativos y 132 benignos—, así que la referencia es la intención de
-quien los escribió y no los marcadores del motor: el número no es circular. Entre
-los benignos hay 75 **trampas**: turnos honestos que *suenan* a manipulación —
-urgencia real, autoridad legítima, empatía sincera.
-
-| | sin modelo (default) | con modelo conectado |
-|---|---|---|
-| Manipulativos detectados | 47/148 (32%) | **131/148 (89%)** |
-| — sólo los **difíciles** (parafraseados) | 26/98 (27%) | 81/98 (83%) |
-| Benignos marcados 🔴 **rojo** | **0/132** | **0/132** |
-| Benignos que quedaron limpios | 121/132 (92%) | 120/132 (91%) |
-
-La fila que más nos importa es la tercera: **ningún turno benigno terminó en rojo**,
-con modelo o sin él, y las 75 trampas lo esquivaron enteras. Un detector que grita
-lobo se apaga a la semana; preferimos que se nos escape uno antes que hacerte
-desconfiar de una conversación sana.
-
-**Ahora leé bien la primera columna: el default corre al 32%.** El modelo viene
-apagado de fábrica —COGO es determinista y standalone— y en ese modo el léxico es
-un ancla barata y muy precisa, pero de alcance corto: atrapa el cliché, no la
-paráfrasis. Un 🟢 verde sin modelo significa *"no vi nada"*, **no** *"acá no hay
-nada"*. Para el 89% hay que conectar un modelo (`COGO_LLM_*`, o Ajustes → Modelo IA
-en el visor).
-
-```bash
-# columna 1 — determinista, gratis, 3 segundos
-go test ./internal/suasion/ -run TestRedTeamDeterministic -v
-
-# columna 2 — con modelo (medido con gpt-4o vía OpenRouter: 233 llamadas, ~4 min, ~USD 1,50)
-export COGO_LLM_BASE_URL=https://openrouter.ai/api/v1
-export COGO_LLM_MODEL=openai/gpt-4o
-export COGO_LLM_API_KEY=sk-or-...
-RUN_TIER1=1 go test ./internal/suasion/ -run TestRedTeamTier1 -v -timeout 45m
+```yaml
+# ---- computed by COGO · do not edit ----
+confidence: red
+color_reason: no observed or reported evidence
 ```
 
-> **Próximo.** Que el Guard cruce lo que el modelo te afirma contra tus notas ya
-> verificadas: *"te está afirmando X, y tu nota verde del martes —la del log— dice
-> Y"*. Es la unión de las dos mitades de COGO y todavía no está.
+## What it looks like in practice
 
-### Veracidad: ¿esto es sólido o es humo?
+You're debugging:
 
-El gemelo del Guard. Donde el Guard pregunta *"¿me está empujando?"*, la pestaña
-**Veracidad** (tool MCP `xray`) pregunta *"¿esta respuesta se sostiene?"*. Pegás la
-respuesta de un modelo y COGO la **radiografía frase por frase**, sin modelo, de
-forma determinista: mide el **compromiso** (¿hedged o afirmado con fuerza?), la
-**evidencia** (¿observada, reportada, o ninguna?) y si es **falsable** (una opinión
-disfrazada de hecho). Una afirmación fuerte y sin fundamento sale 🔴; una sólida con
-evidencia observada, mejor. Es la Fase 1 (el piso determinista) del *motor de
-veracidad* — [`docs/motor-veracidad.md`](docs/motor-veracidad.md).
+1. You jot down *"the worker can't reach Redis"* — a hunch, no evidence → 🔴 **red**
+2. You check the logs, find the proof, attach it as evidence → 🟡 **yellow** (there's evidence,
+   but the test that would confirm it hasn't run)
+3. You run the test, it passes, you hit **verify** → 🟢 **green**
+4. Next week you ask Claude for help. Claude reads your notes, sees Redis is **green** (uses it
+   as fact) and something else is **red** (won't build on it). It doesn't waste a turn
+   re-investigating what you already proved, and it doesn't act on your hunch.
 
-## Editar una nota cambia el color (es el punto)
+That's COGO: **a memory with a confidence traffic light, for you and for your tools.**
 
-El semáforo refleja el estado actual de la nota, **siempre**. En el visor editás una nota y
-COGO **recomputa el color en vivo mientras escribís** (lo ves antes de guardar):
+## Guard — the anti-manipulation x-ray
 
-- sumás evidencia observada → más verde
-- la dejás envejecer → decae sola a amarillo y después a rojo
-- cambiás la afirmación → se reinicia a "hay que re-verificar"
-- apretás **"verificar"** (ya lo chequeé) → verde
+The other half of COGO. When you talk to an LLM you have no way to tell whether that very
+confident answer is real reasoning or **fluent nonsense** — or to notice when a conversation is
+walking you, step by step, toward something you never agreed to. That has a name: the
+**jailbreak on the human**.
 
-## Arrancar (la pavada)
+Guard reads each model turn **with the adversary's playbook in hand**: an ontology of **108
+manipulation techniques** distilled from the six disciplines that studied how to move a person
+against their will — persuasion (Cialdini, Kahneman), **police and military interrogation**
+(Reid, Army FM 2-22.3, Scharff), negotiation (Harvard, Voss), **coercion and thought reform**
+(Lifton, Biderman), emotional manipulation (gaslighting, DARVO, FOG) and rhetoric/propaganda
+(Frankfurt, Grice, Walton). Each technique carries its real source, what it looks like *in a
+chat*, and its countermeasure.
 
-Primeros pasos para principiantes: **[docs/instalacion.md](docs/instalacion.md)**.
-Guía de despliegue completa (todos los modos, cada variable, respaldo,
-actualización, problemas comunes): **[docs/deploy.md](docs/deploy.md)**.
+It runs **deterministically and offline** by default — no model, no API key, nothing leaves
+your machine. Plug a model in and it goes deeper.
 
-**En tu compu, con Docker** — un comando, y abrís el navegador:
+**Veracity (`xray`)** is Guard's twin. Instead of *how hard is this pushing me*, it measures
+**how much of this answer is actually held up**: the gap between what a text asserts and what
+it supports.
 
-```bash
-docker run -d -p 127.0.0.1:8095:8080 -v cogo-vault:/vault \
-  -e COGO_ALLOW_INSECURE=1 ghcr.io/diegoparras/cogo
-```
-
-→ <http://localhost:8095>. Ves tu vault pintado por confianza, capturás y editás notas,
-todo desde la web. **Cero terminal.** (`COGO_ALLOW_INSECURE=1` está OK acá porque el puerto
-queda atado a tu máquina. Para un servidor **no** lo uses: poné `COGO_MCP_TOKEN` — ver la guía.)
-
-**Sin Docker** — un solo binario, sin runtime:
+## Quickstart
 
 ```bash
-cogo serve -http 127.0.0.1:8080 -vault ./vault
+docker run -d -p 127.0.0.1:8080:8080 -v cogo-vault:/vault -e COGO_ALLOW_INSECURE=1 ghcr.io/diegoparras/cogo
 ```
 
-**Conectarlo a tu agente (MCP)** — el mismo binario es un servidor MCP. En Claude Code,
-un `.mcp.json`:
+Open <http://localhost:8080>. That's it — the viewer ships **inside** the binary. No database,
+no build step, nothing else to install.
+
+> `COGO_ALLOW_INSECURE=1` is fine here because the port is bound to your machine. On a server,
+> set `COGO_MCP_TOKEN` instead — see [the deploy guide](docs/deploy.md).
+
+<details>
+<summary><b>Without Docker</b> — one static binary</summary>
+
+```bash
+go install github.com/diegoparras/cogo/cmd/cogo@latest
+cogo init && cogo serve -http 127.0.0.1:8080 -vault ./vault
+```
+</details>
+
+## Connect it to your agent
+
+COGO speaks **MCP** over stdio (local) and Streamable HTTP (remote), so any MCP client works —
+Claude Code, Codex, Copilot, OpenCode, Antigravity:
 
 ```json
-{ "mcpServers": { "cogo": { "command": "cogo", "args": ["serve", "-vault", "./vault"] } } }
+{
+  "mcpServers": {
+    "cogo": { "command": "cogo", "args": ["serve", "-vault", "./vault"] }
+  }
+}
 ```
 
-Desde ahí, en cualquier sesión pedís `pack "<tema>"` y obtenés contexto coloreado, o
-`capture` un hallazgo. Lo que Claude aprende hoy, mañana lo lee Cursor: **el mismo vault.**
+What Claude learns today, Cursor reads tomorrow: **the same vault.**
 
-## Cómo se computa el color
+### The 14 tools your agent gets
+
+| tool | what it does |
+|---|---|
+| `pack` | colored context on a topic **before acting** — red is quarantined as do-not-rely |
+| `search` | find notes by meaning (embeddings) or by keyword (BM25) |
+| `open` | one note, with its freshly computed color |
+| `capture` | record a finding — evidence and a check are required, a color is not accepted |
+| `verify` | mark the check as passing today and re-color |
+| `archive` · `restore` | pull a note out of the graph without destroying it, and bring it back |
+| `remove` | actually delete — only for genuine garbage; leaves a tombstone |
+| `stash` | store an artifact by content hash → cite it as `artifact://<sha256>` |
+| `recall` | re-anchor after a context compaction, or catch up on another agent's work |
+| `reflect` | hand in what you did; COGO proposes graded notes worth keeping |
+| `lease` | take a TTL'd lease on a resource before a migration, a deploy or a bulk edit |
+| `guard` | x-ray a model turn for manipulation pressure |
+| `xray` | x-ray an answer for veracity |
+
+> **Shared memory across machines.** Over HTTP + token, any agent on any machine reads and
+> writes the same vault. `recall` is the cursor that turns it from an archive into a channel:
+> pass back the cursor it gave you and you get **only what changed** since — plus a new cursor.
+
+## The viewer
+
+Seven panels, embedded in the binary:
+
+- **Vault** — a real index: BM25 search, searchable filters, creation-date ranges, pagination.
+  Each note shows when it was born, when it was last verified and when it goes stale.
+- **Vigencia** *(currency)* — what expired or is about to. Facts have a shelf life.
+- **Pack** — the colored context bundle, exactly as an agent receives it.
+- **Graph** — how your knowledge connects, and how red propagates down dependencies.
+- **Review** — broken links, stale notes and (with a model) contradictions between notes.
+- **Guard** · **Veracity** — the two engines, with their evidence.
+
+Plus a Markdown editor that **recomputes the color live as you type**, a **GitHub explorer**
+with a confidence map over your repo, an agent-instruction manager (`AGENTS.md`, `CLAUDE.md`…),
+a downloadable and prunable audit log, multi-token management, and one-click vault export.
+
+## Evidence that can actually be re-checked
+
+Evidence isn't a vibe, it's a reference COGO can go verify again:
+
+```yaml
+evidence:
+  - kind: file_read                                  # 9 kinds, from test_result
+    ref: worker.go:12                                #  down to hypothesis and absence
+  - kind: command_output
+    ref: github://acme/api@main/internal/db.go:88    # pinned to the blob SHA
+  - kind: direct_log
+    ref: artifact://9f2a…                            # content-addressed, immutable
+```
+
+GitHub references are anchored to the **blob SHA**, so when the file changes upstream COGO sees
+the drift and the note drops to yellow until you re-verify. Artifacts are keyed by their
+**SHA-256** — locally or on Cloudflare R2 — so `verify` **recomputes** the hash instead of
+trusting a citation that rots. A **secret scanner runs before anything is stored**, and refuses
+by default.
+
+## How the color is computed
 
 ```
-confianza = min( evidencia , frescura , dependencia más débil , contradicción )
+confidence = min( evidence , freshness , weakest dependency , contradiction )
 ```
 
-Una nota es **verde** solo cuando **nada** la empuja para abajo: evidencia observada, con un
-check que pasó, fresca, todas sus dependencias verdes y sin contradicciones. Cada color trae
-su `color_reason`, así que siempre podés auditar **por qué** quedó como quedó.
+A note is green only when **nothing** drags it down. Evidence sets the ceiling: observed (a
+log, a command, a test, a file) can reach green; reported or inferred caps at yellow; none is
+red. Freshness decays by type — a command lasts 30 days, an architecture decision 180. Every
+color ships its `color_reason`, so you can always audit **why**.
 
-La **evidencia** define el techo del color: observada (un log, un comando, un test, un
-archivo) puede llegar a verde; reportada o inferida tapa en amarillo; sin evidencia, rojo.
-La **frescura** decae por tipo (un comando dura 30 días; una decisión de arquitectura, 180).
+## Built to be trusted
 
-## Las tres caras, una sola lógica
+- **One static binary.** Go 1.25, `CGO_ENABLED=0`, `scratch` image (~12 MB), assets embedded.
+  No database, no runtime, no `node_modules`.
+- **Offline by default.** Every network-touching feature — models, embeddings, OIDC, R2,
+  GitHub — is an opt-in accessory. The core never phones home.
+- **Verifiable supply chain.** Images are signed with **cosign** (keyless Sigstore) and ship
+  **SLSA build provenance**. Tests, `go vet` and `gofmt` gate every publish.
+- **Your data stays yours.** Notes are Markdown files in a folder you own. Delete COGO and you
+  still have everything — readable in any text editor, versionable in git.
 
-| Cara | Para quién | Cómo |
-|------|------------|------|
-| **Visor web** | todos | `cogo serve -http :8080` → navegador (Vault · Vigencia · Pack · Grafo · Revisión · **Guard** · **Veracidad**) |
-| **MCP** | tu agente (Claude, Codex, Cursor, Gemini…) | `cogo serve` (stdio) — tools: `pack` `search` `open` `capture` `verify` `archive` `restore` `remove` `recall` `reflect` `stash` `lease` `guard` `xray` |
-| **CLI** | power users | `cogo add · pack · search · stale · verify · lint · agents` |
+## Philosophy
 
-Es un **solo binario Go** (imagen Docker `scratch` de ~12 MB) que es las tres cosas a la vez.
+> Not knowing is not a lesser kind of knowing. It's a different thing, and it has to be
+> visible.
 
-> **Memoria compartida entre máquinas.** Con el MCP sobre HTTP + token, cualquier agente en cualquier máquina lee y escribe el mismo vault. `recall` es el **cursor** que lo vuelve un canal, no solo un archivo: la primera llamada devuelve el bundle que sostiene el proyecto (mandato + decisiones verdes) y un cursor; pasás ese cursor como `since` y `recall` te da **solo lo que cambió** desde entonces —sin releer todo—, más un cursor nuevo.
+COGO's iron rule is that **the system never claims more than it can hold up**. The color isn't
+a label somebody applies; it's a consequence of the evidence. That's the whole reason it's
+worth anything — to you, and against a model that would otherwise be delighted to tell you
+exactly what you want to hear.
 
-> **Evidencia que vive en GitHub.** Una nota puede citar un archivo del repo como `github://owner/repo@main/src/foo.go:42`. COGO baja el archivo por la API, confirma que la cita **existe** y guarda el **hash del blob**. Eso hace dos cosas: le devuelve los dientes al motor de color en una instancia **hosteada** (que no tiene tu working copy, así que hoy no puede verificar ninguna ruta local), y habilita la **frescura anclada a git** — la nota sigue verde **mientras el archivo citado no cambie**; si cambia en la rama, cae a amarilla pidiendo re-verificar. Citá un **commit fijo** y la evidencia es inmutable. Sin dependencias: 3 endpoints REST.
-
-> **Artefactos con dirección por contenido.** `stash` guarda un artefacto (la salida completa de un comando, un CSV, un archivo chico) bajo la clave = **SHA-256 de su contenido** y te devuelve `artifact://<sha>` para citarlo como evidencia. Como la clave ES el hash, la referencia prueba que el artefacto no cambió: `verify` **recomputa** (existe y su hash matchea → la evidencia vale; desapareció → se rompe y el color cae) en vez de confiar en una cita que se pudre. Un **guard de secretos** corre antes de guardar y, por defecto, **se niega** a inmortalizar credenciales (opt-in a redactar). Standalone guarda en disco (`.cogo/artifacts`); con `COGO_R2_*` guarda en Cloudflare R2.
-
-### Todo se maneja desde el visor (menú ⋮)
-
-Para el que no quiere tocar la terminal, cada cosa operativa vive en el menú:
+## Documentation
 
 | | |
 |---|---|
-| **Conexiones MCP** | emitir/revocar tokens por app (con vencimiento y modo *solo lectura*) |
-| **Papelera** | notas borradas — restaurar o borrar para siempre |
-| **Auditoría MCP** | quién llamó a qué herramienta, cuándo y desde qué IP |
-| **Raíces de evidencia** | contra qué carpeta se resuelve la evidencia de cada proyecto |
-| **Exportar (backup)** | bajar todo el vault como zip (sin secretos) |
-| **Instrucciones para agentes** | generar el `AGENTS.md`/`CLAUDE.md` que le enseña el protocolo a tu agente |
-| **Ajustes · Modelo IA** | conectar un modelo (OpenRouter/Ollama) para contradicciones y Guard |
+| [Installation](docs/instalacion.md) | get it running, step by step |
+| [Deploy](docs/deploy.md) | your machine, a server, or a whole team |
+| [Manual](docs/manual.md) | how to actually use it |
+| [For AI agents](docs/COGO-para-agentes.md) | put this in front of your agent |
+| [Autonomy engine](docs/motor-autonomia.md) | Guard, in depth |
+| [Veracity engine](docs/motor-veracidad.md) | xray, in depth |
+| [Security](docs/seguridad.md) | threat model and hardening |
+| [Theory](docs/fundamento-teorico.md) | why the iron rule |
 
-## Accesorios opcionales (apagados por default)
+## License
 
-COGO es 100% determinista y standalone sin nada de esto. Se prenden por variable de entorno
-y **nunca tocan el núcleo**:
-
-| Accesorio | Se prende con | Para |
-|---|---|---|
-| **Modelo IA** (OpenRouter, Ollama, DeepSeek…) | `COGO_LLM_BASE_URL` + `COGO_LLM_MODEL` (o Ajustes en la GUI) | detectar **contradicciones** entre notas + los tiers de Guard |
-| **Juez fuerte independiente** | `COGO_LLM_STRONG_BASE_URL` + `COGO_LLM_STRONG_MODEL` | que el **steelman** de Guard no comparta cerebro con el proponente |
-| **Scrub Anonimal** | `ANONIMAL_URL` | que secretos/PII no entren al vault |
-| **Login Lockatus (OIDC)** | `AUTH_MODE=federado` | federar con la Suite Escriba |
-
-```bash
-# ejemplo: detectar contradicciones con un modelo de OpenRouter
-export COGO_LLM_BASE_URL=https://openrouter.ai/api/v1
-export COGO_LLM_MODEL=deepseek/deepseek-chat
-export COGO_LLM_API_KEY=sk-or-...
-cogo lint
-```
-
-## CLI (para rosquear)
-
-```bash
-cogo init                 # crea un vault
-cogo add nota.md          # valida, computa el color, la guarda (stdin si no hay archivo)
-cogo pack "redis"         # arma un contexto coloreado para un tema (degrada el rojo)
-cogo search "worker"      # lista: color · id · resumen (sin cuerpos)
-cogo stale                # qué está vencido o por vencer
-cogo verify <id>          # "ya lo chequeé": revalida y re-colorea
-cogo lint                 # enlaces rotos, vencidas, y contradicciones (si hay modelo)
-cogo agents --claude      # genera el CLAUDE.md/AGENTS.md que le enseña el protocolo a un agente
-cogo install              # cablea COGO en el .mcp.json del agente (stdio; --http para remoto)
-cogo serve -http :8080    # visor web + servidor MCP por HTTP
-cogo serve                # servidor MCP por stdio
-```
-
-## Formato de una nota
-
-```yaml
----
-id: fisherboy-redis-hostname
-type: bug                 # decision|bug|runbook|architecture|constraint|command|mistake
-project: fisherboy
-evidence:
-  - kind: direct_log      # observada → puede llegar a verde
-    ref: "api log 2026-06-27T14:03Z: connect OK to redis:6379"
-check:
-  test: "leer el env efectivo del worker; probar conectividad a fisherboy-redis:6379"
-  status: not_run         # passed | failed | not_run
-last_verified: 2026-06-27
-depends_on: [fisherboy-redis-topology]
-# ---- computed by COGO · do not edit ----
-confidence: yellow
-color_reason: "evidencia observada pero el check no pasó"
----
-
-## Claim
-El worker probablemente falla porque no resuelve el hostname interno de Redis.
-```
-
-El vault Markdown es la **única fuente de verdad**: portable, diffeable, sobrevive a que la
-herramienta muera. Todo lo demás es un cliente fino o un caché reconstruible.
-
-## Filosofía
-
-Parte de la **Suite Escriba** (getescriba.com): self-hosted, Docker, interno por defecto,
-MIT. **Standalone-first**: un `docker run` y anda; la federación es un accesorio. Simple por
-sustracción — el día que le crezca un kanban, falló.
-
-## Build / desarrollo
-
-```bash
-go build -o cogo ./cmd/cogo     # un binario estático, sin CGO
-go test ./...                   # toda la suite
-docker build -t cogo .          # imagen scratch (~12 MB)
-```
-
-## Licencia
-
-[MIT](LICENSE) · Diego Parrás · Ecosistema Escriba.
+MIT — Diego Parrás, CeMIACE / SEUBES / FCE-UBA. Part of the **Escriba Suite**.
