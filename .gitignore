@@ -2,8 +2,17 @@
 /cogo
 /cogo.exe
 *.exe
+*.exe~
 
 # local LLM settings (may hold an API key) — never commit
 .cogo/
 vault/.cogo/
 .mcp.json
+
+# El vault del repo es una DEMO: las notas fisherboy-* existen para que quien
+# clone abra COGO y vea algo funcionando. Todo lo demás que aparezca acá son
+# notas de trabajo reales de quien esté desarrollando, y no van al repo: su
+# lugar es la instancia propia. Subirlas dejaría el ejemplo mezclado con notas
+# ajenas y desactualizadas desde el primer día.
+vault/*.md
+!vault/fisherboy-*.md
