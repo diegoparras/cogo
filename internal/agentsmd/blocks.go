@@ -90,6 +90,19 @@ func Curated(o BlockOptions) []Block {
 				"- Al guardar: `capture(project: \"%s\", …)`\n", proj, proj, proj, proj),
 		},
 		{
+			ID: "repos-github", Title: "Repos por GitHub MCP",
+			Desc: "Los archivos se leen del repo por el MCP oficial de GitHub; la evidencia se cita con github://.",
+			Markdown: "### Los repositorios\n\n" +
+				"El código se lee del **repositorio**, no de COGO. Si tenés conectado el **MCP oficial de GitHub** " +
+				"(`github/github-mcp-server`), usalo para leer archivos, PRs e issues; COGO guarda el juicio sobre eso.\n\n" +
+				"Cuando cites un archivo del repo como evidencia, **no uses una ruta local** (el COGO hosteado no tiene " +
+				"tu working copy y la cita queda sin verificar). Citalo así:\n\n" +
+				"```\ngithub://<owner>/<repo>@<rama-o-commit>/<ruta>:<línea>\n```\n\n" +
+				"- COGO baja el archivo, confirma que la cita existe y guarda el **hash del blob**.\n" +
+				"- Si citás una **rama** (`@main`), la nota se pone amarilla en cuanto ese archivo cambie: hay que re-verificar.\n" +
+				"- Si citás un **commit fijo** (`@a1b2c3d`), la cita es inmutable y no puede driftear.\n",
+		},
+		{
 			ID: "sincronizacion", Title: "Sincronización entre agentes",
 			Desc: "Para ponerse al día con lo que hicieron otros agentes sin releer todo.",
 			Markdown: "### Sincronización\n\n" +
@@ -163,7 +176,7 @@ func Presets() []Preset {
 	with := func(extra ...string) []string { return append(append([]string{}, essentials...), extra...) }
 	return []Preset{
 		{ID: "minimo", Title: "Mínimo", Desc: "Solo lo esencial: qué es COGO, repo vs COGO, protocolo y conexión.", Blocks: essentials},
-		{ID: "codigo", Title: "Agente de código", Desc: "Lo esencial + proyecto, evidencia, coordinación y cierre con reflect.", Blocks: with("proyecto", "evidencia", "leases", "reflect")},
+		{ID: "codigo", Title: "Agente de código", Desc: "Lo esencial + proyecto, repos por GitHub, evidencia, coordinación y cierre con reflect.", Blocks: with("proyecto", "repos-github", "evidencia", "leases", "reflect")},
 		{ID: "research", Title: "Investigación", Desc: "Lo esencial + proyecto y sincronización con lo que hicieron otros agentes.", Blocks: with("proyecto", "sincronizacion", "reflect")},
 		{ID: "ops", Title: "Operaciones", Desc: "Lo esencial + coordinación (leases), evidencia y secretos.", Blocks: with("leases", "evidencia", "seguridad")},
 	}

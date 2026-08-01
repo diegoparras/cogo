@@ -49,6 +49,71 @@ func SetArtifactChecker(f func(sha string) bool) { artifactExists = f }
 // artifactPrefix marks an evidence ref whose bytes COGO stores by content hash.
 const artifactPrefix = "artifact://"
 
+// githubPrefix marks evidence that lives in a GitHub repository, cited as
+// "github://owner/repo@ref/path/to/file.go:42" (the "@ref" and the line are
+// optional). It is what makes file evidence checkable from a HOSTED COGO, which
+// has no working copy on disk — and, because GitHub returns the file's git blob
+// SHA, it is also how a note stays green only while the cited file hasn't moved.
+const githubPrefix = "github://"
+
+// githubResolver, when set, checks a GitHub citation: it returns the file's
+// current content hash and whether it exists. ok=false means COGO could not
+// check (network, rate limit, no access) — the caller must degrade to unchecked,
+// never to broken. Injected by the server so core keeps no network code.
+var githubResolver func(owner, repo, ref, path string) (sha string, found bool, ok bool)
+
+// SetGitHubResolver installs the GitHub evidence resolver. Pass nil to disable
+// (the default: COGO stays offline unless told otherwise).
+func SetGitHubResolver(f func(owner, repo, ref, path string) (sha string, found bool, ok bool)) {
+	githubResolver = f
+}
+
+// ParseGitHubRef splits "github://owner/repo@ref/path/file.go:42" into its
+// parts. ref is "" when not pinned (the repo's default branch); the trailing
+// line locator is dropped. ok=false when the ref is not a usable citation.
+func ParseGitHubRef(ref string) (owner, repo, gitRef, path string, ok bool) {
+	rest := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(ref), githubPrefix))
+	parts := strings.SplitN(rest, "/", 3)
+	if len(parts) < 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return "", "", "", "", false
+	}
+	owner = parts[0]
+	repo = parts[1]
+	if i := strings.Index(repo, "@"); i >= 0 {
+		gitRef = repo[i+1:]
+		repo = repo[:i]
+	}
+	path = parts[2]
+	// Drop a trailing line locator so the path can be fetched.
+	path = lineWordRe.ReplaceAllString(path, "")
+	path = lineSuffixRe.ReplaceAllString(path, "")
+	if repo == "" || path == "" {
+		return "", "", "", "", false
+	}
+	return owner, repo, gitRef, path, true
+}
+
+// githubStatusHash resolves a GitHub citation to a status and its current
+// content hash ("" when unknown).
+func githubStatusHash(ref string) (status, hash string) {
+	if githubResolver == nil {
+		return EvUnchecked, ""
+	}
+	owner, repo, gitRef, path, ok := ParseGitHubRef(ref)
+	if !ok {
+		return EvUnchecked, ""
+	}
+	sha, found, ok := githubResolver(owner, repo, gitRef, path)
+	switch {
+	case !ok:
+		return EvUnchecked, "" // couldn't check: never punish
+	case !found:
+		return EvBroken, ""
+	default:
+		return EvResolved, sha
+	}
+}
+
 // ArtifactRef builds the evidence ref for a stored artifact.
 func ArtifactRef(sha string) string { return artifactPrefix + sha }
 
@@ -86,10 +151,17 @@ func ResolveEvidence(vault map[string]*Note, roots EvidenceRoots) {
 		root := roots.Root(n.Project)
 		for i := range n.Evidence {
 			status, path := resolveRefPath(n.Evidence[i].Ref, root)
-			// Drift: a resolvable file that changed since the stamped baseline no
-			// longer supports the note the way it did when verified.
-			if status == EvResolved && n.Evidence[i].Hash != "" && path != "" {
-				if cur := fileHash(path); cur != "" && cur != n.Evidence[i].Hash {
+			// Drift: evidence that still resolves but whose content changed since
+			// the stamped baseline no longer supports the note the way it did when
+			// verified. The current hash is the local file's, or GitHub's blob SHA.
+			if status == EvResolved && n.Evidence[i].Hash != "" {
+				cur := ""
+				if path != "" {
+					cur = fileHash(path)
+				} else if isGitHubRef(n.Evidence[i].Ref) {
+					_, cur = githubStatusHash(n.Evidence[i].Ref)
+				}
+				if cur != "" && cur != n.Evidence[i].Hash {
 					status = EvDrifted
 				}
 			}
@@ -105,12 +177,25 @@ func ResolveEvidence(vault map[string]*Note, roots EvidenceRoots) {
 func StampEvidenceHashes(n *Note, roots EvidenceRoots) {
 	root := roots.Root(n.Project)
 	for i := range n.Evidence {
+		if isGitHubRef(n.Evidence[i].Ref) {
+			// The blob SHA at the cited ref: the baseline for "green while the
+			// cited file hasn't changed".
+			if status, h := githubStatusHash(n.Evidence[i].Ref); status == EvResolved && h != "" {
+				n.Evidence[i].Hash = h
+			}
+			continue
+		}
 		if status, path := resolveRefPath(n.Evidence[i].Ref, root); status == EvResolved && path != "" {
 			if h := fileHash(path); h != "" {
 				n.Evidence[i].Hash = h
 			}
 		}
 	}
+}
+
+// isGitHubRef reports whether a citation points into a GitHub repository.
+func isGitHubRef(ref string) bool {
+	return strings.HasPrefix(strings.TrimSpace(ref), githubPrefix)
 }
 
 // fileHash is a fast, NON-cryptographic content hash (FNV-64a) — enough to detect
@@ -140,6 +225,12 @@ func resolveRefPath(ref, root string) (status, path string) {
 	// first so the locator/line-suffix logic below can't mangle the hash.
 	if strings.HasPrefix(ref, artifactPrefix) {
 		return artifactStatus(strings.TrimSpace(ref[len(artifactPrefix):])), ""
+	}
+	// A GitHub citation: checked against the API, not the filesystem — this is
+	// what gives a hosted COGO teeth over file evidence.
+	if strings.HasPrefix(ref, githubPrefix) {
+		s, _ := githubStatusHash(ref)
+		return s, ""
 	}
 
 	// Take the locator token: everything before a prose separator, then the first

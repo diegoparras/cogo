@@ -556,8 +556,29 @@ function initTabs() {
     state.editing = null; // salir a una pestaña siempre cierra el editor abierto
     state.view = b.dataset.view;
     $$(".tab").forEach(x => x.classList.toggle("active", x === b));
+    location.hash = state.view; // link compartible a la vista
     render();
   }));
+  applyHash();
+  window.addEventListener("hashchange", applyHash);
+}
+
+// applyHash abre la vista (o el panel) que pide el fragmento de la URL, para que
+// un link como .../#guard o .../#leases lleve directo ahí.
+const HASH_PANELS = { leases: openLeases, audit: openAudit, tokens: openTokens, trash: openTrash, instrucciones: openAgents, evroots: openEvidenceRoots };
+function applyHash() {
+  const h = (location.hash || "").replace(/^#/, "");
+  if (!h) return;
+  const tab = $$(".tab").find(t => t.dataset.view === h);
+  if (tab) {
+    state.editing = null;
+    state.view = h;
+    $$(".tab").forEach(x => x.classList.toggle("active", x === tab));
+    render();
+    return;
+  }
+  const panel = HASH_PANELS[h];
+  if (panel) panel();
 }
 
 function fmtTokens(n) {

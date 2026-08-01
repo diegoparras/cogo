@@ -17,6 +17,7 @@ import (
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/embed"
+	"github.com/diegoparras/cogo/internal/ghsource"
 	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/llm"
@@ -109,6 +110,19 @@ func newMCPServer(dir string) *mcp.Server {
 		defer cancel()
 		ok, _ := store.Has(ctx, sha)
 		return ok
+	})
+	// Resolve "github://owner/repo@ref/path" evidence against the GitHub API, so a
+	// hosted COGO (no working copy on disk) can still check file citations — and
+	// so a note stays green only while the cited file's blob SHA hasn't moved.
+	gh := ghsource.FromEnv()
+	core.SetGitHubResolver(func(owner, repo, ref, path string) (string, bool, bool) {
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancel()
+		sha, found, err := gh.FileSHA(ctx, owner, repo, ref, path)
+		if err != nil {
+			return "", false, false // couldn't check: stays unchecked
+		}
+		return sha, found, true
 	})
 	cache := core.NewVaultCache(dir) // mtime-keyed reads: the MCP is a long-running server
 	// loadVault reads the vault and checks that evidence refs resolve, so the

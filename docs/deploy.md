@@ -222,6 +222,8 @@ Ninguna es obligatoria en local. Agrupadas por función.
 | `COGO_R2_ACCESS_KEY_ID` | — | Access Key ID del **R2 API Token** (permiso *Object Read & Write*). |
 | `COGO_R2_SECRET_ACCESS_KEY` | — | Secret Access Key del R2 API Token. Por env/secret, **nunca** commitear. |
 | `COGO_R2_REGION` | `auto` | región S3; para R2 es `auto`. |
+| `COGO_GITHUB_TOKEN` | — | PAT de GitHub (**solo lectura de repos**) para verificar evidencia citada como `github://owner/repo@ref/path:línea`. Sin token funciona igual para repos **públicos**, con el límite anónimo de GitHub (60 req/h); con token son 5000/h y alcanza los repos privados. **Es lo que le devuelve los dientes al motor de color en la nube**: sin esto, un COGO hosteado no puede verificar ninguna cita a un archivo, porque no tiene tu working copy. |
+| `COGO_GITHUB_API` | `https://api.github.com` | base de la API, para GitHub Enterprise. |
 
 > Podés configurar el modelo IA **desde el visor** (menú ⋮ → *Ajustes · Modelo IA*)
 > en vez de env vars: se guarda en `<vault>/.cogo/llm.json` (gitignoreado, texto
