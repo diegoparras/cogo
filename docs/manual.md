@@ -63,13 +63,25 @@ la aplicación.
 
 ## 4. Las pestañas, una por una
 
-- **Vault** ("bóveda"): tus notas, cada una con su color. Es la pantalla principal.
+- **Vault** ("bóveda"): tus notas, cada una con su color. Es la pantalla principal. Arriba
+  tenés buscador, filtros por color, proyecto y agente, un rango de fechas y el paginador,
+  para que siga siendo usable cuando tengas cientos de notas.
 - **Vigencia**: te avisa qué notas están "venciendo" (las cosas cambian; una nota vieja deja
   de ser confiable). Tiene un botón "revalidar" para renovarlas.
-- **Pack**: junta tus notas de un tema en un texto ordenado para copiar y pegárselo a una IA.
-- **Grafo**: un dibujo de cómo se relacionan tus notas. Lindo de ver, opcional.
-- **Revisión**: busca problemas (enlaces rotos, contradicciones entre notas).
+- **Agentes**: acá escribís y guardás los archivos de instrucciones que tus agentes leen al
+  arrancar (`AGENTS.md`, `CLAUDE.md`…), y podés pegarles bloques armados: el protocolo de
+  COGO, contexto coloreado de tu vault, tus convenciones.
+- **Grafo**: un dibujo de cómo se relacionan tus notas, y cómo el rojo se contagia por las
+  dependencias. También podés conectar un repositorio de GitHub y verlo como árbol de
+  archivos o como mapa coloreado por confianza.
+- **Revisión**: busca problemas (enlaces rotos, notas vencidas, contradicciones entre notas).
 - **Guard**: el detector de manipulación (la Mitad B). Le dedicamos la sección 6.
+- **Veracidad**: el gemelo de Guard. Pegás una respuesta de un modelo y te dice cuánto de lo
+  que afirma está realmente sostenido.
+
+> El **Pack** —el bloque de contexto coloreado para pegarle a una IA— ya no es una pestaña:
+> se arma desde la pestaña **Agentes**, y es lo que tu agente recibe solo cuando lo conectás
+> por MCP.
 
 ---
 
@@ -95,6 +107,20 @@ la aplicación.
 **Subir el color de una nota:** sumá evidencia y, cuando la chequeaste de verdad, apretá
 **"verificar"**. La nota se pone más verde. Si la dejás vieja, sola se va poniendo amarilla
 y después roja. Es honesto: refleja el estado real.
+
+**Editar una nota:** hacé clic en cualquier tarjeta del Vault. Mientras escribís, COGO
+**recalcula el color en vivo** y te explica abajo por qué quedó así — lo ves antes de
+guardar.
+
+**Enlazar notas entre sí:** en la barra del editor hay un botón `[[ ]]` que busca entre tus
+notas y te deja elegir. Se inserta el enlace ya escrito, así que nunca queda roto por un
+error de tipeo. Lo mismo con las relaciones del final del editor (*depende de*, *reemplaza
+a*, *causada por*): buscás y elegís, viendo el color de cada candidata. Si enganchás tu nota
+a una roja, COGO te avisa ahí mismo que la tuya también será roja.
+
+**Encontrar algo entre muchas notas:** el buscador de arriba busca dentro del texto; los
+chips filtran por color; y con los selectores de proyecto, agente y fechas achicás la lista.
+El paginador te deja ver de a 10, 25, 100 o todas.
 
 ---
 
