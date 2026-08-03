@@ -78,6 +78,28 @@ func EstadoEfectivo(est confidence.Estado, n *core.Note) confidence.Estado {
 	return confidence.Meet(est, TechoPorEvidencia(n))
 }
 
+// EstadoLocal es lo que vale una nota POR SÍ MISMA, con todos los ejes que no
+// dependen de otras notas ya combinados: el check (de los eventos), la fuerza de
+// la evidencia, la frescura y las contradicciones abiertas.
+//
+// Es la entrada del punto fijo. La separación importa: lo local se calcula por
+// nota y en cualquier orden, y recién después la propagación mira el grafo. Si
+// se mezclaran, el resultado dependería del orden de visita — que es lo que el
+// punto fijo viene a evitar.
+func EstadoLocal(est confidence.Estado, n *core.Note, hoy core.Date, contradicha bool) confidence.Estado {
+	out := EstadoEfectivo(est, n)
+	if contradicha {
+		out = confidence.Meet(out, confidence.Contradicted)
+	}
+	switch {
+	case n.LastVerified.IsZero():
+		// Nunca se verificó: no hay reloj que haya empezado a correr.
+	case hoy.After(n.StaleAt) && !n.StaleAt.IsZero():
+		out = confidence.Meet(out, confidence.Stale)
+	}
+	return out
+}
+
 // Sombra compara y acumula. Es deliberadamente pasiva: no escribe en las notas
 // ni cambia ningún color.
 type Sombra struct {
