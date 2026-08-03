@@ -128,8 +128,8 @@ func TestFoldLlevaLaNotaPorLaMaquina(t *testing.T) {
 	}
 
 	// y el runner la lleva a verified
-	j.Append(Event{NoteID: "n", Kind: "VerificationStarted", Emitter: "internal_runner"})
-	j.Append(Event{NoteID: "n", Kind: "CheckExecuted", Emitter: "internal_runner", Guard: "ejecucion_ok"})
+	j.AppendEjecucion(Event{NoteID: "n", Kind: "VerificationStarted"})
+	j.AppendEjecucion(Event{NoteID: "n", Kind: "CheckExecuted", Guard: "ejecucion_ok"})
 	evs, _ = j.All()
 	if got := EstadoDe(evs, "n"); got != confidence.Verified {
 		t.Errorf("tras ejecutar el check, la nota quedó en %s; se esperaba verified", got)
@@ -181,7 +181,7 @@ func TestElCorteTemporalReconstruyeElPasado(t *testing.T) {
 // la máquina es total, y eso es lo que hace que el fold termine siempre.
 func TestUnEventoQueNoAplicaNoCambiaNada(t *testing.T) {
 	j := abrir(t)
-	j.Append(Event{NoteID: "n", Kind: "CheckExecuted", Emitter: "internal_runner", Guard: "ejecucion_ok"})
+	j.AppendEjecucion(Event{NoteID: "n", Kind: "CheckExecuted", Guard: "ejecucion_ok"})
 	evs, _ := j.All()
 	if got := EstadoDe(evs, "n"); got != confidence.Inicial {
 		t.Errorf("un CheckExecuted sin haber empezado a verificar movió la nota a %s", got)

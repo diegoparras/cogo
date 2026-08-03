@@ -89,9 +89,39 @@ func Open(vault string) (*Journal, error) {
 // SetClock inyecta el reloj. Solo para tests.
 func (j *Journal) SetClock(f func() time.Time) { j.mu.Lock(); j.ahora = f; j.mu.Unlock() }
 
-// Append escribe un evento. Completa seq, tx_time y el encadenado; si valid_time
-// viene vacío, se asume que pasó cuando se registró.
+// EmisorEjecucion es el emisor reservado: el único cuyos eventos pueden llevar
+// una nota a `verified`. Está acá y no en el runner para que el journal pueda
+// defenderlo.
+const EmisorEjecucion = "internal_runner"
+
+// ErrEmisorReservado se devuelve cuando alguien intenta emitir con el emisor
+// privilegiado por la puerta común.
+var ErrEmisorReservado = fmt.Errorf("journal: %q es el emisor reservado del runner; usá AppendEjecucion", EmisorEjecucion)
+
+// Append escribe un evento.
+//
+// Rechaza el emisor reservado. Go no tiene paquetes "amigos", así que no se
+// puede impedir por tipos que otro paquete escriba esa cadena — pero sí se puede
+// obligar a que pase por una puerta con nombre propio, que además hace que un
+// grep de AppendEjecucion muestre TODOS los lugares que producen verificaciones.
+// Una cadena mágica esparcida no se audita; una función sí.
 func (j *Journal) Append(e Event) (Event, error) {
+	if e.Emitter == EmisorEjecucion {
+		return Event{}, ErrEmisorReservado
+	}
+	return j.escribir(e)
+}
+
+// AppendEjecucion es la única puerta del emisor reservado. La usa el runner
+// cuando ejecutó un check de verdad y observó su código de salida.
+func (j *Journal) AppendEjecucion(e Event) (Event, error) {
+	e.Emitter = EmisorEjecucion
+	return j.escribir(e)
+}
+
+// escribir completa seq, tx_time y el encadenado; si valid_time viene vacío, se
+// asume que pasó cuando se registró.
+func (j *Journal) escribir(e Event) (Event, error) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 

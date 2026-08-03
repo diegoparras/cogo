@@ -32,6 +32,24 @@ Knowing the threat model saves you from reporting things that are working as des
   bug worth reporting.
 - **Your notes are plain files.** COGO does not encrypt the vault at rest. Filesystem
   permissions are the boundary. Disk encryption is your operating system's job.
+- **The check runner executes commands, and it is off unless you turn it on.** When enabled,
+  it runs *only* commands you declared yourself in `.cogo/runner.yaml` — argv lists, not
+  shell lines, each with its own working directory and timeout. A note cannot bring its own
+  command; it can only name one you already authorised.
+
+  This is deliberate and it is the whole design. An allowlist of *programs* would not help:
+  if an agent can write both the note and the command, and `go test` is allowed, then the
+  agent gets `go test` to run code the agent itself wrote — `TestMain` and `init()` execute
+  arbitrary code, and `npm test` runs whatever `package.json` says. The line that matters is
+  not which binary runs, it is **who decides what runs**.
+
+  The executed command does not inherit COGO's environment (your MCP token and model API key
+  do not travel to it); only variables you list explicitly are passed. Output is truncated.
+  Timeouts are enforced, and a timeout is reported as *unobserved*, never as a failed check.
+
+  Known limitation, stated plainly: a command that spawns children can leave orphans behind
+  after its timeout. COGO stops waiting for them, but does not kill the process tree —
+  doing that portably means process-group handling that differs per operating system.
 
 ## What I consider a vulnerability
 
@@ -42,6 +60,10 @@ Knowing the threat model saves you from reporting things that are working as des
 - The secret scanner failing to stop a credential from being stored in an artifact.
 - Anything that lets a captured note write its own `confidence` field. The computed block is
   the whole premise of the product: if an agent can paint itself green, COGO is worthless.
+- Anything that gets a command executed which is **not** one declared in `.cogo/runner.yaml`,
+  or that runs one with a different working directory or environment than declared.
+- Anything that produces a `verified` state without the runner actually executing a check —
+  for example forging the reserved emitter in the journal.
 - Remote code execution, SSRF through evidence resolution, or command injection.
 
 ## Supported versions
