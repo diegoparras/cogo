@@ -145,6 +145,20 @@ transitions:
     to: verifying
     on: VerificationStarted
 
+  # Confirmar lo que alguien declaró es el camino que MÁS importa: es cómo una
+  # declaración se convierte en una verificación, y el único modo de saber si
+  # quien declara suele acertar. Sin esta arista, lo declarado quedaría fuera del
+  # alcance del runner para siempre.
+  - from: claimed_passed
+    to: verifying
+    on: VerificationStarted
+
+  # Y una nota ya verificada se puede volver a verificar: el respaldo no es
+  # eterno, y re-ejecutar es más barato que esperar a que venza.
+  - from: verified
+    to: verifying
+    on: VerificationStarted
+
   # --- el runner decide, y es el único camino a verified
   - from: verifying
     to: verified

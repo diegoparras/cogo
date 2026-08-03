@@ -178,6 +178,8 @@ var Tabla = []Transicion{
 	{Desde: Asserted, Hasta: CheckDeclared, Evento: EvCheckDeclared},
 	{Desde: CheckDeclared, Hasta: Verifying, Evento: EvVerificationStarted},
 	{Desde: Stale, Hasta: Verifying, Evento: EvVerificationStarted},
+	{Desde: ClaimedPassed, Hasta: Verifying, Evento: EvVerificationStarted},
+	{Desde: Verified, Hasta: Verifying, Evento: EvVerificationStarted},
 	{Desde: Verifying, Hasta: Verified, Evento: EvCheckExecuted, Guarda: GEjecucionOk},
 	{Desde: Verifying, Hasta: Refuted, Evento: EvCheckExecuted, Guarda: GEjecucionFalla},
 	{Desde: CheckDeclared, Hasta: ClaimedPassed, Evento: EvVerifyDeclared, Guarda: GDeclaraUnTercero},

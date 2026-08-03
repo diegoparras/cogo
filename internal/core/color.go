@@ -211,3 +211,8 @@ func (e *evaluator) compute(n *Note) Verdict {
 	// GREEN — observed, check passed, fresh, every dependency green, no contradiction.
 	return Verdict{Green, "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción", staleAt}
 }
+
+// TierDeEvidencia expone la fuerza de la evidencia de una nota. Es el techo que
+// la evidencia le impone al color: sin evidencia observada no hay verificación
+// que alcance para llegar a verde.
+func TierDeEvidencia(ev []Evidence) Tier { return evidenceTier(ev) }
