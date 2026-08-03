@@ -32,6 +32,16 @@ jobs:
           if [ -n "$sin_formato" ]; then
             echo "estos archivos no están formateados:"; echo "$sin_formato"; exit 1
           fi
+      - name: go generate deja el árbol limpio
+        run: |
+          go generate ./...
+          sucio=$(git status --porcelain)
+          if [ -n "$sucio" ]; then
+            echo "hay archivos generados sin regenerar — corré 'go generate ./...':"
+            echo "$sucio"
+            git diff
+            exit 1
+          fi
       - run: go vet ./...
       - run: go test ./... -count=1
 
