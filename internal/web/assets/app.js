@@ -1244,6 +1244,17 @@ function notaCard(n) {
     f.title = "Verificada el " + fechaLarga(n.verified);
     head.appendChild(f);
   }
+  // La procedencia del respaldo. Es un eje distinto del color: el color dice
+  // cuánto sostiene la evidencia, esto dice quién lo comprobó. Se muestra
+  // discreto porque no compite con el semáforo, lo matiza.
+  if (n.attested) {
+    const ejec = n.attested === "executed";
+    const s = el("span", "nc-sello" + (ejec ? " ok" : ""), ejec ? "✓ ejecutado" : "declarado");
+    s.title = ejec
+      ? "COGO ejecutó el check y vio su código de salida" + (n.attested_by ? " (" + n.attested_by + ")" : "")
+      : "Alguien declaró que el check pasa; nadie lo ejecutó" + (n.attested_by ? " — lo declaró " + n.attested_by : "");
+    head.appendChild(s);
+  }
   if (n.stale_at) {
     const f = freshnessLabel(n.stale_at);
     const stl = el("span", "nc-stale " + f.cls, f.text);

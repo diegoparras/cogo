@@ -10,6 +10,7 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -1018,6 +1019,23 @@ func datesFacet(views []core.NoteView) map[string]any {
 
 // archivedParam reads the "?archived=1" toggle used by views that can optionally
 // show the notes that are normally hidden (archived, retracted, superseded).
+// normalizarCuerpo colapsa los espacios en blanco para que reformatear no
+// cuente como cambio de contenido. No normaliza nada más: mayúsculas, signos y
+// palabras son contenido.
+func normalizarCuerpo(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// truthy lee un parámetro de query como booleano, con las grafías que la gente
+// escribe de verdad.
+func truthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "si", "sí":
+		return true
+	}
+	return false
+}
+
 func archivedParam(r *http.Request) bool {
 	switch strings.ToLower(r.URL.Query().Get("archived")) {
 	case "1", "true", "yes":
@@ -1208,9 +1226,23 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such note", http.StatusNotFound)
 		return
 	}
-	n.Check.Status = "passed"
-	n.LastVerified = s.today()
-	core.StampEvidenceHashes(n, s.evRoots()) // re-baseline drift: this is what I confirmed against
+	// ?reanchor=1 confirma que se comprobó la afirmación contra el contenido
+	// actual de la evidencia que derivó. Sin eso, verificar una nota derivada se
+	// rechaza — antes la re-verificación borraba el aviso de deriva en silencio.
+	err := core.Verificar(n, s.evRoots(), s.today(), core.Verificacion{
+		Por:      auth.Caller(r),
+		Reanclar: truthy(r.URL.Query().Get("reanchor")),
+	})
+	if err != nil {
+		var d *core.ErrDeriva
+		if errors.As(err, &d) {
+			w.WriteHeader(http.StatusConflict)
+			writeJSON(w, map[string]any{"error": d.Error(), "drifted": d.Refs, "needs": "reanchor"})
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	v := core.Evaluate(n, vault, s.contras(), s.today())
 	n.Apply(v)
 	path := n.Path
@@ -1445,8 +1477,22 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 // cosmeticEdit reports whether the new version leaves the CLAIM, the evidence and
 // the check test unchanged — i.e. nothing that the verification was about moved,
 // so the note's passed check and last_verified date can carry over.
+// cosmeticEdit dice si una edición conserva la verificación de la nota.
+//
+// Comparaba `core.Claim`, que es un RESUMEN recortado a 280 caracteres. Con eso,
+// cualquier cambio más allá de ese corte —o en cualquier sección que no fuera el
+// claim— pasaba por cosmético: una nota podía invertir lo que afirmaba y
+// conservar el verde de la afirmación anterior. Usar una función de resumen como
+// función de identidad es el error, y era explotable en 17 de las 25 notas de un
+// vault real.
+//
+// Ahora compara el cuerpo ENTERO, normalizando solo espacios en blanco. Re-
+// indentar o reordenar saltos de línea sigue sin costar la verificación;
+// cambiar una palabra, sí. Es deliberadamente conservador: el costo de
+// re-verificar de más es bajo, y el de afirmar de más es todo el producto.
 func cosmeticEdit(a, b *core.Note) bool {
-	if core.Claim(a) != core.Claim(b) || a.Check.Test != b.Check.Test || len(a.Evidence) != len(b.Evidence) {
+	if normalizarCuerpo(a.Body) != normalizarCuerpo(b.Body) ||
+		a.Check.Test != b.Check.Test || len(a.Evidence) != len(b.Evidence) {
 		return false
 	}
 	for i := range a.Evidence {

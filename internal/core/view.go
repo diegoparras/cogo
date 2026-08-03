@@ -18,6 +18,13 @@ type NoteView struct {
 	// (está en el historial), así que la completa la cara web: ver history.CreatedAt.
 	Verified string `json:"verified,omitempty"`
 	Created  string `json:"created,omitempty"`
+
+	// Procedencia del respaldo: eje ORTOGONAL al color. El color dice cuánto
+	// sostiene la evidencia; esto dice quién lo comprobó — "declared" si alguien
+	// lo afirmó, "executed" si COGO corrió el check y vio su código de salida.
+	// Se expone aparte justamente para no colapsar las dos preguntas en un color.
+	Attested   string `json:"attested,omitempty"`
+	AttestedBy string `json:"attested_by,omitempty"`
 }
 
 // Overview grades the whole vault and returns one NoteView per note, ordered
@@ -37,6 +44,7 @@ func Overview(vault map[string]*Note, contradictions map[string]bool, today Date
 			Color: v.Color.String(), Reason: v.Reason,
 			StaleAt: v.StaleAt.String(), Claim: summarize(claimOf(n), 200),
 			State: stateTag(state, id), Author: n.Author, Verified: n.LastVerified.String(),
+			Attested: attestedTag(n), AttestedBy: n.Check.AttestedBy,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -46,6 +54,15 @@ func Overview(vault map[string]*Note, contradictions map[string]bool, today Date
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+// attestedTag informa la procedencia solo cuando hay algo que informar: una nota
+// sin check no tiene qué respaldar, y decir "declarado" ahí sería ruido.
+func attestedTag(n *Note) string {
+	if n.Check.Status != "passed" {
+		return ""
+	}
+	return n.Check.Attestation()
 }
 
 // attentionOrder puts the least trustworthy first: red, yellow, green, ungraded.

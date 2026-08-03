@@ -170,25 +170,60 @@ func ResolveEvidence(vault map[string]*Note, roots EvidenceRoots) {
 	}
 }
 
-// StampEvidenceHashes records the current content hash of each resolvable file
-// citation as the drift baseline. Call it when a note is (re)verified — that is
-// the moment "this is the evidence I confirmed against". Non-file evidence is
-// left untouched (empty hash = never drifts).
-func StampEvidenceHashes(n *Note, roots EvidenceRoots) {
-	root := roots.Root(n.Project)
-	for i := range n.Evidence {
-		if isGitHubRef(n.Evidence[i].Ref) {
-			// The blob SHA at the cited ref: the baseline for "green while the
-			// cited file hasn't changed".
-			if status, h := githubStatusHash(n.Evidence[i].Ref); status == EvResolved && h != "" {
-				n.Evidence[i].Hash = h
-			}
-			continue
+// DriftedRefs devuelve las citas cuya evidencia cambió desde la última vez que
+// se verificó la nota. Es lo que hay que mostrarle a alguien antes de dejarlo
+// re-verificar: son exactamente las afirmaciones que ya no descansan sobre lo
+// mismo que descansaban.
+func DriftedRefs(n *Note) []string {
+	var out []string
+	for _, e := range n.Evidence {
+		if e.Status == EvDrifted {
+			out = append(out, e.Ref)
 		}
-		if status, path := resolveRefPath(n.Evidence[i].Ref, root); status == EvResolved && path != "" {
-			if h := fileHash(path); h != "" {
-				n.Evidence[i].Hash = h
-			}
+	}
+	return out
+}
+
+// StampNewEvidenceHashes establece la línea base SOLO donde todavía no había
+// una. Es lo que corresponde al verificar: fija el punto de comparación de la
+// evidencia nueva sin tocar la que ya derivó.
+//
+// La diferencia con StampEvidenceHashes es el defecto que arregla: re-estampar
+// todo al verificar BORRA la señal de deriva. Una nota cuyo archivo citado
+// cambió volvía a verde y perdía el rastro de que había cambiado — el sistema
+// olvidaba, en el mismo acto, aquello de lo que debía avisar.
+func StampNewEvidenceHashes(n *Note, roots EvidenceRoots) {
+	for i := range n.Evidence {
+		if n.Evidence[i].Hash != "" {
+			continue // ya tiene línea base: dejarla es lo que conserva el drift
+		}
+		stampOne(n, i, roots)
+	}
+}
+
+// StampEvidenceHashes records the current content hash of each resolvable file
+// citation as the drift baseline. Re-baselines EVERYTHING, so it erases any
+// pending drift: only call it when the caller explicitly confirmed the claim
+// against the current content (re-anclaje deliberado).
+func StampEvidenceHashes(n *Note, roots EvidenceRoots) {
+	for i := range n.Evidence {
+		stampOne(n, i, roots)
+	}
+}
+
+// stampOne fija la línea base de una cita: el SHA del blob para GitHub, el hash
+// del contenido para un archivo local. La evidencia que no es un archivo queda
+// sin hash, y por eso nunca deriva.
+func stampOne(n *Note, i int, roots EvidenceRoots) {
+	if isGitHubRef(n.Evidence[i].Ref) {
+		if status, h := githubStatusHash(n.Evidence[i].Ref); status == EvResolved && h != "" {
+			n.Evidence[i].Hash = h
+		}
+		return
+	}
+	if status, path := resolveRefPath(n.Evidence[i].Ref, roots.Root(n.Project)); status == EvResolved && path != "" {
+		if h := fileHash(path); h != "" {
+			n.Evidence[i].Hash = h
 		}
 	}
 }

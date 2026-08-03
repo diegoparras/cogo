@@ -732,3 +732,11 @@ canvas.graph-canvas:active { cursor: grabbing; }
   box-shadow: 0 12px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.06); }
 .md-wl-pop.abierta { display: block; }
 .md-wl-pop .bn-wrap { flex: 1 1 auto; width: 100%; }
+
+/* ---- sello de procedencia del respaldo ----
+   Eje ortogonal al color: el semáforo dice cuánto sostiene la evidencia, el
+   sello dice quién lo comprobó. Por eso es neutro y chico — matiza el color, no
+   compite con él. */
+.nc-sello { font-size: 10px; letter-spacing: .04em; padding: 1px 6px; border-radius: 100px;
+  border: 1px solid var(--border); color: var(--muted); cursor: help; white-space: nowrap; }
+.nc-sello.ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); color: var(--ok); }

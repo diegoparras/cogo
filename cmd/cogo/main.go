@@ -456,6 +456,7 @@ func cmdStale(args []string) error {
 func cmdVerify(args []string) error {
 	fs := flag.NewFlagSet("verify", flag.ExitOnError)
 	dir := vaultFlag(fs)
+	reanchor := fs.Bool("reanchor", false, "confirmá que comprobaste la afirmación contra el contenido ACTUAL de la evidencia que cambió")
 	_ = fs.Parse(args)
 	rest := fs.Args()
 	if len(rest) != 1 {
@@ -472,9 +473,14 @@ func cmdVerify(args []string) error {
 		return fmt.Errorf("no note with id %q", id)
 	}
 
-	// Revalidate: the check passed, as of today. Re-color from there.
-	note.Check.Status = "passed"
-	note.LastVerified = today()
+	// Revalidar: se declara que el check pasa, con fecha de hoy. Queda asentado
+	// como declaración; solo el runner interno produce `executed`.
+	if err := core.Verificar(note, core.LoadEvidenceRoots(*dir), today(), core.Verificacion{
+		Por:      "cli",
+		Reanclar: *reanchor,
+	}); err != nil {
+		return err
+	}
 	v := core.Evaluate(note, vault, nil, today())
 	note.Apply(v)
 

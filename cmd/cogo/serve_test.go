@@ -46,13 +46,16 @@ func TestMCPServer(t *testing.T) {
 	}
 	defer cs.Close()
 
-	// pack must surface the seeded green fact as verified.
+	// pack must surface the seeded green fact in the top section. The heading
+	// says "Supported" rather than "Verified — treat as fact" on purpose: until
+	// COGO's own runner executes the check, a passing check is a declaration, and
+	// the pack shouldn't tell an agent to treat it as more than that.
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "pack", Arguments: map[string]any{"query": "redis"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if txt := toolText(res); !strings.Contains(txt, "redis-fact") || !strings.Contains(txt, "Verified") {
-		t.Fatalf("pack did not surface the verified fact:\n%s", txt)
+	if txt := toolText(res); !strings.Contains(txt, "redis-fact") || !strings.Contains(txt, "Supported") {
+		t.Fatalf("pack did not surface the supported fact:\n%s", txt)
 	}
 
 	// capture with no evidence must persist as red — the agent grades its own

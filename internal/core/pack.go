@@ -134,7 +134,11 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 			running, rawTokens, 100*(1-float64(running)/float64(rawTokens)))
 	}
 
-	writeSection(&b, "Verified — treat as fact", greens)
+	// "treat as fact" prometía más de lo que el sistema podía sostener: hasta que
+	// exista el runner, todo check pasado es una declaración. El encabezado ahora
+	// dice qué respalda cada nota y deja que el agente lea la procedencia de cada
+	// línea de check.
+	writeSection(&b, "Supported — evidence holds; check the attestation before acting on it", greens)
 	writeSection(&b, "Probable — likely, not certain", yellows)
 	writeSection(&b, "Do not repeat — past mistakes", mistakes)
 	writeSection(&b, "Assumptions — DO NOT RELY", reds)
@@ -241,6 +245,13 @@ func checkLine(n *Note) string {
 	status := n.Check.Status
 	if status == "" {
 		status = "not_run"
+	}
+	// La procedencia viaja junto al estado del check. Un agente que va a apoyar
+	// una acción sobre esta nota necesita distinguir un check que se ejecutó de
+	// uno que alguien afirmó: son dos grados de respaldo muy distintos y hasta
+	// ahora llegaban escritos igual.
+	if status == "passed" {
+		return fmt.Sprintf("%s (passed, %s)", n.Check.Test, n.Check.Attestation())
 	}
 	return fmt.Sprintf("%s (%s)", n.Check.Test, status)
 }

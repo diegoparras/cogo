@@ -50,6 +50,34 @@ type Evidence struct {
 type Check struct {
 	Test   string `yaml:"test"`
 	Status string `yaml:"status"` // passed | failed | not_run
+
+	// Attested dice CÓMO se estableció ese status, que es un eje distinto del
+	// color y no debe confundirse con él:
+	//
+	//	declared — alguien afirmó que el check pasa. Nadie lo corrió.
+	//	executed — COGO ejecutó el comando y vio su código de salida.
+	//
+	// El color mide cuánto respalda la evidencia; esto mide quién lo comprobó.
+	// Separarlos es lo que permite que una nota siga siendo verde sin que el
+	// verde mienta: dice "la evidencia sostiene esto", y el sello dice si se
+	// ejecutó o se declaró. Vacío en notas viejas = declared.
+	Attested   string `yaml:"attested,omitempty"`
+	AttestedBy string `yaml:"attested_by,omitempty"` // quién lo afirmó o lo corrió
+}
+
+// Los dos valores de Check.Attested.
+const (
+	AttestDeclared = "declared"
+	AttestExecuted = "executed"
+)
+
+// Attestation devuelve la procedencia del check, tratando el campo vacío de las
+// notas anteriores a este campo como una declaración — que es lo que eran.
+func (c Check) Attestation() string {
+	if c.Attested == AttestExecuted {
+		return AttestExecuted
+	}
+	return AttestDeclared
 }
 
 // Note is one Markdown note in the vault. The fields above the line are inputs,

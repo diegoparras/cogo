@@ -432,8 +432,8 @@ func newMCPServer(dir string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "verify",
-		Description: "Mark a note's check as passed as of today and re-color it.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in openIn) (*mcp.CallToolResult, any, error) {
+		Description: "Record that a note's check passes, as of today, and re-color it. This is a DECLARATION, not an execution: it is stored as such, with your identity, and the note is marked `attested: declared`. Only COGO's own runner can produce `attested: executed`. If the cited evidence CHANGED since the note was last verified, this refuses — re-verifying must not be a way to make a drift warning disappear. Pass reanchor:true only if you actually re-checked the claim against the current content.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in verifyIn) (*mcp.CallToolResult, any, error) {
 		vault, err := loadVault()
 		if err != nil {
 			return errResult(err), nil, nil
@@ -442,9 +442,12 @@ func newMCPServer(dir string) *mcp.Server {
 		if !ok {
 			return errResult(fmt.Errorf("no note with id %q", in.ID)), nil, nil
 		}
-		n.Check.Status = "passed"
-		n.LastVerified = today()
-		core.StampEvidenceHashes(n, core.LoadEvidenceRoots(dir)) // re-baseline drift on verify
+		if err := core.Verificar(n, core.LoadEvidenceRoots(dir), today(), core.Verificacion{
+			Por:      auth.CallerCtx(ctx),
+			Reanclar: in.Reanchor,
+		}); err != nil {
+			return errResult(err), nil, nil
+		}
 		v := core.Evaluate(n, vault, contradictions(), today())
 		n.Apply(v)
 
@@ -673,6 +676,14 @@ func setNoteStatus(dir, id, status string) (*mcp.CallToolResult, any, error) {
 
 type openIn struct {
 	ID string `json:"id" jsonschema:"the note id"`
+}
+
+// verifyIn es el input de `verify`. Lleva reanchor aparte porque re-anclar es
+// una afirmación distinta de verificar: dice "comprobé la afirmación contra el
+// contenido NUEVO de la evidencia que cambió".
+type verifyIn struct {
+	ID       string `json:"id" jsonschema:"the note id"`
+	Reanchor bool   `json:"reanchor,omitempty" jsonschema:"set only if you re-checked the claim against the CURRENT content of evidence that has drifted"`
 }
 
 type evidenceIn struct {
