@@ -71,6 +71,11 @@ func hasDriftedEvidence(ev []Evidence) bool {
 // expiry = last_verified + 2×window (-> red). Mistakes never decay and are
 // handled before this is called.
 func windowDays(noteType string) int {
+	if ventanas != nil {
+		if d, ok := ventanas(noteType); ok {
+			return d
+		}
+	}
 	switch noteType {
 	case "constraint":
 		return 365
@@ -86,6 +91,17 @@ func windowDays(noteType string) int {
 		return 90 // conservative default for an unknown type
 	}
 }
+
+// ventanas, si está instalada, decide la ventana de frescura de cada tipo. La
+// tabla de arriba queda como el default que ve un COGO sin configurar, y sigue
+// siendo la respuesta cuando el hook dice que no sabe.
+//
+// Es el mismo patrón de SetMotor y SetWriteHook: core no lee archivos ni conoce
+// la configuración, y quien arranca el programa decide qué le inyecta.
+var ventanas func(noteType string) (int, bool)
+
+// SetVentanas instala la tabla de frescura. nil vuelve a los valores de core.
+func SetVentanas(f func(noteType string) (int, bool)) { ventanas = f }
 
 // Verdict is the computed color plus the clause that decided it. The reason is
 // what makes any color auditable.

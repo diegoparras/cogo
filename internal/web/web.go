@@ -33,6 +33,7 @@ import (
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
+	"github.com/diegoparras/cogo/internal/parametros"
 	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/secretscan"
@@ -52,6 +53,11 @@ type Server struct {
 	tokens *tokens.Store
 	contra *contra.Store
 	cache  *core.VaultCache // mtime-keyed vault reads (scale past a few thousand notes)
+
+	// pars son los parámetros del vault, compartidos con el motor. Ver
+	// parametros.go: el panel los edita y el motor los lee, sobre la misma
+	// instancia, para que un cambio valga en la evaluación siguiente.
+	pars *parametros.Set
 
 	mu             sync.RWMutex
 	provider       llm.Provider
@@ -106,6 +112,8 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/graph", s.handleGraph)
 	mux.HandleFunc("/api/note", s.handleNote)
 	mux.HandleFunc("/api/note/history", s.handleHistory)
+	mux.HandleFunc("/api/parametros", s.handleParametros)
+	mux.HandleFunc("/api/salud", s.handleSalud)
 	mux.HandleFunc("/api/verify", s.handleVerify)
 	mux.HandleFunc("/api/archive", s.handleArchive)
 	mux.HandleFunc("/api/restore", s.handleRestore)

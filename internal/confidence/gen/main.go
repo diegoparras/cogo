@@ -52,6 +52,9 @@ type event struct {
 	ID      string `yaml:"id"`
 	Doc     string `yaml:"doc"`
 	Emitter string `yaml:"emitter"`
+	// Degrada marca los eventos que solo pueden bajar el estado. El fold los
+	// aplica como techo (meet) en vez de como salto.
+	Degrada bool `yaml:"degrada"`
 }
 
 type transition struct {
@@ -331,6 +334,23 @@ func Meet(a, b Estado) Estado {
 		fmt.Fprintf(&b, "\t// %s\n\tEv%s Evento = %q\n", limpiar(e.Doc), ident(e.ID), e.ID)
 	}
 	fmt.Fprint(&b, ")\n\n")
+
+	// eventos que solo bajan
+	fmt.Fprint(&b, "// Degrada dice si un evento solo puede BAJAR el estado de una nota. El fold\n"+
+		"// lo aplica como techo, no como salto: un evento negativo que sube un estado\n"+
+		"// convertiría registrar un problema en una mejora.\nfunc Degrada(e Evento) bool {\n\tswitch e {\n\tcase ")
+	primero := true
+	for _, e := range s.Events {
+		if !e.Degrada {
+			continue
+		}
+		if !primero {
+			fmt.Fprint(&b, ", ")
+		}
+		fmt.Fprintf(&b, "Ev%s", ident(e.ID))
+		primero = false
+	}
+	fmt.Fprint(&b, ":\n\t\treturn true\n\t}\n\treturn false\n}\n\n")
 
 	// guardas
 	fmt.Fprint(&b, "// Guarda discrimina entre transiciones que salen del mismo estado con el\n// mismo evento. Las de una misma decisión son excluyentes entre sí.\ntype Guarda string\n\nconst (\n")

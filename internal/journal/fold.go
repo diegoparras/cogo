@@ -52,7 +52,7 @@ func aplicar(desde confidence.Estado, e Event) confidence.Estado {
 		if t.Guarda != "" && string(t.Guarda) != e.Guard {
 			continue
 		}
-		return t.Hasta
+		return destino(desde, ev, t.Hasta)
 	}
 	for _, t := range confidence.Tabla {
 		if !t.Any || t.Evento != ev {
@@ -66,7 +66,7 @@ func aplicar(desde confidence.Estado, e Event) confidence.Estado {
 		if desde.Transitorio() {
 			return desde
 		}
-		return t.Hasta
+		return destino(desde, ev, t.Hasta)
 	}
 	return desde
 }
@@ -82,4 +82,22 @@ func EstadoDe(events []Event, noteID string) confidence.Estado {
 		st = aplicar(st, e)
 	}
 	return st
+}
+
+// destino aplica la transición, salvo que el evento sea de los que solo bajan:
+// esos son un TECHO, no un salto.
+//
+// La diferencia la encontró una invariante corriendo sobre vaults al azar: abrir
+// una contradicción sobre una nota ya refutada la movía de `refuted` a
+// `contradicted` —hacia ARRIBA— o sea que registrar un problema mejoraba la
+// nota. Vencer la frescura de una nota refutada hacía lo mismo.
+//
+// Ninguno de los dos casos cambiaba un color (los dos estados son rojos), y por
+// eso ningún test de color lo habría visto nunca. Rompía el retículo igual, y
+// con él la propiedad de la que dependen los umbrales de las acciones.
+func destino(desde confidence.Estado, ev confidence.Evento, hasta confidence.Estado) confidence.Estado {
+	if confidence.Degrada(ev) {
+		return confidence.Meet(desde, hasta)
+	}
+	return hasta
 }

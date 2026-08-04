@@ -73,6 +73,22 @@ type Cambio struct {
 // parte: relocalizarla no sería encontrar la cita, sería adivinar.
 const minCaracteresDistintivos = 12
 
+// caracteresDistintivos, si está instalado, reemplaza el mínimo por el del
+// vault. Mismo patrón de costura que SetVentanas: core no lee configuración.
+var caracteresDistintivos func() int
+
+// SetCaracteresDistintivos instala el mínimo configurable. nil vuelve al de core.
+func SetCaracteresDistintivos(f func() int) { caracteresDistintivos = f }
+
+func minDistintivo() int {
+	if caracteresDistintivos != nil {
+		if n := caracteresDistintivos(); n > 0 {
+			return n
+		}
+	}
+	return minCaracteresDistintivos
+}
+
 // AnalizarCita decide si el cambio de un archivo alcanza a lo que la nota citó.
 //
 // contenido son los bytes actuales del archivo; ref es la cita completa (con o
@@ -143,7 +159,7 @@ func distintiva(region []string) bool {
 	for _, l := range region {
 		n += len(strings.ReplaceAll(l, " ", ""))
 	}
-	return n >= minCaracteresDistintivos
+	return n >= minDistintivo()
 }
 
 // buscarUnica encuentra la región anclada en el archivo, si está y si está una

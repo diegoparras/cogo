@@ -94,6 +94,15 @@ func vaultFlag(fs *flag.FlagSet) *string {
 	return fs.String("vault", def, "vault directory")
 }
 
+// conVault se llama después de parsear los flags de un subcomando, y es donde se
+// enchufan los parámetros del vault. Está separado de vaultFlag porque el valor
+// del flag no existe hasta después de Parse: declarar y resolver son dos
+// momentos distintos.
+func conVault(dir *string) string {
+	instalarParametros(*dir)
+	return *dir
+}
+
 func today() core.Date {
 	n := time.Now()
 	return core.NewDate(n.Year(), n.Month(), n.Day())
@@ -157,6 +166,7 @@ func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	dir := vaultFlag(fs)
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
 		return err
@@ -180,6 +190,7 @@ func cmdAdd(args []string) error {
 	dir := vaultFlag(fs)
 	force := fs.Bool("force", false, "overwrite even a note that is currently green")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	var data []byte
 	var err error
@@ -241,6 +252,7 @@ func cmdPack(args []string) error {
 	budget := fs.Int("budget", 0, "approx token budget (0 = unlimited)")
 	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD (default: real today)")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	t, err := resolveToday(*todayStr)
 	if err != nil {
@@ -267,6 +279,7 @@ func cmdSearch(args []string) error {
 	limit := fs.Int("limit", 0, "max results (0 = all)")
 	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	t, err := resolveToday(*todayStr)
 	if err != nil {
@@ -299,6 +312,7 @@ func cmdAgents(args []string) error {
 	out := fs.String("o", "", "write to this file instead of stdout")
 	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	name := "AGENTS.md"
 	if *claude {
@@ -356,6 +370,7 @@ func cmdInstall(args []string) error {
 	out := fs.String("o", ".mcp.json", "path to the .mcp.json to write/merge")
 	claude := fs.Bool("claude", false, "also drop a CLAUDE.md with the COGO protocol next to it")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	bin, err := os.Executable()
 	if err != nil {
@@ -412,6 +427,7 @@ func cmdStale(args []string) error {
 	within := fs.Int("within", 30, "also list notes going stale within N days")
 	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	t, err := resolveToday(*todayStr)
 	if err != nil {
@@ -458,6 +474,7 @@ func cmdVerify(args []string) error {
 	dir := vaultFlag(fs)
 	reanchor := fs.Bool("reanchor", false, "confirmá que comprobaste la afirmación contra el contenido ACTUAL de la evidencia que cambió")
 	_ = fs.Parse(args)
+	conVault(dir)
 	rest := fs.Args()
 	if len(rest) != 1 {
 		return fmt.Errorf("usage: cogo verify <id>")

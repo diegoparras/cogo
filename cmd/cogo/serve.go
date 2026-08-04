@@ -12,15 +12,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/cogo/internal/accion"
 	"github.com/diegoparras/cogo/internal/artifact"
 	"github.com/diegoparras/cogo/internal/auth"
+	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/embed"
 	"github.com/diegoparras/cogo/internal/ghsource"
 	"github.com/diegoparras/cogo/internal/history"
+	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/llm"
+	"github.com/diegoparras/cogo/internal/motor"
 	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/secretscan"
@@ -50,6 +54,7 @@ func cmdServe(args []string) error {
 	core.SetWriteHook(func(path string, n *core.Note) {
 		history.Record(filepath.Dir(path), n.ID, n.Confidence, n.ColorReason, core.Claim(n))
 	})
+	instalarParametros(*dir)
 	if err := instalarMotor(*dir); err != nil {
 		return err
 	}
@@ -83,8 +88,10 @@ func cmdServe(args []string) error {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
-	web.New(*dir, today, store).Mount(mux) // human face: visor at /, JSON API at /api
-	authn.RegisterRoutes(mux)              // accessory: OIDC login (federated only)
+	visor := web.New(*dir, today, store)
+	visor.UsarParametros(pars) // el panel edita el mismo Set que lee el motor
+	visor.Mount(mux)           // human face: visor at /, JSON API at /api
+	authn.RegisterRoutes(mux)  // accessory: OIDC login (federated only)
 
 	tls := os.Getenv("COOKIE_SECURE") == "1"
 	var h http.Handler = enforceReadOnly(mux) // read-only tokens can't write
@@ -413,6 +420,34 @@ func newMCPServer(dir string) *mcp.Server {
 			msg += fmt.Sprintf(" — traba %d decisión(es)", k)
 		}
 		return textResult(msg), nil, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "authorize",
+		Description: "Ask whether what you know is enough for what you are about to do. Call it BEFORE any action that changes something outside your own answer — writing files, running migrations, deploying, deleting, sending, publishing. Not every action needs the same backing: explaining something from a yellow note is fine, dropping a table from the same note is not. COGO classifies the action, looks up the confidence this vault requires for that class, and checks the notes you say you are relying on. A NOT AUTHORIZED answer is not an obstacle to route around: report it to the human and let them decide. Declaring a lower class does not lower the bar — the text of the action is classified too and the stricter of the two wins.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in authorizeIn) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.Action) == "" {
+			return errResult(fmt.Errorf("authorize needs to know what you are about to do")), nil, nil
+		}
+		vault, err := loadVault()
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		estados := map[string]confidence.Estado{}
+		if j, err := journal.Open(dir); err == nil {
+			if evs, err := j.All(); err == nil {
+				estados, _ = motor.Estados(vault, contradictions(), today(), evs)
+			}
+		}
+		v := accion.Autorizar(
+			accion.Peticion{Accion: in.Action, Clase: in.Class, Notas: in.Notes},
+			fuenteVault{estados: estados, vault: vault}, pars)
+		// Toda consulta queda registrada, autorice o no. Un control que solo deja
+		// rastro cuando bloquea no sirve para auditar: lo que se quiere poder
+		// reconstruir es en qué se apoyó cada acción, sobre todo las que pasaron.
+		_ = appendLog(dir, fmt.Sprintf("authorize %s [%s] %v -> %v",
+			v.Clase, v.Necesita, in.Notes, v.Autoriza))
+		return textResult(textoAutorizacion(v)), v, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{

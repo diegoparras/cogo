@@ -740,3 +740,56 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .nc-sello { font-size: 10px; letter-spacing: .04em; padding: 1px 6px; border-radius: 100px;
   border: 1px solid var(--border); color: var(--muted); cursor: help; white-space: nowrap; }
 .nc-sello.ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); color: var(--ok); }
+
+/* ── Modo deidad ──────────────────────────────────────────────────────────
+   Todo el sistema en un panel. La jerarquía hace el trabajo que en otros
+   paneles hace esconder cosas: el valor se lee de un vistazo, la explicación
+   está siempre ahí, y el efecto —lo que cambia si lo movés— aparece cuando el
+   parámetro deja de estar en su default, que es justo cuando importa. */
+.deidad-puerta { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hairline);
+  font-size: 12.5px; color: var(--muted); }
+.deidad-card { max-width: 780px; }
+.deidad-intro { color: var(--muted-2); }
+.deidad-barra { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin: 16px 0 4px; font-size: 12.5px; color: var(--muted); }
+.deidad-h3 { margin: 30px 0 4px; font-size: 15px; }
+.deidad-sub { font-size: 12.5px; color: var(--muted); margin: 0 0 12px; }
+
+.dg { margin-top: 22px; }
+.dg-tit { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.dp { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px;
+  align-items: start; padding: 11px 0; border-top: 1px solid var(--hairline); }
+.dp-rot { font-weight: 600; font-size: 13.5px; }
+.dp-exp { grid-column: 1; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.dp-ctl { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 7px; }
+.dp-ctl input[type=number] { width: 88px; text-align: right; font-family: var(--mono); }
+.dp-ctl select { min-width: 148px; }
+.dp-uni { font-size: 12px; color: var(--muted); min-width: 58px; }
+.dp-efecto { grid-column: 1 / -1; font-size: 12px; color: var(--warn);
+  margin-top: 6px; padding-left: 11px; border-left: 2px solid var(--warn); }
+.dp-volver { grid-column: 1 / -1; justify-self: start; }
+.dp-afloja { font-size: 11px; color: var(--warn); font-weight: 600; margin-left: 6px; }
+.dp.editado .dp-rot::after { content: "·"; color: var(--accent); margin-left: 6px; font-weight: 800; }
+
+/* Un interruptor, no una casilla: el estado tiene que leerse sin leer. */
+.dsw { position: relative; width: 42px; height: 24px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--hairline); cursor: pointer;
+  transition: background .18s ease, border-color .18s ease; flex: none; }
+.dsw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--panel); box-shadow: var(--shadow);
+  transition: transform .18s ease; }
+.dsw[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.dsw[aria-checked="true"]::after { transform: translateX(18px); }
+.dsw:focus-visible { outline: none; box-shadow: var(--ring); }
+
+.dsal { border-top: 1px solid var(--hairline); padding: 12px 0; font-size: 13px; }
+.dsal-vacio { color: var(--muted); font-size: 12.5px; }
+.dtab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.dtab th { text-align: left; font-weight: 600; color: var(--muted); padding: 5px 10px 5px 0;
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+.dtab td { padding: 6px 10px 6px 0; border-top: 1px solid var(--hairline);
+  font-variant-numeric: tabular-nums; }
+.dtab .num { text-align: right; font-family: var(--mono); }
+.dtab .motivo { color: var(--muted); }

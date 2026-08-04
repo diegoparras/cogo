@@ -177,10 +177,35 @@
         </div>
       </div>
       <div class="set-status" id="setStatus"></div>
+      <div class="deidad-puerta">
+        <span id="deidadResumen">Motor · todo en sus valores por defecto</span>
+        <button class="mini ghost" id="deidadAbrir" type="button">ver los controles</button>
+      </div>
     </div>
     <div class="modal-acciones">
       <button class="ghost" id="setTest">Probar</button>
       <button id="setSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal-back hidden" id="deidadModal">
+  <div class="modal-card deidad-card">
+    <button class="modal-x" id="deidadClose" aria-label="Cerrar">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2 class="modal-tit">Modo deidad</h2>
+    <div class="modal-cuerpo">
+      <p class="deidad-intro">Todos los números que gobiernan a COGO, sin nada escondido. Los defaults están pensados para no tener que tocar ninguno — y el dia que haga falta, estan todos. Cada cambio queda en la auditoría.</p>
+      <div class="deidad-barra">
+        <span id="deidadCuenta"></span>
+        <button class="mini ghost hidden" id="deidadReset" type="button">restaurar todo</button>
+      </div>
+      <div id="deidadGrupos"></div>
+      <h3 class="deidad-h3">Lo que el vault aprendió</h3>
+      <p class="deidad-sub">La calibración por emisor y las ventanas por supervivencia vienen apagadas: necesitan datos que solo se juntan con el uso. Acá se ve qué dirían si las encendieras, y con cuánto respaldo.</p>
+      <div id="deidadSalud"></div>
     </div>
   </div>
 </div>

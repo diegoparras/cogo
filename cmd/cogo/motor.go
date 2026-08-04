@@ -4,11 +4,44 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
+	"github.com/diegoparras/cogo/internal/calibracion"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/motor"
+	"github.com/diegoparras/cogo/internal/parametros"
+	"github.com/diegoparras/cogo/internal/supervivencia"
 )
+
+// pars son los parámetros vigentes de este proceso. Los carga instalarMotor y
+// los comparte con el visor, que es quien los edita: un solo Set, así lo que se
+// guarda desde el panel es exactamente lo que el motor lee en la evaluación
+// siguiente, sin reiniciar.
+var pars = parametros.Defaults()
+
+// instalarParametros carga el registro y engancha lo que depende de él. Se llama
+// antes que nada: la tabla de frescura la usan hasta los comandos que no abren
+// el motor de eventos.
+func instalarParametros(dir string) {
+	pars = parametros.Cargar(dir)
+	core.SetVentanas(func(tipo string) (int, bool) {
+		// Primero, si el vault decidió derivar las ventanas de sus datos y para
+		// ESE tipo hay con qué. La estimación se calcula aparte y se cachea; acá
+		// solo se consulta.
+		if v, ok := ventanaEstimada(tipo); ok {
+			return v, true
+		}
+		clave := "frescura." + tipo
+		switch tipo {
+		case "constraint", "decision", "architecture", "runbook", "bug", "command":
+		default:
+			clave = "frescura.otros"
+		}
+		return pars.Entero(clave), true
+	})
+	core.SetCaracteresDistintivos(func() int { return pars.Entero("ancla.caracteres_minimos") })
+}
 
 // instalarMotor conecta el motor de confianza basado en el journal.
 //
@@ -75,10 +108,60 @@ func instalarMotor(dir string) error {
 		for id, n := range vault {
 			n.StaleAt = previos[id].StaleAt
 		}
-		return motor.Evaluar(vault, contras, hoy, evs)
+		refrescarEstimaciones(vault, evs)
+		return motor.EvaluarCon(vault, contras, hoy, evs, motor.Opciones{
+			Penalizados: emisoresPenalizados(evs),
+		})
 	})
 	log.Printf("cogo: motor de confianza sobre el registro de eventos")
 	return nil
+}
+
+// emisoresPenalizados devuelve a quiénes dejó de alcanzarles la palabra. Con la
+// calibración apagada —el default— devuelve vacío sin calcular nada: el módulo
+// existe, mira y reporta, pero no toca ningún color hasta que alguien lo
+// encienda a sabiendas.
+func emisoresPenalizados(evs []journal.Event) map[string]bool {
+	if !pars.Bool("calibracion.activa") {
+		return nil
+	}
+	return calibracion.Penalizados(calibracion.Calcular(evs,
+		pars.Entero("calibracion.minimo_declaraciones"),
+		pars.Entero("calibracion.desmentidas_toleradas")))
+}
+
+// Las ventanas estimadas se recalculan en cada evaluación y se guardan acá. No
+// es un caché por performance —es barato— sino por ORDEN: estimar necesita el
+// vault entero, y core.windowDays se pregunta por una nota a la vez.
+var (
+	muEst        sync.RWMutex
+	estimaciones map[string]supervivencia.Estimacion
+)
+
+func refrescarEstimaciones(vault map[string]*core.Note, evs []journal.Event) {
+	if !pars.Bool("supervivencia.activa") {
+		return
+	}
+	est := supervivencia.Estimar(
+		supervivencia.Observar(vault, evs, time.Now()),
+		pars.Entero("supervivencia.minimo_observaciones"),
+		pars.Entero("supervivencia.cuantil"))
+	muEst.Lock()
+	estimaciones = est
+	muEst.Unlock()
+}
+
+func ventanaEstimada(tipo string) (int, bool) {
+	if !pars.Bool("supervivencia.activa") {
+		return 0, false
+	}
+	muEst.RLock()
+	defer muEst.RUnlock()
+	e, ok := estimaciones[tipo]
+	if !ok || !e.Suficiente || e.Ventana <= 0 {
+		return 0, false
+	}
+	return e.Ventana, true
 }
 
 // faltan dice si hay notas del vault que el registro todavía no conoce.

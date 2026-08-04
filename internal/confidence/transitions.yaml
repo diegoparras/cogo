@@ -104,6 +104,15 @@ decisions:
 # Eventos. El único que puede llevar a `verified` es CheckExecuted, y su
 # constructor vive en un paquete no exportado para que el compilador haga
 # cumplir esa regla (invariante I1).
+#
+# `degrada: true` marca los eventos que solo pueden BAJAR. Un evento negativo
+# que sube un estado es un bug por construcción, y es un bug que se cometió:
+# abrir una contradicción sobre una nota ya refutada la movía de `refuted` a
+# `contradicted`, o sea que registrar un problema mejoraba la nota. Lo mismo
+# hacía vencer la ventana de frescura de una nota refutada.
+#
+# Declararlo acá y no como excepciones en las transiciones es lo que hace que
+# agregar un evento negativo nuevo no vuelva a introducirlo.
 # ---------------------------------------------------------------------------
 events:
   - id: CheckDeclared
@@ -117,14 +126,18 @@ events:
     doc: Alguien afirma que el check pasa, sin ejecutarlo.
   - id: TTLExpired
     doc: Venció la ventana de frescura de la nota.
+    degrada: true
   - id: AnchorMaterialChange
     doc: Cambió de forma material una evidencia en la que la nota se apoya.
+    degrada: true
   - id: ContradictionOpened
     doc: El análisis encontró una contradicción con otra nota.
+    degrada: true
   - id: ContradictionResolved
     doc: La contradicción se cerró o se descartó.
   - id: Quarantined
     doc: Se excluyó la nota del pack por decisión explícita.
+    degrada: true
   - id: Unquarantined
     doc: Se levantó la cuarentena.
 

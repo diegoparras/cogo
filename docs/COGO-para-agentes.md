@@ -48,13 +48,20 @@ mirarlo.
 
 1. **Consultá antes de actuar.** Antes de responder o cambiar algo, pedí
    contexto con `pack`. Es lo primero, siempre.
-2. **Respetá el color.** Ver la tabla de arriba.
-3. **Capturá lo que verifiques.** Cuando confirmes algo nuevo, guardalo con
+2. **Pedí autorización antes de tocar algo.** Antes de cualquier acción que
+   cambie algo fuera de tu propia respuesta —escribir archivos, migrar,
+   desplegar, borrar, enviar, publicar— llamá a `authorize` diciendo qué vas a
+   hacer y en qué notas te apoyás. No todas las acciones piden lo mismo:
+   explicar algo desde una nota amarilla está bien, borrar una tabla desde la
+   misma nota no. Un **NOT AUTHORIZED no es un obstáculo para rodear**:
+   informalo y que decida el humano.
+3. **Respetá el color.** Ver la tabla de arriba.
+4. **Capturá lo que verifiques.** Cuando confirmes algo nuevo, guardalo con
    `capture`: claim + evidencia real + el check mínimo que lo probaría.
    **No escribas el color**: COGO lo computa.
-4. **No pises el verde.** Si ya existe una nota verde, no la sobrescribas a
+5. **No pises el verde.** Si ya existe una nota verde, no la sobrescribas a
    ciegas: verificala de nuevo o usá un id nuevo.
-5. **El rojo no se "arregla" escribiendo.** Una contradicción o una cita rota
+6. **El rojo no se "arregla" escribiendo.** Una contradicción o una cita rota
    se resuelve corrigiendo la nota o la evidencia, nunca reformulando el texto
    para que suene mejor.
 
@@ -151,6 +158,22 @@ que COGO te marque las notas cuyo alcance no coincide con el tuyo.
 
 **`capture(type, body, evidence[], check_test, project, scope, …)`** — guardar
 un hallazgo. Nunca pases el color.
+
+**`authorize(action, class?, notes[])`** — preguntar si lo que sabés alcanza
+para lo que vas a hacer. `action` en palabras, describiendo la operación real
+("borrar la base de staging", no "limpiar"): COGO la clasifica en informativa,
+reversible, costosa o irreversible, y compara el estado de las notas que citás
+contra el mínimo que ese vault pide para esa clase.
+
+Dos cosas que conviene saber. **Declarar una clase más baja no baja la vara**:
+el texto también se clasifica y manda la más estricta. Y **una sola nota floja
+hunde el pedido**: te apoyás en el conjunto, y el conjunto vale lo que su parte
+más débil. Cuando no alcanza, la respuesta trae qué le falta a cada nota y qué
+hacer para subirla.
+
+Por default, lo irreversible es la única clase que exige un check **ejecutado**
+y no declarado. Ahí tu palabra no alcanza, y no es personal: es la línea entera
+por la que existe el runner.
 
 **`verify(id)`** — marcar el check como pasado. COGO re-estampa el hash de la
 evidencia y recalcula. Hacelo **solo si realmente corriste el check**.

@@ -148,6 +148,17 @@ const (
 	EvUnquarantined Evento = "Unquarantined"
 )
 
+// Degrada dice si un evento solo puede BAJAR el estado de una nota. El fold
+// lo aplica como techo, no como salto: un evento negativo que sube un estado
+// convertiría registrar un problema en una mejora.
+func Degrada(e Evento) bool {
+	switch e {
+	case EvTTLExpired, EvAnchorMaterialChange, EvContradictionOpened, EvQuarantined:
+		return true
+	}
+	return false
+}
+
 // Guarda discrimina entre transiciones que salen del mismo estado con el
 // mismo evento. Las de una misma decisión son excluyentes entre sí.
 type Guarda string

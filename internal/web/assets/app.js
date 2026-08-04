@@ -3257,6 +3257,11 @@ async function openSettings() {
   const st = $("#setStatus");
   st.textContent = s.configured ? ("activo: " + s.name) : "apagado";
   st.className = "set-status " + (s.configured ? "ok" : "");
+  api("/api/parametros").then(d => {
+    $("#deidadResumen").textContent = d.editados === 0
+      ? "Motor · todo en sus valores por defecto"
+      : `Motor · ${d.editados} de ${d.total} parámetros cambiados`;
+  }).catch(() => {});
   $("#settingsModal").classList.remove("hidden");
 }
 
@@ -3296,6 +3301,7 @@ async function loadModels() {
 }
 
 function initSettings() {
+  montarDeidad();
   const m = $("#settingsModal");
   $("#settingsClose").addEventListener("click", () => m.classList.add("hidden"));
   m.addEventListener("click", e => { if (e.target.id === "settingsModal") m.classList.add("hidden"); });
@@ -3388,3 +3394,152 @@ function showTokenGate(withLockatusBack) {
   await loadConfig();
   render();
 })();
+
+// ── Modo deidad ─────────────────────────────────────────────────────────────
+//
+// El panel se DIBUJA del catálogo que devuelve el servidor: rótulo, unidad,
+// rango, opciones y efecto vienen de la definición del parámetro en Go. No hay
+// una lista de controles escrita acá que pueda quedar desincronizada del motor
+// — agregar un parámetro es agregarlo en un lado solo.
+async function abrirDeidad() {
+  $("#settingsModal").classList.add("hidden");
+  $("#deidadModal").classList.remove("hidden");
+  await pintarDeidad();
+  pintarSalud();
+}
+
+async function pintarDeidad() {
+  const d = await api("/api/parametros");
+  const cont = $("#deidadGrupos");
+  cont.innerHTML = "";
+  $("#deidadCuenta").textContent = d.editados === 0
+    ? `${d.total} parámetros, todos en su valor original`
+    : `${d.total} parámetros · ${d.editados} cambiado${d.editados === 1 ? "" : "s"}`;
+  $("#deidadReset").classList.toggle("hidden", d.editados === 0);
+
+  (d.grupos || []).forEach(g => {
+    const box = el("div", "dg");
+    box.appendChild(el("div", "dg-tit", g.titulo));
+    (g.params || []).forEach(p => box.appendChild(filaParametro(p)));
+    cont.appendChild(box);
+  });
+}
+
+function filaParametro(p) {
+  const row = el("div", "dp" + (p.es_default ? "" : " editado"));
+
+  const rot = el("div", "dp-rot", p.rotulo);
+  if (p.afloja) rot.appendChild(el("span", "dp-afloja", "afloja"));
+  row.appendChild(rot);
+  row.appendChild(el("div", "dp-exp", p.explica));
+
+  const ctl = el("div", "dp-ctl");
+  ctl.appendChild(controlDe(p, row));
+  if (p.unidad) ctl.appendChild(el("span", "dp-uni", p.unidad));
+  row.appendChild(ctl);
+
+  // El efecto solo aparece cuando el parámetro se movió de su default. Antes es
+  // ruido; después es exactamente lo que hay que saber.
+  if (!p.es_default) {
+    row.appendChild(el("div", "dp-efecto", p.efecto));
+    const volver = el("button", "mini ghost dp-volver", "volver al default (" + p.default + ")");
+    volver.addEventListener("click", () => guardarParametro({ clave: p.clave, restaurar: true }));
+    row.appendChild(volver);
+  }
+  return row;
+}
+
+function controlDe(p, row) {
+  if (p.tipo === "booleano") {
+    const sw = el("div", "dsw");
+    sw.setAttribute("role", "switch");
+    sw.setAttribute("tabindex", "0");
+    sw.setAttribute("aria-checked", String(!!p.valor));
+    const alternar = () => guardarParametro({ clave: p.clave, valor: !p.valor });
+    sw.addEventListener("click", alternar);
+    sw.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); alternar(); } });
+    return sw;
+  }
+  if (p.tipo === "opcion") {
+    // select() espera pares [valor, etiqueta]. Las etiquetas van con el número de
+    // orden porque el retículo ES un orden, y verlo evita tener que recordarlo:
+    // "5 · check_declared" dice sin explicaciones que está por debajo de "7".
+    const pares = p.opciones.map((o, i) => [o, `${i + 1} · ${o}`]);
+    return select(pares, p.valor, v => guardarParametro({ clave: p.clave, valor: v }));
+  }
+  const inp = el("input");
+  inp.type = "number";
+  inp.min = p.min; inp.max = p.max; inp.value = p.valor;
+  inp.addEventListener("change", () => guardarParametro({ clave: p.clave, valor: Number(inp.value) }));
+  return inp;
+}
+
+async function guardarParametro(body) {
+  const r = await api("/api/parametros", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (r && r.error) { alert(r.error); }
+  await pintarDeidad();
+  // Mover una ventana de frescura mueve el semáforo: lo que se está mirando
+  // detrás del panel puede haber cambiado de color.
+  if (typeof render === "function") render();
+}
+
+async function pintarSalud() {
+  const cont = $("#deidadSalud");
+  cont.innerHTML = "";
+  let s;
+  try { s = await api("/api/salud"); } catch { return; }
+
+  // Calibración por emisor.
+  const cal = el("div", "dsal");
+  cal.appendChild(el("div", "dp-rot", "Calibración por emisor" + (s.calibracion_activa ? "" : " · apagada")));
+  const c = s.calibracion;
+  if (!c || c.sin_datos) {
+    cal.appendChild(el("div", "dsal-vacio",
+      "Todavía no hay ninguna declaración que un check ejecutado haya puesto a prueba. " +
+      "Hasta que las haya, no hay nada que medir — y encender esto no cambiaría nada."));
+  } else {
+    const t = el("table", "dtab");
+    t.innerHTML = "<tr><th>emisor</th><th>declaró</th><th>a prueba</th><th>desmentidas</th><th>piso</th><th></th></tr>";
+    (c.emisores || []).forEach(e => {
+      const tr = el("tr");
+      tr.innerHTML = `<td>${e.nombre}</td><td class="num">${e.declaraciones}</td>` +
+        `<td class="num">${e.comprobadas}</td><td class="num">${e.desmentidas}</td>` +
+        `<td class="num">${(e.cota_inferior * 100).toFixed(1)}%</td>` +
+        `<td class="motivo">${e.penalizado ? "su palabra ya no alcanza" : (e.suficiente ? "dentro de lo tolerado" : "muestra chica")}</td>`;
+      t.appendChild(tr);
+    });
+    cal.appendChild(t);
+  }
+  cont.appendChild(cal);
+
+  // Ventanas: las que se usan contra las que dirían los datos.
+  const vt = el("div", "dsal");
+  vt.appendChild(el("div", "dp-rot", "Ventanas de frescura" + (s.supervivencia_activa ? " · derivadas de los datos" : " · de la tabla")));
+  const t = el("table", "dtab");
+  t.innerHTML = "<tr><th>tipo</th><th>en uso</th><th>los datos dicen</th><th>notas</th><th>fallaron</th><th></th></tr>";
+  (s.ventanas || []).forEach(v => {
+    const tr = el("tr");
+    tr.innerHTML = `<td>${v.tipo}</td><td class="num">${v.en_uso} d</td>` +
+      `<td class="num">${v.aplicable ? v.estimada + " d" : "—"}</td>` +
+      `<td class="num">${v.observaciones || 0}</td><td class="num">${v.fallos || 0}</td>` +
+      `<td class="motivo">${v.aplicable ? "" : (v.motivo || "")}</td>`;
+    t.appendChild(tr);
+  });
+  vt.appendChild(t);
+  cont.appendChild(vt);
+}
+
+function montarDeidad() {
+  const b = $("#deidadAbrir");
+  if (!b) return;
+  b.addEventListener("click", abrirDeidad);
+  const m = $("#deidadModal");
+  $("#deidadClose").addEventListener("click", () => m.classList.add("hidden"));
+  m.addEventListener("click", e => { if (e.target.id === "deidadModal") m.classList.add("hidden"); });
+  $("#deidadReset").addEventListener("click", async () => {
+    if (!confirm("Vuelve todos los parámetros a sus valores por defecto. ¿Seguimos?")) return;
+    await guardarParametro({ restaurar_todo: true });
+  });
+}
