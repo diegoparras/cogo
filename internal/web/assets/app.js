@@ -1261,6 +1261,36 @@ function notaCard(n) {
     stl.title = "Fresca hasta " + n.stale_at + " · después conviene revalidar (pestaña Vigencia).";
     head.appendChild(stl);
   }
+  // Quién decidió. Solo en decisiones y restricciones: en las demás la evidencia
+  // ya responde por la nota. "Lo propuso el agente" no es un reproche — es el
+  // dato que dice que eso se puede discutir.
+  if (n.origin) {
+    const esProp = n.origin === "agent";
+    const o = el("span", "nc-origen" + (esProp ? " prop" : ""), {
+      agent: "propuesta", human: "decidida", instrument: "medida", unrecorded: "sin origen",
+    }[n.origin] || n.origin);
+    o.title = {
+      agent: "La propuso un agente. Nadie con autoridad para elegir la eligió: se puede revisar.",
+      human: "La decidió una persona.",
+      instrument: "Salió de un instrumento: nadie la eligió, se midió.",
+      unrecorded: "No consta quién la decidió (se capturó antes de que COGO registrara el origen).",
+    }[n.origin] || "";
+    head.appendChild(o);
+  }
+  if (n.pinned) {
+    const p = el("span", "nc-fijada", "fijada");
+    p.title = "Fijada a mano: nunca sale de circulación, por vieja que quede.";
+    head.appendChild(p);
+  }
+  // Una nota latente salió del camino: no llega a los agentes. Tiene que verse
+  // ACÁ, porque el visor es el único lugar donde se puede recuperar, y algo que
+  // no se ve no se recupera.
+  if (n.latent) {
+    const l = el("span", "nc-latente", "latente");
+    l.title = (n.latent_reason || "") +
+      ". No entra en el pack ni en las búsquedas. Abrila o fijala para devolverla a circulación.";
+    head.appendChild(l);
+  }
   body.appendChild(head);
   body.appendChild(el("div", "nc-claim", n.claim || "—"));
   body.appendChild(el("div", "nc-reason", n.reason));

@@ -89,6 +89,7 @@ func cmdServe(args []string) error {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	visor := web.New(*dir, today, store)
 	visor.UsarParametros(pars) // el panel edita el mismo Set que lee el motor
+	visor.UsarRegistroDeUso(Consultadas)
 	if j, err := journalDe(*dir); err == nil {
 		visor.UsarJournal(j) // y lee el mismo registro, con su caché ya caliente
 	}
@@ -163,6 +164,11 @@ func newMCPServer(dir string) *mcp.Server {
 			return errResult(err), nil, nil
 		}
 		p := core.BuildPack(vault, contradictions(), core.PackOptions{Query: in.Query, Project: in.Project, Budget: in.Budget, Today: today(), Env: in.Env})
+		// Lo que entró en el pack se consumió. Es la señal que permite olvidar sin
+		// riesgo: una nota que ningún pack entrega hace medio año no la extraña
+		// nadie. Y es lo que DESPIERTA a una latente, porque la latencia se calcula
+		// —no se escribe— así que dejar de estar sin consultar alcanza.
+		Consultadas(p.Incluidas...)
 		savings.Add(dir, p.RawTokens-p.Tokens, today().String())
 		return textResult(p.Markdown), nil, nil
 	})
@@ -353,6 +359,7 @@ func newMCPServer(dir string) *mcp.Server {
 		if err != nil {
 			return errResult(err), nil, nil
 		}
+		Consultadas(in.ID) // abrir una nota por su id también la despierta
 		n, ok := vault[in.ID]
 		if !ok {
 			return errResult(fmt.Errorf("no note with id %q", in.ID)), nil, nil
@@ -471,6 +478,18 @@ func newMCPServer(dir string) *mcp.Server {
 			Check:        core.Check{Test: in.CheckTest, Status: "not_run"},
 			DependsOn:    in.DependsOn, Supersedes: in.Supersedes, CausedBy: in.CausedBy,
 			Scope: in.Scope,
+			// El origen se normaliza acá y no se toma crudo: un valor que no
+			// existe cae en `agent`, que es la suposición conservadora — quien
+			// está capturando ES un agente. Un typo no puede ser una forma de
+			// que una propuesta pase por decisión.
+			Origin: string(core.NormalizarOrigen(in.Origin)),
+		}
+		// Y si no declaró nada en una normativa, también es del agente. Dejarlo
+		// vacío lo mostraría como "no consta", que es la marca reservada para las
+		// notas escritas antes de que este campo existiera: usarla acá borraría
+		// la diferencia entre no haber podido declarar y no haber querido.
+		if note.Origin == "" && core.EsNormativa(note) {
+			note.Origin = string(core.OrigenAgente)
 		}
 		for _, e := range in.Evidence {
 			note.Evidence = append(note.Evidence, core.Evidence{Kind: e.Kind, Ref: e.Ref})
@@ -785,6 +804,7 @@ type captureIn struct {
 	DependsOn  []string          `json:"depends_on,omitempty" jsonschema:"ids of notes this one hard-depends on; a red dependency makes this note red too"`
 	Supersedes string            `json:"supersedes,omitempty" jsonschema:"id of a note this one replaces; the old note is archived (buried)"`
 	CausedBy   string            `json:"caused_by,omitempty" jsonschema:"id of the note that caused this finding"`
+	Origin     string            `json:"origin,omitempty" jsonschema:"human|agent|instrument — who ORIGINATED the claim, which is not who is writing the note. Set 'human' only when the person actually said it; 'agent' when you chose, proposed or inferred it; 'instrument' when it came out of a command, a test or a file. It matters most for decisions and constraints: those assert that somebody CHOSE, and no evidence can prove a choice. If you decided it yourself, say 'agent' — a proposal recorded honestly is more useful than a decision nobody made."`
 	Scope      map[string]string `json:"scope,omitempty" jsonschema:"the conditions under which the claim holds, on a vault shared across machines — e.g. {\"os\":\"windows\",\"commit\":\"abc123\",\"go\":\"1.25\"}. A claim true here may be false elsewhere; recording the scope keeps another machine from trusting it blindly."`
 }
 

@@ -60,6 +60,8 @@ type fmInputs struct {
 	CausedBy     string            `yaml:"caused_by,omitempty"`
 	Status       string            `yaml:"status,omitempty"`
 	Author       string            `yaml:"author,omitempty"`
+	Origin       string            `yaml:"origin,omitempty"`
+	Pinned       bool              `yaml:"pinned,omitempty"`
 	Scope        map[string]string `yaml:"scope,omitempty"`
 
 	// Notas de brecha (type: gap). Van con omitempty porque una nota común no
@@ -89,6 +91,8 @@ func MarshalNote(n *Note) ([]byte, error) {
 		CausedBy:   n.CausedBy,
 		Status:     n.Status,
 		Author:     n.Author,
+		Origin:     n.Origin,
+		Pinned:     n.Pinned,
 		Scope:      n.Scope,
 
 		Question:      n.Question,

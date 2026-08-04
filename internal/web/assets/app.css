@@ -793,3 +793,13 @@ canvas.graph-canvas:active { cursor: grabbing; }
   font-variant-numeric: tabular-nums; }
 .dtab .num { text-align: right; font-family: var(--mono); }
 .dtab .motivo { color: var(--muted); }
+
+/* Origen, fijado y latencia en la tarjeta de nota. Discretos: matizan el
+   semáforo, no compiten con él. */
+.nc-origen { font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--hairline); color: var(--muted); }
+.nc-origen.prop { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.nc-fijada { font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--hairline); color: var(--accent); }
+.nc-latente { font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  background: var(--card); color: var(--muted); border: 1px dashed var(--hairline); }

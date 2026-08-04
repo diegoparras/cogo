@@ -33,6 +33,17 @@ func (s *Server) UsarParametros(p *parametros.Set) { s.pars = p }
 // abriría uno propio en cada consulta, y abrir un journal es leerlo entero.
 func (s *Server) UsarJournal(j *journal.Journal) { s.registro = j }
 
+// UsarRegistroDeUso conecta el visor al registro de consultas. El humano que
+// mira una nota en el visor también la está consultando, y eso también despierta
+// a una latente: no habría por qué exigir que la consulta venga de un agente.
+func (s *Server) UsarRegistroDeUso(f func(ids ...string)) { s.anotarUso = f }
+
+func (s *Server) consultadas(ids ...string) {
+	if s.anotarUso != nil {
+		s.anotarUso(ids...)
+	}
+}
+
 func (s *Server) journal() (*journal.Journal, error) {
 	if s.registro != nil {
 		return s.registro, nil

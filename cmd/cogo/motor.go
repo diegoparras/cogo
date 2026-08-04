@@ -12,6 +12,7 @@ import (
 	"github.com/diegoparras/cogo/internal/motor"
 	"github.com/diegoparras/cogo/internal/parametros"
 	"github.com/diegoparras/cogo/internal/supervivencia"
+	"github.com/diegoparras/cogo/internal/uso"
 )
 
 // pars son los parámetros vigentes de este proceso. Los carga instalarMotor y
@@ -41,7 +42,24 @@ func instalarParametros(dir string) {
 		return pars.Entero(clave), true
 	})
 	core.SetCaracteresDistintivos(func() int { return pars.Entero("ancla.caracteres_minimos") })
+
+	// El olvido necesita saber qué se consulta. Sin este registro, core.Latente
+	// no tiene con qué decidir y deja todo en circulación, que es el
+	// comportamiento correcto ante la falta de datos.
+	registroUso = uso.Abrir(dir)
+	core.SetUso(func(id string, ahora time.Time) time.Duration {
+		return registroUso.SinConsultar(id, ahora)
+	})
+	core.SetDiasSinConsultar(func() int { return pars.Entero("olvido.dias_sin_consultar") })
 }
+
+// registroUso es el registro de consultas del vault, compartido por el proceso.
+var registroUso = uso.Abrir("")
+
+// Consultadas anota que estas notas se entregaron a alguien. Es lo que despierta
+// a una nota latente: consultarla la saca de "sin consultar", y como la latencia
+// se calcula y no se escribe, con eso vuelve al camino sola.
+func Consultadas(ids ...string) { registroUso.Consultada(ids...) }
 
 // registro es el journal del vault, compartido por todo el proceso.
 //

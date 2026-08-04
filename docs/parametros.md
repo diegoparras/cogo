@@ -55,6 +55,84 @@ amarillo; al doble, expira a rojo.
 
 ---
 
+## Olvido · cuándo una nota sale del camino
+
+COGO calificaba todo lo que entraba y no sacaba nada nunca. El color aísla lo
+rojo pero no lo elimina: sigue existiendo, sigue costando, sigue apareciendo. Un
+vault a tres años son miles de notas, casi todas vencidas, todas ahí — y lo
+muerto tapa a lo vivo.
+
+**Olvidar por antigüedad sería el error obvio**, porque la nota más vieja del
+vault puede ser la que más se consulta. COGO puede hacerlo mejor porque sabe
+cosas que un contador de fechas no. Una nota se vuelve **latente** cuando se dan
+todas a la vez:
+
+| | Por qué |
+|---|---|
+| expiró | pasó el **doble** de su ventana. Una apenas vencida todavía se re-verifica |
+| nadie depende de ella | si algo se apoya, sacarla lo dejaría apoyado en el aire |
+| nadie la consultó en 180 días | la condición que hace que esto no sea olvidar por edad |
+
+Y **nunca** salen del camino: las restricciones (sostienen todo lo demás), las
+fijadas a mano (`pinned: true`), las que tienen una contradicción abierta
+(esconderla escondería el conflicto) y las preguntas abiertas.
+
+**Latente no es borrada.** La nota sigue en el vault, sigue siendo un archivo,
+sigue abriéndose por su id, y se ve en el visor con su motivo. Lo que cambia es
+que deja de entrar en el `pack` y en las búsquedas.
+
+**Y se calcula, no se escribe** — igual que el color. Nadie marca una nota como
+latente: la condición se evalúa cada vez. Por eso despertar no tiene ceremonia:
+consultala y deja de estar sin consultar, así que deja de ser latente. No hay un
+estado que alguien tenga que acordarse de revertir.
+
+> Para que esto no sea adivinar, COGO registra **qué notas se consultan**: las
+> que entran en un `pack` y las que se abren por su id. Aparecer en una búsqueda
+> no cuenta — eso mediría coincidencias léxicas, no uso. El registro guarda su
+> propia fecha de inicio, así que instalar esta versión no vuelve latente a medio
+> vault el primer día: una nota sin registro no es una que nadie consultó, es una
+> que nadie consultó *desde que se empezó a mirar*.
+
+---
+
+## Origen · quién decidió
+
+Un agente propone Fastify. Vos decís "dale". El agente captura *"se decidió usar
+Fastify"*, con su autor y su evidencia. Mañana lo lee de vuelta como un hecho
+establecido del proyecto y construye encima. En cada vuelta, una opinión se lava
+en hecho.
+
+Los ejes que COGO ya tenía no lo ven: la evidencia puede ser impecable —un
+`file_read` del `package.json` que el propio agente escribió— y la procedencia
+dice quién corrió el check, no quién tuvo la idea.
+
+Por eso las notas normativas (`decision`, `constraint`) llevan **origen**:
+
+```
+origin: human       lo decidió una persona
+origin: agent       lo propuso el agente
+origin: instrument  salió de un instrumento: nadie lo eligió, se midió
+```
+
+Solo esos dos tipos. Un `bug` o un `runbook` describen cómo es el mundo, y ahí
+la evidencia responde; una decisión afirma que alguien **eligió**, y ninguna
+salida de comando puede probar una elección.
+
+**No baja el color, y es deliberado.** Un techo obligaría a ratificar a mano cada
+decisión que tome un agente, y COGO se juega en no agregar tareas: una
+herramienta que pide trabajo para seguir siendo confiable termina no usándose. La
+etiqueta da casi todo el valor — el que lee sabe que eso se puede revisar. Y si
+con el tiempo resulta que verla siempre lleva a actuar, ponerle techo es un
+cambio de una línea; sacárselo después de acostumbrar a un equipo, no.
+
+En el pack se ve así:
+
+```
+- origin: **proposed by an agent** — no human chose this; it is open to revision
+```
+
+---
+
 ## Acciones · cuánto respaldo pide cada una
 
 Acá vive la fase 7, y es la mitad que le faltaba al sistema. COGO decía cuánto

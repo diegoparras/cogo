@@ -61,6 +61,8 @@ type Server struct {
 	pars *parametros.Set
 	// registro es el journal compartido del proceso (ver parametros.go).
 	registro *journal.Journal
+	// anotarUso registra qué notas se consultaron (ver internal/uso).
+	anotarUso func(ids ...string)
 
 	mu             sync.RWMutex
 	provider       llm.Provider
@@ -1067,6 +1069,7 @@ func (s *Server) handlePack(w http.ResponseWriter, r *http.Request) {
 		Budget:  budget,
 		Today:   s.today(),
 	})
+	s.consultadas(p.Incluidas...) // el humano también consume, y también despierta
 	savings.Add(s.dir, p.RawTokens-p.Tokens, s.today().String())
 	writeJSON(w, map[string]any{
 		"markdown": p.Markdown, "tokens": p.Tokens, "raw_tokens": p.RawTokens,

@@ -115,6 +115,16 @@ type Note struct {
 	// another machine. Free-form keys; ScopeConflict compares against an env.
 	Scope map[string]string `yaml:"scope,omitempty"`
 
+	// El eje de ORIGEN: quién originó la afirmación, distinto de quién escribió
+	// la nota (Author) y de quién atestiguó el check (Check.AttestedBy). Ver
+	// origen.go: es lo que impide que un agente lave su propia propuesta en una
+	// decisión del proyecto.
+	Origin string `yaml:"origin,omitempty" json:"origin,omitempty"`
+	// Pinned saca a la nota del olvido, para siempre. Es la salida de emergencia
+	// del que sabe algo que las reglas no: "esto no se toca aunque parezca
+	// muerto". Ver latencia.go — no afecta al color, solo a si sale del camino.
+	Pinned bool `yaml:"pinned,omitempty" json:"pinned,omitempty"`
+
 	// ---- notas de brecha (type: gap) ----
 	//
 	// Una brecha no es una nota sin evidencia: es una PREGUNTA ABIERTA. La

@@ -160,6 +160,15 @@ var Registro = []Def{
 		"La ventana se pone donde ya falló este porcentaje de las notas del tipo. 20% significa: fresca mientras 4 de cada 5 notas parecidas seguían siendo ciertas.",
 		"Subirlo alarga las ventanas: se acepta que más notas ya estén mal antes de pedir revisión.", true),
 
+	// ── Olvido ──────────────────────────────────────────────────────────────
+	// Una nota vencida, sin dependientes y que nadie consulta sale del camino:
+	// deja de entrar en el pack y en las búsquedas. No se borra — sigue siendo un
+	// archivo y se abre por su id. Es lo único que impide que un vault de tres
+	// años sea mil notas muertas tapando a las cincuenta vivas.
+	entero("olvido.dias_sin_consultar", "días sin consultar antes de salir del camino", 180, 0, 3650, "días",
+		"Cuánto tiempo tiene que pasar sin que nadie consulte una nota YA VENCIDA para que deje de entrar en el pack. Cero apaga el olvido por completo.",
+		"Bajarlo saca notas de circulación antes; subirlo las conserva más tiempo aunque nadie las use. En cero, el vault crece para siempre.", false),
+
 	// ── Ejecución ───────────────────────────────────────────────────────────
 	entero("runner.timeout_maximo", "techo del timeout de un check", 15, 1, 240, "minutos",
 		"Ningún check declarado en runner.yaml puede pedir más que esto.",
@@ -214,11 +223,12 @@ func grupoDe(clave string) string {
 
 // GruposOrdenados es el orden en que el panel muestra las secciones: de lo que
 // más se toca a lo que casi nunca.
-var GruposOrdenados = []string{"frescura", "accion", "ancla", "calibracion", "supervivencia", "runner"}
+var GruposOrdenados = []string{"frescura", "olvido", "accion", "ancla", "calibracion", "supervivencia", "runner"}
 
 // TituloGrupo es cómo se llama cada sección para un humano.
 var TituloGrupo = map[string]string{
 	"frescura":      "Cuánto dura fresca cada cosa",
+	"olvido":        "Cuándo una nota sale del camino",
 	"accion":        "Cuánto respaldo pide cada tipo de acción",
 	"ancla":         "Cuándo un archivo que cambió invalida una nota",
 	"calibracion":   "Cuánto vale la palabra de cada emisor",

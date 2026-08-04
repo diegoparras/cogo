@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Pack is a budgeted, color-aware context digest for one query. It is what an
@@ -20,6 +21,14 @@ type Pack struct {
 	Reds      int
 	Mistakes  int
 	Dropped   int // notes left out to stay under budget
+	// Incluidas son los ids que efectivamente entraron. Es lo que permite
+	// registrar el uso: una nota entró en un pack = alguien la consumió. Sin
+	// esto, olvidar tendría que decidirse por la edad. Ver internal/uso.
+	Incluidas []string
+	// Latentes es cuántas quedaron fuera del camino por olvido. Se informa
+	// aparte de Dropped porque son cosas distintas: una salió por presupuesto y
+	// puede volver mañana; la otra salió porque nadie la usa.
+	Latentes int
 }
 
 // PackOptions parameterizes a pack. Budget is an approximate token ceiling on
@@ -46,10 +55,18 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	// First pass: the candidate pool (visible, project-filtered). Its stats feed
 	// the BM25 ranker, and its full bodies are the "read it all" baseline used for
 	// the token-savings figure.
+	// La latencia se resuelve sobre el vault ENTERO, antes de filtrar por
+	// proyecto: una de sus condiciones es que nadie dependa de la nota, y un
+	// dependiente puede estar en otro proyecto.
+	latentes := Latentes(vault, contradictions, opts.Today, time.Now())
+
 	var pool []*Note
 	for id, n := range vault {
 		if hidden[id] || (opts.Project != "" && n.Project != opts.Project) {
 			continue // archived/retracted/superseded never feed an agent's context
+		}
+		if latentes[id].Latente {
+			continue // vencida, sin dependientes y sin consultar: fuera del camino
 		}
 		pool = append(pool, n)
 	}
@@ -92,6 +109,7 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	// green was left out. Within a tier we may skip a big note and keep a later
 	// smaller one.
 	var greens, yellows, mistakes, reds, brechas []string
+	var incluidas []string
 	running, dropped := 0, 0
 	droppedRank := 99
 	for _, c := range cands {
@@ -104,6 +122,7 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 			continue
 		}
 		running += c.toks
+		incluidas = append(incluidas, c.n.ID)
 		switch c.v.Color {
 		case Green:
 			greens = append(greens, c.block)
@@ -172,7 +191,19 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 		Reds:      len(reds),
 		Mistakes:  len(mistakes),
 		Dropped:   dropped,
+		Incluidas: incluidas,
+		Latentes:  contarLatentes(latentes),
 	}
+}
+
+func contarLatentes(l map[string]Latencia) int {
+	n := 0
+	for _, x := range l {
+		if x.Latente {
+			n++
+		}
+	}
+	return n
 }
 
 // BuildConstraints renders the load-bearing memory an agent must NOT lose across
@@ -232,6 +263,29 @@ func renderBlock(n *Note, v Verdict, env map[string]string) string {
 		return fmt.Sprintf("- **%s**: %s\n", n.ID, claim)
 	default: // Red
 		return fmt.Sprintf("- **%s**: %s — _unverified: %s_\n", n.ID, claim, v.Reason)
+	}
+}
+
+// lineaOrigen dice quién originó una decisión o una restricción, cuando eso no
+// se puede dar por sentado.
+//
+// Solo aparece en las normativas, y solo cuando hay algo que advertir. Un `bug`
+// o un `runbook` describen el mundo y la evidencia ya responde por ellos; una
+// decisión afirma que alguien ELIGIÓ, y ahí saber quién es la mitad del dato. El
+// agente que lee "proposed by an agent" sabe que puede discutirlo; sin esa línea
+// lo trataría como algo ya resuelto.
+func lineaOrigen(n *Note) string {
+	switch {
+	case !EsNormativa(n):
+		return ""
+	case EsPropuesta(n):
+		return "\n- origin: **proposed by an agent** — no human chose this; it is open to revision"
+	case OrigenDe(n) == OrigenHumano:
+		return "\n- origin: decided by a human"
+	case OrigenDe(n) == OrigenInstrumento:
+		return "\n- origin: measured, not chosen"
+	default:
+		return "\n- origin: unrecorded — nobody knows who decided this"
 	}
 }
 
