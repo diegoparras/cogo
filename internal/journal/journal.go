@@ -129,8 +129,24 @@ func (j *Journal) AppendEjecucion(e Event) (Event, error) {
 // escribir completa seq, tx_time y el encadenado; si valid_time viene vacío, se
 // asume que pasó cuando se registró.
 func (j *Journal) escribir(e Event) (Event, error) {
+	// El orden importa: primero el candado del proceso, que serializa las
+	// goroutines, y recién después el cerrojo del sistema, que serializa los
+	// procesos. Al revés, cada goroutine competiría por el cerrojo del sistema
+	// contra las suyas propias, que es caro y no hace falta.
 	j.mu.Lock()
 	defer j.mu.Unlock()
+
+	c, err := bloquear(j.dir, esperaCerrojo)
+	if err != nil {
+		return Event{}, err
+	}
+	defer c.liberar()
+
+	// Con el cerrojo en la mano, la punta del registro se relee del disco. El
+	// número de secuencia que este proceso tiene en memoria puede haber quedado
+	// viejo si otro escribió mientras tanto, y escribir sobre un número ya usado
+	// es lo único que este cerrojo existe para impedir.
+	j.ponerseAlDia()
 
 	now := j.ahora().UTC()
 	e.TxTime = now
@@ -175,8 +191,13 @@ func (j *Journal) escribir(e Event) (Event, error) {
 // la siguiente evaluación — justo después de capturar una nota, que es cuando
 // alguien está mirando.
 //
-// El append es sobre una copia porque el slice memorizado se entrega a los
-// llamadores: pisarlo por atrás cambiaría datos que otro está leyendo.
+// El append es directo, sin copiar: lo que se entrega a los llamadores es una
+// VISTA recortada (ver vista), así que la capacidad de sobra que usa este append
+// queda fuera de lo que cualquiera de ellos puede ver o tocar.
+//
+// La versión anterior copiaba el registro entero en cada escritura para poder
+// entregarlo directo. Era correcta, y era O(n) por evento: sobre un registro de
+// veinte mil, cada captura movía cuatro megabytes.
 func (j *Journal) extenderCache(e Event) {
 	h, err := j.huella()
 	j.muCache.Lock()
@@ -199,7 +220,7 @@ func (j *Journal) extenderCache(e Event) {
 	case ultimo == e.Seq:
 		j.cacheHuella = h // ya estaba: solo hay que ponerlo al día
 	case ultimo == e.Seq-1:
-		j.cacheEvs = append(j.cacheEvs[:len(j.cacheEvs):len(j.cacheEvs)], e)
+		j.cacheEvs = append(j.cacheEvs, e)
 		j.cacheHuella = h
 	default:
 		j.cacheHuella = "" // desfasado por algo que no fue esta escritura: que relea
@@ -229,6 +250,26 @@ func (j *Journal) huella() (string, error) {
 	return b.String(), nil
 }
 
+// ponerseAlDia adopta la punta que está en el disco si va más adelante que la
+// que este proceso recuerda. Se apoya en el caché de All: cuando nadie más
+// escribió, la huella coincide y no se lee nada.
+//
+// Solo adopta hacia ADELANTE. Un disco que quedó ATRÁS de la memoria no es otro
+// proceso escribiendo: es un archivo truncado o restaurado por atrás, y ahí
+// reescribir números ya usados empeoraría las cosas. Se sigue de largo y que lo
+// denuncie Verificar.
+func (j *Journal) ponerseAlDia() {
+	evs, err := j.All()
+	if err != nil || len(evs) == 0 {
+		return
+	}
+	u := evs[len(evs)-1]
+	if u.Seq >= j.seq {
+		j.seq = u.Seq
+		j.prev = u.digest()
+	}
+}
+
 // All devuelve todos los eventos, ordenados por número de secuencia. Los
 // archivos son por mes y se leen en orden, así que la cadena se reconstruye
 // aunque haya rotado.
@@ -246,7 +287,7 @@ func (j *Journal) All() ([]Event, error) {
 	j.muCache.Lock()
 	defer j.muCache.Unlock()
 	if h != "" && h == j.cacheHuella {
-		return j.cacheEvs, nil
+		return j.vista(), nil
 	}
 
 	var out []Event
@@ -269,12 +310,20 @@ func (j *Journal) All() ([]Event, error) {
 		}
 	}
 	sort.SliceStable(out, func(i, k int) bool { return out[i].Seq < out[k].Seq })
-	// Se recorta a su largo exacto antes de guardarlo: así, si un llamador le
-	// hace append al resultado, Go reserva un array nuevo en vez de escribir
-	// sobre el que están leyendo los demás.
-	j.cacheEvs = out[:len(out):len(out)]
+	j.cacheEvs = out
 	j.cacheHuella = h
-	return j.cacheEvs, nil
+	return j.vista(), nil
+}
+
+// vista es lo que se le entrega a un llamador: el registro memorizado recortado
+// a su largo exacto.
+//
+// El recorte es lo que hace seguro compartirlo. Un slice con capacidad de sobra
+// deja que quien le haga append escriba sobre el array que están leyendo los
+// demás; uno donde largo y capacidad coinciden obliga a Go a reservar uno nuevo.
+// Y no cuesta nada: es un encabezado de slice, no una copia.
+func (j *Journal) vista() []Event {
+	return j.cacheEvs[:len(j.cacheEvs):len(j.cacheEvs)]
 }
 
 // Desde devuelve los eventos posteriores a un número de secuencia. Es lo que
@@ -298,7 +347,18 @@ func (j *Journal) Verificar() error {
 		return err
 	}
 	prev := ""
-	for _, e := range evs {
+	var anterior uint64
+	for i, e := range evs {
+		// Los números repetidos o que retroceden tienen una causa conocida —dos
+		// procesos escribiendo el mismo registro— y merecen decirlo con nombre.
+		// Un "la cadena se rompe" a secas manda a buscar el problema al lugar
+		// equivocado.
+		if i > 0 && e.Seq <= anterior {
+			return fmt.Errorf("journal: el evento %d (nota %q) repite o retrocede el número de secuencia %d. "+
+				"Es lo que pasa cuando dos procesos escriben el mismo vault sin coordinarse",
+				e.Seq, e.NoteID, anterior)
+		}
+		anterior = e.Seq
 		if e.PrevDigest != prev {
 			return fmt.Errorf("journal: la cadena se rompe en el evento %d (nota %q): esperaba prev=%q y tiene %q",
 				e.Seq, e.NoteID, prev, e.PrevDigest)

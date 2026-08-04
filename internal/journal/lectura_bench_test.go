@@ -69,3 +69,23 @@ func BenchmarkAll(b *testing.B) {
 		})
 	}
 }
+
+// Escribir ahora toma un cerrojo del sistema y relee la punta del registro. Es
+// el precio de que dos procesos no se pisen; conviene tenerlo medido y no
+// supuesto.
+func BenchmarkAppend(b *testing.B) {
+	for _, n := range []int{0, 20_000} {
+		vault := journalCon(b, n)
+		j, err := Open(vault)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Run(fmt.Sprintf("sobre-%d-eventos", n), func(b *testing.B) {
+			for b.Loop() {
+				if _, err := j.Append(Event{NoteID: "n", Kind: "CheckDeclared", Emitter: "bench"}); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

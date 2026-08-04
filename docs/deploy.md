@@ -102,6 +102,25 @@ Pestaña **Mounts → Add Mount**:
 
 > Sin este paso, **cada actualización te borra las notas.**
 
+### 3.4.1 Una sola instancia por vault
+
+COGO está pensado para que **un vault lo escriba un solo COGO**. No hace falta
+que hagas nada: es lo que EasyPanel hace por default con una app de una réplica.
+
+Vale la pena saber por qué, porque hay un momento en que deja de ser obvio: un
+**despliegue rodante** levanta el contenedor nuevo antes de bajar el viejo, y por
+unos segundos hay dos COGO con el mismo volumen montado.
+
+Ese caso está cubierto. Las escrituras del registro de eventos toman un cerrojo
+del sistema operativo, así que dos procesos sobre el mismo volumen se turnan en
+vez de pisarse los números de secuencia. Se libera solo si un proceso muere, y
+si algún día el registro quedara trabado de verdad, la escritura falla en cinco
+segundos con un mensaje que lo dice — no se cuelga.
+
+Lo que **no** está cubierto es dos máquinas distintas contra un NFS compartido:
+ahí los cerrojos de red no son confiables. Si necesitás varias instancias, dales
+un vault a cada una y federalas; no compartas el volumen.
+
 ### 3.5 Dominio + HTTPS
 Pestaña **Domains → Add Domain**: tu dominio, **Port `8080`** (el interno de COGO).
 EasyPanel le pone el certificado Let's Encrypt solo.
