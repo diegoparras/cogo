@@ -26,7 +26,11 @@ const (
 	EvResolved  = "resolved"
 	EvBroken    = "broken"
 	EvUnchecked = "unchecked"
-	EvDrifted   = "drifted" // resolves, but the file changed since the note was verified
+	EvDrifted   = "drifted" // resolves, but the file changed WHERE the note cited
+	// EvMoved: el archivo cambió, pero no lo que la nota citaba — o lo citado
+	// sigue igual y solo cambió de línea. No baja el color; se informa para que
+	// alguien pueda actualizar la cita si quiere. Ver ancla.go.
+	EvMoved = "moved"
 )
 
 // a trailing :line, :line-line, #Lnn or "line 33-41" locator, stripped before stat.
@@ -150,30 +154,79 @@ func ResolveEvidence(vault map[string]*Note, roots EvidenceRoots) {
 	for _, n := range vault {
 		root := roots.Root(n.Project)
 		for i := range n.Evidence {
-			status, path := resolveRefPath(n.Evidence[i].Ref, root)
+			e := &n.Evidence[i]
+			status, path := resolveRefPath(e.Ref, root)
 			// Drift: evidence that still resolves but whose content changed since
 			// the stamped baseline no longer supports the note the way it did when
 			// verified. The current hash is the local file's, or GitHub's blob SHA.
-			if status == EvResolved && n.Evidence[i].Hash != "" {
+			if status == EvResolved && e.Hash != "" {
 				cur := ""
 				if path != "" {
 					cur = fileHash(path)
-				} else if isGitHubRef(n.Evidence[i].Ref) {
-					_, cur = githubStatusHash(n.Evidence[i].Ref)
+				} else if isGitHubRef(e.Ref) {
+					_, cur = githubStatusHash(e.Ref)
 				}
-				if cur != "" && cur != n.Evidence[i].Hash {
-					status = EvDrifted
+				switch {
+				case cur == "":
+					// no se pudo leer: no se castiga lo que no se pudo ver
+				case cur != e.Hash:
+					status, e.Detail = juzgarCambio(path, e)
+				default:
+					// El archivo está idéntico a su línea base. Es el único momento
+					// en que el ancla se puede calcular con certeza: lo que dice hoy
+					// la región citada es lo que decía cuando se verificó. Anclar
+					// acá es lo que le da materialidad a las notas viejas, que se
+					// escribieron antes de que esto existiera, sin re-verificar nada
+					// ni cambiarle el color a nadie.
+					anclarSiFalta(path, e)
 				}
 			}
-			n.Evidence[i].Status = status
+			e.Status = status
 		}
 	}
 }
 
-// DriftedRefs devuelve las citas cuya evidencia cambió desde la última vez que
-// se verificó la nota. Es lo que hay que mostrarle a alguien antes de dejarlo
-// re-verificar: son exactamente las afirmaciones que ya no descansan sobre lo
-// mismo que descansaban.
+// juzgarCambio decide si el cambio de un archivo citado alcanza a la cita.
+//
+// Para GitHub no se puede: la API devuelve el SHA del blob, no el contenido, y
+// sin contenido no hay región que comparar. Queda en drifted, que es lo que
+// corresponde cuando no se puede comprobar que el cambio fue inocuo.
+func juzgarCambio(path string, e *Evidence) (status, detalle string) {
+	if path == "" {
+		return EvDrifted, "el archivo citado cambió"
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return EvDrifted, "el archivo citado cambió"
+	}
+	c := AnalizarCita(b, e.Ref, e.Anchor, e.AnchorAt)
+	if c.Material {
+		return EvDrifted, c.Motivo
+	}
+	return EvMoved, c.Motivo
+}
+
+// anclarSiFalta calcula el ancla de una cita cuyo archivo sigue idéntico a la
+// línea base. Es en memoria: se persiste sola la próxima vez que la nota se
+// escriba, y mientras tanto ya sirve, porque el vault vive cargado.
+func anclarSiFalta(path string, e *Evidence) {
+	if e.Anchor != "" || path == "" {
+		return
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	if a, at, ok := Anclar(b, e.Ref); ok {
+		e.Anchor, e.AnchorAt = a, at
+	}
+}
+
+// DriftedRefs devuelve las citas cuyo archivo cambió JUSTO DONDE la nota citaba.
+// Es lo que hay que mostrarle a alguien antes de dejarlo re-verificar: son
+// exactamente las afirmaciones que ya no descansan sobre lo mismo que
+// descansaban. Las que solo se corrieron de línea no están acá — para eso está
+// MovedRefs.
 func DriftedRefs(n *Note) []string {
 	var out []string
 	for _, e := range n.Evidence {
@@ -183,6 +236,27 @@ func DriftedRefs(n *Note) []string {
 	}
 	return out
 }
+
+// MovedRefs devuelve las citas que siguen diciendo lo mismo aunque el archivo
+// haya cambiado, con la explicación de qué pasó. No son un problema: son una
+// oportunidad de actualizar el número de línea antes de que envejezca.
+func MovedRefs(n *Note) map[string]string {
+	var out map[string]string
+	for _, e := range n.Evidence {
+		if e.Status == EvMoved {
+			if out == nil {
+				out = map[string]string{}
+			}
+			out[e.Ref] = e.Detail
+		}
+	}
+	return out
+}
+
+// HayDerivaMaterial dice si alguna cita de la nota dejó de estar respaldada por
+// lo que citaba. Exportada porque los dos motores la necesitan y ninguno de los
+// dos debería reimplementar el criterio.
+func HayDerivaMaterial(n *Note) bool { return hasDriftedEvidence(n.Evidence) }
 
 // StampNewEvidenceHashes establece la línea base SOLO donde todavía no había
 // una. Es lo que corresponde al verificar: fija el punto de comparación de la
@@ -194,9 +268,13 @@ func DriftedRefs(n *Note) []string {
 // olvidaba, en el mismo acto, aquello de lo que debía avisar.
 func StampNewEvidenceHashes(n *Note, roots EvidenceRoots) {
 	for i := range n.Evidence {
-		if n.Evidence[i].Hash != "" {
+		if n.Evidence[i].Hash != "" && n.Evidence[i].Status != EvMoved {
 			continue // ya tiene línea base: dejarla es lo que conserva el drift
 		}
+		// La excepción es la evidencia que solo se movió: ahí COGO ya comprobó que
+		// el texto citado es idéntico, así que no hay ningún aviso pendiente que
+		// re-estampar pudiera tapar. Actualizar la línea base es lo que evita que
+		// la nota quede analizándose contra un archivo que hace meses no existe.
 		stampOne(n, i, roots)
 	}
 }
@@ -215,16 +293,29 @@ func StampEvidenceHashes(n *Note, roots EvidenceRoots) {
 // del contenido para un archivo local. La evidencia que no es un archivo queda
 // sin hash, y por eso nunca deriva.
 func stampOne(n *Note, i int, roots EvidenceRoots) {
-	if isGitHubRef(n.Evidence[i].Ref) {
-		if status, h := githubStatusHash(n.Evidence[i].Ref); status == EvResolved && h != "" {
-			n.Evidence[i].Hash = h
+	e := &n.Evidence[i]
+	if isGitHubRef(e.Ref) {
+		if status, h := githubStatusHash(e.Ref); status == EvResolved && h != "" {
+			e.Hash = h
 		}
 		return
 	}
-	if status, path := resolveRefPath(n.Evidence[i].Ref, roots.Root(n.Project)); status == EvResolved && path != "" {
-		if h := fileHash(path); h != "" {
-			n.Evidence[i].Hash = h
-		}
+	status, path := resolveRefPath(e.Ref, roots.Root(n.Project))
+	if status != EvResolved || path == "" {
+		return
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	h := fnv.New64a()
+	_, _ = h.Write(b)
+	e.Hash = fmt.Sprintf("%016x", h.Sum64())
+	// El ancla se toma junto con la línea base, del mismo contenido: son las dos
+	// mitades de la misma pregunta —qué cambió y si eso te toca— y tomarlas en
+	// momentos distintos las dejaría hablando de archivos distintos.
+	if a, at, ok := Anclar(b, e.Ref); ok {
+		e.Anchor, e.AnchorAt = a, at
 	}
 }
 

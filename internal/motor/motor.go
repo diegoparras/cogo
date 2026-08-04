@@ -115,10 +115,19 @@ func color(e confidence.Estado) core.Color {
 // cuando una nota cayó por una dependencia, lo que hay que decir es cuál — si no,
 // el usuario ve "rojo" sin saber dónde mirar.
 func razon(final confidence.Estado, n *core.Note, propio confidence.Estado) string {
-	if final != propio {
-		return fmt.Sprintf("%s — y además depende de una nota más débil", explicar(propio))
+	base := explicar(propio)
+	// La deriva material entra al retículo como un techo, y el techo a secas
+	// dice "todavía no se ejecutó ni se declaró" — que en este caso es falso: se
+	// declaró, y después cambió el archivo. Decir cuál es lo que convierte el
+	// amarillo en algo que se puede arreglar.
+	if propio == confidence.CheckDeclared && core.HayDerivaMaterial(n) {
+		base = fmt.Sprintf("cambió lo que la nota cita (%s): la evidencia ya no la respalda igual",
+			strings.Join(core.DriftedRefs(n), ", "))
 	}
-	return explicar(final)
+	if final != propio {
+		return base + " — y además depende de una nota más débil"
+	}
+	return base
 }
 
 func explicar(e confidence.Estado) string {

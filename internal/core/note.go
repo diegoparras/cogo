@@ -39,11 +39,21 @@ type Evidence struct {
 	// verification, the note can no longer be green — the evidence moved under it.
 	// Empty for non-file evidence or notes never verified through COGO.
 	Hash string `yaml:"hash,omitempty" json:"-"`
+	// Anchor es la huella de la REGIÓN que la cita señala, y AnchorAt el tramo de
+	// líneas del que se tomó. Juntos son lo que permite distinguir un archivo que
+	// cambió de una cita que cambió: sin ellos, tocar la línea 3 invalida una nota
+	// que citaba la 164. Ver ancla.go.
+	Anchor   string `yaml:"anchor,omitempty" json:"-"`
+	AnchorAt string `yaml:"anchor_at,omitempty" json:"-"`
 	// Status is computed at runtime by ResolveEvidence (not persisted): whether
 	// the ref actually points at something real. A "broken" item stops counting
 	// toward the note's color — that is the difference between an honest green
-	// and a claimed one. "drifted" = resolves, but changed since Hash was stamped.
-	Status string `yaml:"-" json:"status,omitempty"` // resolved | broken | unchecked | drifted
+	// and a claimed one. "drifted" = the file changed WHERE the note cited;
+	// "moved" = it changed elsewhere, or the citation just shifted lines.
+	Status string `yaml:"-" json:"status,omitempty"` // resolved | broken | unchecked | drifted | moved
+	// Detail explica el status en una frase, cuando hay algo que explicar. No se
+	// persiste: se recalcula, como el color.
+	Detail string `yaml:"-" json:"detail,omitempty"`
 }
 
 // Check is the minimal test that would verify the claim.

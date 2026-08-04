@@ -239,7 +239,8 @@ func (e *evaluator) compute(n *Note) Verdict {
 	// YELLOW — not red, but something keeps it below green.
 	switch {
 	case hasDriftedEvidence(n.Evidence):
-		return Verdict{Yellow, "la evidencia citada cambió desde la última verificación — re-verificá", staleAt}
+		return Verdict{Yellow, fmt.Sprintf("cambió lo que la nota cita (%s) — re-verificá",
+			strings.Join(DriftedRefs(n), ", ")), staleAt}
 	case tier == TierReported || tier == TierReasoned:
 		return Verdict{Yellow, "la evidencia es reportada o razonada (tope: amarillo)", staleAt}
 	case n.Check.Status != "passed": // tier is observed here

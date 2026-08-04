@@ -61,6 +61,13 @@ type Divergencia struct {
 //
 // Vive acá y no en la máquina porque no se deriva de eventos: se lee de la nota.
 func TechoPorEvidencia(n *core.Note) confidence.Estado {
+	// La evidencia sigue existiendo, pero ya no dice lo que decía cuando se
+	// verificó: el archivo cambió justo donde la nota se apoyaba. No es lo mismo
+	// que no tener evidencia —la cita resuelve— pero tampoco alcanza para lo más
+	// alto. Tope amarillo, hasta que alguien la mire.
+	if core.HayDerivaMaterial(n) {
+		return confidence.CheckDeclared
+	}
 	switch core.TierDeEvidencia(n.Evidence) {
 	case core.TierObserved:
 		return confidence.Verified // sin techo: puede llegar arriba de todo

@@ -1998,17 +1998,20 @@ function relField(label, node) {
 }
 
 // paintEvBadge pinta el resultado del resolver de evidencia en una fila del editor.
-function paintEvBadge(node, status) {
+function paintEvBadge(node, status, detail) {
   const map = {
     resolved: ["✓ resuelve", "ev-status ok", "El archivo citado existe."],
-    drifted: ["⟳ cambió", "ev-status warn", "El archivo citado cambió desde la última verificación → la nota baja a amarillo hasta que la re-verifiques."],
+    moved: ["✓ sigue igual", "ev-status ok", "El archivo cambió, pero no en lo que esta nota cita. No baja el color."],
+    drifted: ["⟳ cambió", "ev-status warn", "Cambió justo lo que la nota cita → baja a amarillo hasta que la re-verifiques."],
     broken: ["✗ no resuelve", "ev-status bad", "El archivo citado no existe → esta evidencia NO cuenta para el color."],
     unchecked: ["— sin chequear", "ev-status muted", "COGO no puede verificar esta ref sin conexión (log, comando, URL o ruta sin raíz)."],
   };
   const [text, className, title] = map[status] || ["", "ev-status", ""];
   node.textContent = text;
   node.className = className;
-  node.title = title;
+  // El detalle es específico de ESTA cita ("ahora en la línea 210"); el título
+  // genérico solo explica qué significa el estado. Gana el específico.
+  node.title = detail || title;
 }
 
 // ---------- Conexiones MCP (tokens de acceso) ----------
@@ -2709,7 +2712,7 @@ async function openEditor(id) {
   let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "", depends_on: [], supersedes: "", caused_by: "" };
   if (id) {
     const n = await api("/api/note?id=" + encodeURIComponent(id));
-    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "" };
+    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status, detail: e.detail })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "" };
   }
   state.editing = d;
   render();
@@ -2740,8 +2743,8 @@ function renderEditor(main) {
       prev.appendChild(el("span", "cp-reason", p.reason));
       // reflejar el resultado del resolver de evidencia en las badges
       (p.evidence || []).forEach((e, i) => {
-        if (d.evidence[i]) d.evidence[i].status = e.status;
-        if (evBadges[i]) paintEvBadge(evBadges[i], e.status);
+        if (d.evidence[i]) { d.evidence[i].status = e.status; d.evidence[i].detail = e.detail; }
+        if (evBadges[i]) paintEvBadge(evBadges[i], e.status, e.detail);
       });
     }, 300);
   }
@@ -2776,7 +2779,7 @@ function renderEditor(main) {
       ref.addEventListener("input", () => { d.evidence[i].ref = ref.value; preview(); });
       row.appendChild(ref);
       const badge = el("span", "ev-status");
-      paintEvBadge(badge, e.status);
+      paintEvBadge(badge, e.status, e.detail);
       evBadges[i] = badge;
       row.appendChild(badge);
       const rm = el("button", "icon-btn ev-x"); rm.textContent = "×";

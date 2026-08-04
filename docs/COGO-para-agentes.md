@@ -27,12 +27,20 @@ consumís hoy sin re-derivarlo.
 | Color | Qué significa | Qué hacés |
 |---|---|---|
 | 🟢 **verde** | verificado: evidencia observada, check pasado, fresco | Te apoyás con confianza. |
-| 🟡 **amarillo** | probable: evidencia reportada, check sin correr, vencida o con drift | Lo usás **diciendo que es probable**. |
+| 🟡 **amarillo** | probable: evidencia reportada, check sin correr, vencida, o cambió lo que cita | Lo usás **diciendo que es probable**. |
 | 🔴 **rojo** | no confiable: sin evidencia, cita rota o contradicción abierta | **No te apoyás.** Ya viene en cuarentena. |
 
 `pack` no se limita a rotular el rojo: lo **saca del cuerpo del contexto** y lo
 aísla en una sección "do not rely". Si algo llega ahí, tratalo como
 "esto puede estar mal", incluso si suena razonable.
+
+**Sobre "cambió lo que cita":** cuando una nota apunta a `archivo.go:42`, COGO
+guarda el TEXTO de esa región, no solo la fecha del archivo. Si el archivo cambia
+en otro lado, o si lo citado sigue igual pero se corrió de línea, la nota **no
+baja de color** — cambió el archivo, no la afirmación. El amarillo aparece
+únicamente cuando cambió lo que la nota citaba. Vale la pena decirlo porque
+implica lo contrario: si ves ese amarillo, el cambio es real y vale la pena
+mirarlo.
 
 ---
 

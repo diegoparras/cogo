@@ -125,3 +125,38 @@ func TestCorteSobreVaultReal(t *testing.T) {
 		t.Errorf("el corte cambiaría el color de %d notas — revisá cada una antes de cortar", cambios)
 	}
 }
+
+// La deriva material tiene que bajar el color también en el motor nuevo. Antes
+// de la Fase 6 no lo hacía: la máquina de estados mira el check y el techo mira
+// el TIER de la evidencia, y ninguno de los dos preguntaba si el archivo citado
+// seguía diciendo lo mismo. Una nota podía quedar verde apoyada en un archivo
+// que ya no la respaldaba.
+func TestLaDerivaMaterialBajaElColor(t *testing.T) {
+	hoy := core.MustDate("2026-08-03")
+	mk := func(id, estadoEv string) *core.Note {
+		return &core.Note{
+			ID: id, Type: "architecture", LastVerified: hoy,
+			Evidence: []core.Evidence{{Kind: "command_output", Ref: "x.log:1", Status: estadoEv}},
+			Check:    core.Check{Test: "t", Status: "passed"},
+			Body:     "## Claim\n" + id,
+		}
+	}
+	vault := map[string]*core.Note{
+		"intacta":  mk("intacta", core.EvResolved),
+		"movida":   mk("movida", core.EvMoved),
+		"derivada": mk("derivada", core.EvDrifted),
+	}
+	got := evaluarConCadena(t, vault, hoy)
+
+	if got["intacta"].Color != core.Green {
+		t.Errorf("la nota intacta quedó en %s: %s", got["intacta"].Color, got["intacta"].Reason)
+	}
+	// Lo que la Fase 6 vino a arreglar del otro lado: que el archivo cambie lejos
+	// de la cita no puede costar nada.
+	if got["movida"].Color != core.Green {
+		t.Errorf("un cambio ajeno a la cita bajó la nota a %s: %s", got["movida"].Color, got["movida"].Reason)
+	}
+	if got["derivada"].Color != core.Yellow {
+		t.Errorf("la evidencia derivó y la nota quedó en %s: %s", got["derivada"].Color, got["derivada"].Reason)
+	}
+}
