@@ -99,12 +99,45 @@ type Verdict struct {
 // the note itself (keyed by ID) plus every note it depends on. contradictions
 // is the set of note IDs touched by an open hard contradiction (from lint);
 // nil is fine. today is injected so the result is deterministic and testable.
+// motorExterno, si está instalado, reemplaza el cálculo del color. Es el punto
+// ÚNICO del corte: en vez de cambiar los diez llamadores repartidos entre el
+// visor, la CLI y el servidor MCP, se cambia el motor de acá para adentro.
+//
+// Sigue el mismo patrón que SetWriteHook: core se mantiene puro y sin
+// dependencias, y quien arranca el programa decide qué le inyecta. Y como es una
+// variable, volver al motor anterior es no instalarlo — la marcha atrás no
+// necesita un release.
+var motorExterno func(vault map[string]*Note, contradictions map[string]bool, today Date) map[string]Verdict
+
+// SetMotor instala un motor de color alternativo. Pasar nil vuelve al de core.
+func SetMotor(f func(vault map[string]*Note, contradictions map[string]bool, today Date) map[string]Verdict) {
+	motorExterno = f
+}
+
 func Evaluate(n *Note, vault map[string]*Note, contradictions map[string]bool, today Date) Verdict {
+	if motorExterno != nil {
+		// Una nota se evalúa en el contexto de su vault: su color depende de
+		// aquello de lo que depende, así que no hay atajo por nota suelta.
+		if v, ok := motorExterno(vault, contradictions, today)[n.ID]; ok {
+			return v
+		}
+	}
 	return newEvaluator(vault, contradictions, today).evaluate(n.ID)
 }
 
 // EvaluateVault computes every note's color in one memoized pass.
 func EvaluateVault(vault map[string]*Note, contradictions map[string]bool, today Date) map[string]Verdict {
+	if motorExterno != nil {
+		return motorExterno(vault, contradictions, today)
+	}
+	return EvaluateVaultCore(vault, contradictions, today)
+}
+
+// EvaluateVaultCore calcula con las reglas de core, sin pasar por el motor
+// instalado. Existe para que un motor externo pueda apoyarse en él —por ejemplo
+// para las ventanas de frescura por tipo, que son una tabla de core— sin
+// llamarse a sí mismo para siempre.
+func EvaluateVaultCore(vault map[string]*Note, contradictions map[string]bool, today Date) map[string]Verdict {
 	e := newEvaluator(vault, contradictions, today)
 	out := make(map[string]Verdict, len(vault))
 	for id := range vault {

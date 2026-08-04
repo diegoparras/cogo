@@ -50,6 +50,9 @@ func cmdServe(args []string) error {
 	core.SetWriteHook(func(path string, n *core.Note) {
 		history.Record(filepath.Dir(path), n.ID, n.Confidence, n.ColorReason, core.Claim(n))
 	})
+	if err := instalarMotor(*dir); err != nil {
+		return err
+	}
 	srv := newMCPServer(*dir)
 
 	// stdio: the local default, launched per session by the LLM client.
