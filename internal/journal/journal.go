@@ -65,6 +65,13 @@ type Journal struct {
 	prev string
 	// ahora se inyecta para que los tests no dependan del reloj.
 	ahora func() time.Time
+
+	// La lectura completa, memorizada. Ver All: leer un journal es leer y
+	// parsear TODO, y hay varios llamadores que lo necesitan entero en la misma
+	// petición. Va con su propio candado para no cruzarse con el de escritura.
+	muCache     sync.Mutex
+	cacheEvs    []Event
+	cacheHuella string
 }
 
 // Open abre (o crea) el journal de un vault y se pone al día con lo que ya hay
@@ -159,7 +166,67 @@ func (j *Journal) escribir(e Event) (Event, error) {
 		return Event{}, err
 	}
 	j.prev = e.digest()
+	j.extenderCache(e)
 	return e, nil
+}
+
+// extenderCache agrega el evento recién escrito a la lectura memorizada, en vez
+// de invalidarla. Invalidar sería correcto y costaría una relectura completa en
+// la siguiente evaluación — justo después de capturar una nota, que es cuando
+// alguien está mirando.
+//
+// El append es sobre una copia porque el slice memorizado se entrega a los
+// llamadores: pisarlo por atrás cambiaría datos que otro está leyendo.
+func (j *Journal) extenderCache(e Event) {
+	h, err := j.huella()
+	j.muCache.Lock()
+	defer j.muCache.Unlock()
+	if err != nil || h == "" || j.cacheHuella == "" {
+		j.cacheHuella = "" // no se pudo confirmar, o no había nada: que relea
+		return
+	}
+
+	// El número de secuencia dice exactamente dónde está parado el caché, y hace
+	// falta preguntárselo: entre que el evento se escribió al archivo y que llega
+	// acá, otra goroutine pudo haber leído el disco y ya tenerlo. Agregarlo
+	// entonces lo duplicaría, y un registro con un evento repetido rompe la
+	// verificación de la cadena.
+	var ultimo uint64
+	if n := len(j.cacheEvs); n > 0 {
+		ultimo = j.cacheEvs[n-1].Seq
+	}
+	switch {
+	case ultimo == e.Seq:
+		j.cacheHuella = h // ya estaba: solo hay que ponerlo al día
+	case ultimo == e.Seq-1:
+		j.cacheEvs = append(j.cacheEvs[:len(j.cacheEvs):len(j.cacheEvs)], e)
+		j.cacheHuella = h
+	default:
+		j.cacheHuella = "" // desfasado por algo que no fue esta escritura: que relea
+	}
+}
+
+// huella identifica el contenido del directorio sin leerlo: nombre, tamaño y
+// fecha de cada archivo. Un journal es append-only, así que cualquier evento
+// nuevo —lo escriba este proceso u otro— cambia el tamaño de algún archivo.
+//
+// Devuelve "" si algo no se pudo consultar. Una huella vacía nunca coincide, y
+// esa es la respuesta correcta ante la duda: releer.
+func (j *Journal) huella() (string, error) {
+	files, err := filepath.Glob(filepath.Join(j.dir, "*.jsonl"))
+	if err != nil {
+		return "", err
+	}
+	sort.Strings(files)
+	var b strings.Builder
+	for _, f := range files {
+		st, err := os.Stat(f)
+		if err != nil {
+			return "", nil
+		}
+		fmt.Fprintf(&b, "%s|%d|%d\n", filepath.Base(f), st.Size(), st.ModTime().UnixNano())
+	}
+	return b.String(), nil
 }
 
 // All devuelve todos los eventos, ordenados por número de secuencia. Los
@@ -171,6 +238,17 @@ func (j *Journal) All() ([]Event, error) {
 		return nil, err
 	}
 	sort.Strings(files) // "2026-01" < "2026-02": el nombre ya ordena
+
+	h, err := j.huella()
+	if err != nil {
+		return nil, err
+	}
+	j.muCache.Lock()
+	defer j.muCache.Unlock()
+	if h != "" && h == j.cacheHuella {
+		return j.cacheEvs, nil
+	}
+
 	var out []Event
 	for _, f := range files {
 		b, err := os.ReadFile(f)
@@ -191,7 +269,12 @@ func (j *Journal) All() ([]Event, error) {
 		}
 	}
 	sort.SliceStable(out, func(i, k int) bool { return out[i].Seq < out[k].Seq })
-	return out, nil
+	// Se recorta a su largo exacto antes de guardarlo: así, si un llamador le
+	// hace append al resultado, Go reserva un array nuevo en vez de escribir
+	// sobre el que están leyendo los demás.
+	j.cacheEvs = out[:len(out):len(out)]
+	j.cacheHuella = h
+	return j.cacheEvs, nil
 }
 
 // Desde devuelve los eventos posteriores a un número de secuencia. Es lo que

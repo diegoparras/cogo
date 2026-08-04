@@ -21,7 +21,6 @@ import (
 	"github.com/diegoparras/cogo/internal/embed"
 	"github.com/diegoparras/cogo/internal/ghsource"
 	"github.com/diegoparras/cogo/internal/history"
-	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/motor"
@@ -90,8 +89,11 @@ func cmdServe(args []string) error {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	visor := web.New(*dir, today, store)
 	visor.UsarParametros(pars) // el panel edita el mismo Set que lee el motor
-	visor.Mount(mux)           // human face: visor at /, JSON API at /api
-	authn.RegisterRoutes(mux)  // accessory: OIDC login (federated only)
+	if j, err := journalDe(*dir); err == nil {
+		visor.UsarJournal(j) // y lee el mismo registro, con su caché ya caliente
+	}
+	visor.Mount(mux)          // human face: visor at /, JSON API at /api
+	authn.RegisterRoutes(mux) // accessory: OIDC login (federated only)
 
 	tls := os.Getenv("COOKIE_SECURE") == "1"
 	var h http.Handler = enforceReadOnly(mux) // read-only tokens can't write
@@ -433,8 +435,10 @@ func newMCPServer(dir string) *mcp.Server {
 		if err != nil {
 			return errResult(err), nil, nil
 		}
+		// El registro compartido, no uno nuevo: abrir un journal lee y parsea
+		// todo lo escrito, y esto se llama antes de cada acción de cada agente.
 		estados := map[string]confidence.Estado{}
-		if j, err := journal.Open(dir); err == nil {
+		if j, err := journalDe(dir); err == nil {
 			if evs, err := j.All(); err == nil {
 				estados, _ = motor.Estados(vault, contradictions(), today(), evs)
 			}

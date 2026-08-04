@@ -30,6 +30,7 @@ import (
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/ghsource"
 	"github.com/diegoparras/cogo/internal/history"
+	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
@@ -58,6 +59,8 @@ type Server struct {
 	// parametros.go: el panel los edita y el motor los lee, sobre la misma
 	// instancia, para que un cambio valga en la evaluación siguiente.
 	pars *parametros.Set
+	// registro es el journal compartido del proceso (ver parametros.go).
+	registro *journal.Journal
 
 	mu             sync.RWMutex
 	provider       llm.Provider

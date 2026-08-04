@@ -29,6 +29,17 @@ import (
 // evaluación siguiente, sin reiniciar nada.
 func (s *Server) UsarParametros(p *parametros.Set) { s.pars = p }
 
+// UsarJournal conecta el visor al registro compartido del proceso. Sin esto
+// abriría uno propio en cada consulta, y abrir un journal es leerlo entero.
+func (s *Server) UsarJournal(j *journal.Journal) { s.registro = j }
+
+func (s *Server) journal() (*journal.Journal, error) {
+	if s.registro != nil {
+		return s.registro, nil
+	}
+	return journal.Open(s.dir)
+}
+
 func (s *Server) parametros() *parametros.Set {
 	if s.pars == nil {
 		return parametros.Defaults()
@@ -124,7 +135,7 @@ func (s *Server) handleSalud(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, out)
 		return
 	}
-	j, err := journal.Open(s.dir)
+	j, err := s.journal()
 	if err != nil {
 		writeJSON(w, out)
 		return

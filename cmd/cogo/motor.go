@@ -43,6 +43,37 @@ func instalarParametros(dir string) {
 	core.SetCaracteresDistintivos(func() int { return pars.Entero("ancla.caracteres_minimos") })
 }
 
+// registro es el journal del vault, compartido por todo el proceso.
+//
+// Está acá y no dentro de instalarMotor porque abrir un journal NO es barato:
+// Open lee y parsea el registro entero para ponerse al día con la cadena. Con
+// veinte mil eventos eso son setenta milisegundos, y `authorize` lo pagaba en
+// CADA llamada — más otra lectura completa después.
+//
+// Un solo handle, además, es un solo caché de lectura: lo que capturó una
+// herramienta ya está en memoria cuando lo consulta la siguiente.
+var (
+	muRegistro sync.Mutex
+	registro   *journal.Journal
+)
+
+// journalDe devuelve el registro compartido, abriéndolo la primera vez. Sirve
+// para los caminos que no pasan por instalarMotor —COGO_MOTOR=legacy, un
+// subcomando suelto— sin que ninguno tenga que saber cuál fue.
+func journalDe(dir string) (*journal.Journal, error) {
+	muRegistro.Lock()
+	defer muRegistro.Unlock()
+	if registro != nil {
+		return registro, nil
+	}
+	j, err := journal.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	registro = j
+	return j, nil
+}
+
 // instalarMotor conecta el motor de confianza basado en el journal.
 //
 // El cambio ocurre en un solo lugar: core.SetMotor. Los diez llamadores
@@ -59,7 +90,7 @@ func instalarMotor(dir string) error {
 		return nil
 	}
 
-	j, err := journal.Open(dir)
+	j, err := journalDe(dir)
 	if err != nil {
 		return fmt.Errorf("no se pudo abrir el registro de eventos: %w", err)
 	}
@@ -90,16 +121,18 @@ func instalarMotor(dir string) error {
 			}
 			sembrado = true
 		}
-		// Notas nuevas creadas después del arranque: se anclan al vuelo.
-		if faltan(j, vault) {
-			previos := core.EvaluateVaultCore(vault, contras, hoy)
-			_, _ = journal.Sembrar(j, vault, previos)
-		}
-
 		evs, err := j.All()
 		if err != nil {
 			log.Printf("cogo: no se pudo leer el registro (%v); se usa el motor anterior", err)
 			return core.EvaluateVaultCore(vault, contras, hoy)
+		}
+		// Notas nuevas creadas después del arranque: se anclan al vuelo. Se
+		// decide con los eventos que ya se leyeron, en vez de volver a leer.
+		if faltan(evs, vault) {
+			previos := core.EvaluateVaultCore(vault, contras, hoy)
+			if _, err := journal.Sembrar(j, vault, previos); err == nil {
+				evs, _ = j.All() // sembrar agregó eventos: hay que verlos
+			}
 		}
 		// El eje de frescura necesita el StaleAt, que lo calcula la tabla de
 		// ventanas por tipo del motor anterior. Es un dato de la nota, no del
@@ -164,12 +197,10 @@ func ventanaEstimada(tipo string) (int, bool) {
 	return e.Ventana, true
 }
 
-// faltan dice si hay notas del vault que el registro todavía no conoce.
-func faltan(j *journal.Journal, vault map[string]*core.Note) bool {
-	evs, err := j.All()
-	if err != nil {
-		return false
-	}
+// faltan dice si hay notas del vault que el registro todavía no conoce. Recibe
+// los eventos ya leídos: es la misma lectura que necesita el motor, y pedirla
+// dos veces era duplicar el trabajo de la evaluación entera.
+func faltan(evs []journal.Event, vault map[string]*core.Note) bool {
 	conocidas := make(map[string]bool, len(evs))
 	for _, e := range evs {
 		conocidas[e.NoteID] = true
