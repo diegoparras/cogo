@@ -91,7 +91,7 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	// less-trusted note is included — we never spend the budget on a red while a
 	// green was left out. Within a tier we may skip a big note and keep a later
 	// smaller one.
-	var greens, yellows, mistakes, reds []string
+	var greens, yellows, mistakes, reds, brechas []string
 	running, dropped := 0, 0
 	droppedRank := 99
 	for _, c := range cands {
@@ -110,7 +110,14 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 		case Yellow:
 			yellows = append(yellows, c.block)
 		case Ungraded:
-			mistakes = append(mistakes, c.block)
+			// Las brechas también son `ungraded`, pero no son lo mismo que un
+			// error registrado: una dice qué NO se sabe, la otra qué salió mal.
+			// Mezclarlas escondería justamente lo que hay que ver.
+			if EsBrecha(c.n) {
+				brechas = append(brechas, c.block)
+			} else {
+				mistakes = append(mistakes, c.block)
+			}
 		default:
 			reds = append(reds, c.block)
 		}
@@ -124,6 +131,9 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	}
 	fmt.Fprintf(&b, "> **%d** verified · **%d** probable · **%d** assumptions · **%d** mistakes · ~**%d** tokens",
 		len(greens), len(yellows), len(reds), len(mistakes), running)
+	if len(brechas) > 0 {
+		fmt.Fprintf(&b, " · **%d** open questions", len(brechas))
+	}
 	if dropped > 0 {
 		fmt.Fprintf(&b, " · %d omitted (budget)", dropped)
 	}
@@ -142,8 +152,13 @@ func BuildPack(vault map[string]*Note, contradictions map[string]bool, opts Pack
 	writeSection(&b, "Probable — likely, not certain", yellows)
 	writeSection(&b, "Do not repeat — past mistakes", mistakes)
 	writeSection(&b, "Assumptions — DO NOT RELY", reds)
+	// Las preguntas abiertas van ÚLTIMAS y en su propia sección. No son
+	// conocimiento degradado: son la ausencia de conocimiento, dicha en voz
+	// alta. Un agente que llega hasta acá sabe qué NO puede averiguar leyendo el
+	// vault — y eso es información, no un hueco.
+	writeSection(&b, "Open questions — nobody knows this yet; do not guess", brechas)
 
-	if len(greens)+len(yellows)+len(mistakes)+len(reds) == 0 {
+	if len(greens)+len(yellows)+len(mistakes)+len(reds)+len(brechas) == 0 {
 		b.WriteString("\n_No matching notes._\n")
 	}
 
@@ -203,6 +218,9 @@ func writeSection(b *strings.Builder, title string, blocks []string) {
 // the claim and its minimal check; mistakes and reds are terse list items, and
 // reds carry the reason they can't be trusted.
 func renderBlock(n *Note, v Verdict, env map[string]string) string {
+	if EsBrecha(n) {
+		return renderBrecha(n)
+	}
 	claim := claimOf(n)
 	meta := scopeMeta(n, env)
 	switch v.Color {
@@ -215,6 +233,30 @@ func renderBlock(n *Note, v Verdict, env map[string]string) string {
 	default: // Red
 		return fmt.Sprintf("- **%s**: %s — _unverified: %s_\n", n.ID, claim, v.Reason)
 	}
+}
+
+// renderBrecha muestra una pregunta abierta. No se renderiza como una nota
+// degradada porque no lo es: lo que importa acá no es un claim con su respaldo
+// sino la pregunta, qué está trabando, y qué ya se intentó — para que el próximo
+// no choque contra la misma pared.
+func renderBrecha(n *Note) string {
+	q := strings.TrimSpace(n.Question)
+	if q == "" {
+		q = claimOf(n)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "### %s\n**%s**\n", n.ID, q)
+	if k := len(n.Blocks); k > 0 {
+		fmt.Fprintf(&b, "- blocks %d decision(s): %s\n", k, strings.Join(n.Blocks, ", "))
+	}
+	if c := strings.TrimSpace(n.CostToResolve); c != "" {
+		fmt.Fprintf(&b, "- cost to resolve: %s\n", c)
+	}
+	for _, a := range n.Attempted {
+		fmt.Fprintf(&b, "- already tried: %s\n", a)
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 // scopeMeta renders a note's author and scope for a pack block, warning loudly

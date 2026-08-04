@@ -192,6 +192,15 @@ func (e *evaluator) compute(n *Note) Verdict {
 	if n.Type == "mistake" {
 		return Verdict{Ungraded, "error registrado: es informativo, no se gradúa por confianza", Date{}}
 	}
+	// Una brecha no se gradúa porque no afirma nada: es una pregunta abierta.
+	// Pintarla de roja —tentador, porque no tiene evidencia— la convertiría en
+	// una mala afirmación en vez de una buena pregunta.
+	if EsBrecha(n) {
+		if k := len(n.Blocks); k > 0 {
+			return Verdict{Ungraded, fmt.Sprintf("pregunta abierta: no se sabe todavía, y hay %d decisión(es) esperándola", k), Date{}}
+		}
+		return Verdict{Ungraded, "pregunta abierta: es algo que el proyecto no sabe, no una afirmación", Date{}}
+	}
 
 	w := windowDays(n.Type)
 	staleAt := n.LastVerified.AddDays(w)

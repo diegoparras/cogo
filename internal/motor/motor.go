@@ -31,14 +31,24 @@ func Legacy() bool {
 	return false
 }
 
-// NoGraduable dice si una nota queda fuera del semáforo. Hoy son los errores
-// aprendidos: registran algo que pasó, no afirman algo que haya que creer, así
-// que graduarlos por confianza no significa nada.
+// NoGraduable dice si una nota queda fuera del semáforo.
+//
+// Son dos casos, y por la misma razón: no afirman nada que haya que creer.
+//
+//	mistake — registra algo que pasó. Es informativo.
+//	gap     — es una PREGUNTA ABIERTA. Declara que algo no se sabe.
+//
+// Que una brecha no tenga color es la parte importante y la más fácil de hacer
+// mal. Sería tentador pintarla de rojo —no hay evidencia, después de todo— pero
+// eso confundiría dos cosas distintas: una nota roja AFIRMA algo sin respaldo,
+// una brecha no afirma nada. Ponerle color la volvería una mala afirmación en
+// vez de una buena pregunta.
 //
 // Quedan fuera del retículo Y de la propagación: ni arrastran a nadie ni son
-// arrastradas. Es el mismo criterio que aplicaba el motor anterior, y hacía
-// falta traerlo — sin esto, una nota informativa terminaba en rojo.
-func NoGraduable(n *core.Note) bool { return n.Type == "mistake" }
+// arrastradas.
+func NoGraduable(n *core.Note) bool {
+	return n.Type == "mistake" || core.EsBrecha(n)
+}
 
 // Evaluar calcula el veredicto de cada nota del vault.
 func Evaluar(vault map[string]*core.Note, contradicciones map[string]bool, hoy core.Date, evs []journal.Event) map[string]core.Verdict {
@@ -67,10 +77,7 @@ func Evaluar(vault map[string]*core.Note, contradicciones map[string]bool, hoy c
 	out := make(map[string]core.Verdict, len(vault))
 	for id, n := range vault {
 		if NoGraduable(n) {
-			out[id] = core.Verdict{
-				Color:  core.Ungraded,
-				Reason: "error registrado: es informativo, no se gradúa por confianza",
-			}
+			out[id] = core.Verdict{Color: core.Ungraded, Reason: razonNoGraduable(n)}
 			continue
 		}
 		est := final[id]
@@ -81,6 +88,16 @@ func Evaluar(vault map[string]*core.Note, contradicciones map[string]bool, hoy c
 		}
 	}
 	return out
+}
+
+func razonNoGraduable(n *core.Note) string {
+	if core.EsBrecha(n) {
+		if k := len(n.Blocks); k > 0 {
+			return fmt.Sprintf("pregunta abierta: no se sabe todavía, y hay %d decisión(es) esperándola", k)
+		}
+		return "pregunta abierta: es algo que el proyecto no sabe, no una afirmación"
+	}
+	return "error registrado: es informativo, no se gradúa por confianza"
 }
 
 func color(e confidence.Estado) core.Color {

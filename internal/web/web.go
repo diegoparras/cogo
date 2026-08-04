@@ -1355,6 +1355,13 @@ type draft struct {
 	Supersedes string            `json:"supersedes"`
 	CausedBy   string            `json:"caused_by"`
 	Scope      map[string]string `json:"scope,omitempty"`
+
+	// Notas de brecha (type: gap). No tienen evidencia ni check porque no
+	// afirman nada: lo que llevan es la pregunta y qué está trabando.
+	Question  string   `json:"question,omitempty"`
+	Blocks    []string `json:"blocks,omitempty"`
+	Cost      string   `json:"cost_to_resolve,omitempty"`
+	Attempted []string `json:"attempted,omitempty"`
 }
 
 func (s *Server) noteFromDraft(d draft) *core.Note {
@@ -1369,7 +1376,7 @@ func (s *Server) noteFromDraft(d draft) *core.Note {
 		}
 	}
 	// Editing resets verification: a changed claim must be re-checked.
-	return &core.Note{
+	n := &core.Note{
 		ID: id, Type: d.Type, Project: d.Project, Body: strings.TrimSpace(d.Body),
 		LastVerified: s.today(),
 		Evidence:     clean,
@@ -1379,6 +1386,19 @@ func (s *Server) noteFromDraft(d draft) *core.Note {
 		CausedBy:     strings.TrimSpace(d.CausedBy),
 		Scope:        d.Scope,
 	}
+	if core.EsBrecha(n) {
+		// Una brecha no lleva evidencia ni check: no hay nada que respaldar
+		// porque no afirma nada. Lo que lleva es la pregunta y qué traba.
+		n.Question = strings.TrimSpace(d.Question)
+		if n.Question == "" {
+			n.Question = core.Claim(n) // el cuerpo, si no se declaró aparte
+		}
+		n.Blocks = cleanIDs(d.Blocks)
+		n.CostToResolve = strings.TrimSpace(d.Cost)
+		n.Attempted = cleanIDs(d.Attempted)
+		n.Evidence, n.Check = nil, core.Check{}
+	}
+	return n
 }
 
 // cleanIDs drops blank entries from a relation list.

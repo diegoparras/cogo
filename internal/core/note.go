@@ -105,6 +105,29 @@ type Note struct {
 	// another machine. Free-form keys; ScopeConflict compares against an env.
 	Scope map[string]string `yaml:"scope,omitempty"`
 
+	// ---- notas de brecha (type: gap) ----
+	//
+	// Una brecha no es una nota sin evidencia: es una PREGUNTA ABIERTA. La
+	// diferencia importa. Una nota roja afirma algo sin respaldo; una brecha no
+	// afirma nada — declara que hay algo que el proyecto no sabe, y que hay
+	// decisiones esperando esa respuesta.
+	//
+	// Sin esto, un agente no puede distinguir un tema que nadie investigó de un
+	// tema que no existe. Las dos ausencias se ven igual: silencio.
+
+	// Question es lo que no se sabe, escrito como pregunta. Es el campo central:
+	// una brecha bien planteada es media brecha resuelta.
+	Question string `yaml:"question,omitempty"`
+	// Blocks son las decisiones que están esperando esta respuesta. El conteo
+	// ordena la lista: conviene resolver primero lo que traba más cosas.
+	Blocks []string `yaml:"blocks,omitempty"`
+	// CostToResolve estima cuánto cuesta averiguarlo: bajo | medio | alto.
+	// Junto con cuántas decisiones traba, es lo que permite elegir por dónde.
+	CostToResolve string `yaml:"cost_to_resolve,omitempty"`
+	// Attempted registra lo que ya se probó y por qué no alcanzó. Es lo que
+	// evita que tres personas distintas choquen contra la misma pared.
+	Attempted []string `yaml:"attempted,omitempty"`
+
 	// ---- computed by COGO · do not edit ----
 	Confidence  string `yaml:"confidence"`
 	StaleAt     Date   `yaml:"stale_at"`

@@ -374,6 +374,48 @@ func newMCPServer(dir string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "gap",
+		Description: "Record something the project does NOT know, as an open question. Use it when you hit a decision you cannot make because a fact is missing, when you had to assume something to keep going, or when an investigation came back inconclusive. This is NOT a low-confidence note: a note claims something and might be wrong, a gap claims nothing and says so. Gaps carry no color and never enter the confidence graph; the pack returns them in their own section, ordered by how many decisions each one blocks. If you find yourself about to guess, record the gap instead.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in gapIn) (*mcp.CallToolResult, any, error) {
+		q := strings.TrimSpace(in.Question)
+		if q == "" {
+			return errResult(fmt.Errorf("a gap needs a question: what is it that nobody knows?")), nil, nil
+		}
+		id := in.ID
+		if id == "" {
+			id = core.DeriveID(in.Project, q)
+		}
+		body := strings.TrimSpace(in.Body)
+		if body == "" {
+			body = "## Claim\n" + q
+		}
+		note := &core.Note{
+			ID: id, Type: core.TipoBrecha, Project: in.Project, Body: body,
+			LastVerified: today(), Question: q, Blocks: in.Blocks,
+			CostToResolve: in.Cost, Attempted: in.Attempted,
+			Author: auth.CallerCtx(ctx),
+		}
+		if err := scrub.Note(ctx, scrubber, note); err != nil {
+			return errResult(fmt.Errorf("scrub failed: %w", err)), nil, nil
+		}
+		vault, err := loadVault()
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		vault[id] = note
+		if err := core.WriteNoteFile(filepath.Join(dir, id+".md"), note); err != nil {
+			return errResult(err), nil, nil
+		}
+		_ = regenIndex(dir, vault)
+		_ = appendLog(dir, fmt.Sprintf("gap %s", id))
+		msg := fmt.Sprintf("gap %s registrada: %s", id, q)
+		if k := len(in.Blocks); k > 0 {
+			msg += fmt.Sprintf(" — traba %d decisión(es)", k)
+		}
+		return textResult(msg), nil, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "capture",
 		Description: "Record a finding as a note. Always include evidence and a minimal check. Never set the color — COGO computes it.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in captureIn) (*mcp.CallToolResult, any, error) {
@@ -705,6 +747,19 @@ type captureIn struct {
 	Supersedes string            `json:"supersedes,omitempty" jsonschema:"id of a note this one replaces; the old note is archived (buried)"`
 	CausedBy   string            `json:"caused_by,omitempty" jsonschema:"id of the note that caused this finding"`
 	Scope      map[string]string `json:"scope,omitempty" jsonschema:"the conditions under which the claim holds, on a vault shared across machines — e.g. {\"os\":\"windows\",\"commit\":\"abc123\",\"go\":\"1.25\"}. A claim true here may be false elsewhere; recording the scope keeps another machine from trusting it blindly."`
+}
+
+// gapIn es el input de `gap`. Deliberadamente NO tiene evidencia ni check: una
+// brecha no afirma nada, así que no hay nada que respaldar. Lo que necesita es
+// la pregunta y qué está trabando.
+type gapIn struct {
+	Question  string   `json:"question" jsonschema:"what the project does NOT know, written as a question"`
+	Project   string   `json:"project,omitempty" jsonschema:"the project this gap belongs to"`
+	ID        string   `json:"id,omitempty" jsonschema:"stable id; derived from the question if omitted"`
+	Blocks    []string `json:"blocks,omitempty" jsonschema:"ids of the decisions waiting on this answer; the count is what orders the list"`
+	Cost      string   `json:"cost_to_resolve,omitempty" jsonschema:"bajo|medio|alto — how expensive it is to find out"`
+	Attempted []string `json:"attempted,omitempty" jsonschema:"what was already tried and why it fell short, so the next person does not hit the same wall"`
+	Body      string   `json:"body,omitempty" jsonschema:"optional detail in markdown"`
 }
 
 type transcriptTurnIn struct {

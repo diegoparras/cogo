@@ -61,6 +61,13 @@ type fmInputs struct {
 	Status       string            `yaml:"status,omitempty"`
 	Author       string            `yaml:"author,omitempty"`
 	Scope        map[string]string `yaml:"scope,omitempty"`
+
+	// Notas de brecha (type: gap). Van con omitempty porque una nota común no
+	// las lleva, y el frontmatter tiene que seguir siendo legible de un vistazo.
+	Question      string   `yaml:"question,omitempty"`
+	Blocks        []string `yaml:"blocks,omitempty"`
+	CostToResolve string   `yaml:"cost_to_resolve,omitempty"`
+	Attempted     []string `yaml:"attempted,omitempty"`
 }
 
 type fmComputed struct {
@@ -83,6 +90,11 @@ func MarshalNote(n *Note) ([]byte, error) {
 		Status:     n.Status,
 		Author:     n.Author,
 		Scope:      n.Scope,
+
+		Question:      n.Question,
+		Blocks:        n.Blocks,
+		CostToResolve: n.CostToResolve,
+		Attempted:     n.Attempted,
 	}
 	if n.Check != (Check{}) {
 		c := n.Check
