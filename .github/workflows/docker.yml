@@ -86,7 +86,7 @@ jobs:
 
       # SLSA build provenance: a signed attestation of how/where the image was
       # built, attached to the image in GHCR. Verify with `gh attestation verify`.
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
