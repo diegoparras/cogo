@@ -130,15 +130,17 @@ Claude Code, Codex, Copilot, OpenCode, Antigravity:
 
 What Claude learns today, Cursor reads tomorrow: **the same vault.**
 
-### The 14 tools your agent gets
+### The 16 tools your agent gets
 
 | tool | what it does |
 |---|---|
 | `pack` | colored context on a topic **before acting** — red is quarantined as do-not-rely |
+| `authorize` | **ask whether what you know is enough for what you're about to do** |
 | `search` | find notes by meaning (embeddings) or by keyword (BM25) |
 | `open` | one note, with its freshly computed color |
 | `capture` | record a finding — evidence and a check are required, a color is not accepted |
 | `verify` | mark the check as passing today and re-color |
+| `gap` | **record what the project does NOT know, as an open question** |
 | `archive` · `restore` | pull a note out of the graph without destroying it, and bring it back |
 | `remove` | actually delete — only for genuine garbage; leaves a tombstone |
 | `stash` | store an artifact by content hash → cite it as `artifact://<sha256>` |
@@ -152,9 +154,65 @@ What Claude learns today, Cursor reads tomorrow: **the same vault.**
 > writes the same vault. `recall` is the cursor that turns it from an archive into a channel:
 > pass back the cursor it gave you and you get **only what changed** since — plus a new cursor.
 
-## The viewer
+## Two tools that don't exist anywhere else
 
-Seven panels, embedded in the binary:
+### `gap` — modeling what nobody knows
+
+Every memory tool stores what a project knows. None of them stores what it **doesn't**.
+
+Without that, an agent cannot tell a topic nobody investigated from a topic that doesn't
+exist. Both look identical: silence.
+
+```yaml
+type: gap
+question: Does the connection pool saturate under sustained load?
+blocks: [migrate-db, scale-replicas]
+cost_to_resolve: medium
+attempted:
+  - checked the dashboard — fine during business hours, never tested under real load
+```
+
+A gap **carries no color**, and that's the whole point. Painting it red would be tempting —
+there's no evidence, after all — and wrong: a red note *asserts* something unsupported, a gap
+asserts nothing. It would turn a good question into a bad claim.
+
+The pack returns them **last, in their own section**, ordered by how many decisions each one
+blocks. The tool description ends with the line that matters: *"if you're about to guess,
+record the gap instead."*
+
+### `authorize` — the tool that can say no
+
+COGO tells you how much each thing you know is worth. That's half of it. The other half is
+that **how much it needs to be worth depends on what for**.
+
+| action class | needs by default |
+|---|---|
+| informative — answer, explain | `asserted` |
+| reversible — edit, create, commit | `check_declared` |
+| costly — deploy, migrate, spend | `claimed_passed` |
+| **irreversible** — delete, publish, send, force-push | **`verified`** |
+
+That last row is the line: **the only class that demands an *executed* check, not a declared
+one.** An agent's word doesn't get you there.
+
+And the class isn't the agent's to choose — because whoever wants to act is exactly who's
+incentivized to classify it low. *"I'll clean up some temp files"* can be an `rm -rf`. So the
+class is decided **twice** — declared and inferred from the text — and **the stricter wins**.
+
+```
+authorize("clean up some temp files with rm -rf in the build folder",
+          class: "informative", notes: ["pool-limit-200"])
+
+NOT AUTHORIZED — an irreversible action needs `verified` support, and the note
+does not reach it
+  · pool-limit-200 is at claimed_passed — the check is declared as passing but
+    nobody executed it: run it with the runner
+
+action class: irreversible (declared "informative", but the text says
+              irreversible (file deletion): the stricter one wins)
+```
+
+## The viewer
 
 - **Vault** — a real index: BM25 search, searchable filters, creation-date ranges, pagination.
   Each note shows when it was born, when it was last verified and when it goes stale.
@@ -167,6 +225,29 @@ Seven panels, embedded in the binary:
 Plus a Markdown editor that **recomputes the color live as you type**, a **GitHub explorer**
 with a confidence map over your repo, an agent-instruction manager (`AGENTS.md`, `CLAUDE.md`…),
 a downloadable and prunable audit log, multi-token management, and one-click vault export.
+
+### God mode — the war room
+
+Every rules engine has constants. Scattered through the code they're invisible: nobody knows
+they exist, nobody knows what happens if they move, and changing one means a recompile.
+
+COGO's **21 parameters live in one registry**, each with its label, what it does, its unit,
+its valid range and **what it loosens if you move it**. The panel is *generated* from that
+registry — there's no hand-written list of controls that can drift from what the engine reads.
+
+Entering asks you to type **acepto**, and the modal says plainly what it implies: that what
+you move re-colors notes that already exist without anyone re-verifying them, and that every
+change lands in the audit log with your name.
+
+Behind the gate, a second tab shows **what the engine is doing right now** — not knobs, state:
+
+- **chain integrity, first** — the only fact that invalidates every other one on the screen
+- **all eight lattice states, not three colors.** The difference shows up immediately:
+  *"17 in `claimed_passed`, 0 in `verified`"* means seventeen notes that look green and not one
+  with a check anybody actually ran
+- the **event log**, the **runner**, every **authorization** an agent asked for, and **graph
+  health** — cycles and dangling dependencies, listed separately because they look like the
+  same red in the Vault and are fixed differently
 
 ## Evidence that can actually be re-checked
 
@@ -182,33 +263,131 @@ evidence:
     ref: artifact://9f2a…                            # content-addressed, immutable
 ```
 
-GitHub references are anchored to the **blob SHA**, so when the file changes upstream COGO sees
-the drift and the note drops to yellow until you re-verify. Artifacts are keyed by their
-**SHA-256** — locally or on Cloudflare R2 — so `verify` **recomputes** the hash instead of
-trusting a citation that rots. A **secret scanner runs before anything is stored**, and refuses
-by default.
+GitHub references are anchored to the **blob SHA**. Artifacts are keyed by their **SHA-256** —
+locally or on Cloudflare R2 — so `verify` **recomputes** the hash instead of trusting a
+citation that rots. A **secret scanner runs before anything is stored**, and refuses by default.
+
+### And a changed file doesn't mean a changed claim
+
+A note cites `docker-compose.yml:164`. Someone runs a formatter, or adds a license header, and
+the note used to go yellow: the **file** hash changed. Line 164 still said exactly the same
+thing.
+
+That's not a harmless false positive. **A warning that fires for anything trains people to
+ignore it** — and then the day the file really changes where the note stood, yellow means
+nothing.
+
+So the anchor isn't "line 164": it's the **text** that was on line 164, and COGO looks for it
+wherever it ended up.
+
+```
+still there, same place        →  no change
+still there, different line    →  no change — and it tells you where it moved
+whitespace only                →  no change
+where you cited now says       →  CHANGED
+something else
+```
+
+Relocating has a trap, and it's handled: a one-line citation that reads `}` matches anywhere.
+Finding it wouldn't be finding it, it'd be guessing — and guessing here means **absolving a
+real change**. So a region needs enough distinctive text, and it has to appear **exactly once**.
 
 ## How the color is computed
 
 ```
-confidence = min( evidence , freshness , weakest dependency , contradiction )
+confidence = meet( check axis , evidence ceiling , freshness ,
+                   contradictions , citation materiality , the graph )
 ```
 
-A note is green only when **nothing** drags it down. Evidence sets the ceiling: observed (a
-log, a command, a test, a file) can reach green; reported or inferred caps at yellow; none is
-red. Freshness decays by type — a command lasts 30 days, an architecture decision 180. Every
-color ships its `color_reason`, so you can always audit **why**.
+`meet` is a lattice infimum: commutative, associative, idempotent — with tests for all three.
+The practical consequence is that **no axis can raise a color, only lower it**. That makes it a
+*must* analysis: it asserts only what holds along every path.
 
-## Built to be trusted
+A note is green only when **nothing** drags it down. Every color ships its `color_reason`, so
+you can always audit **why**.
 
-- **One static binary.** Go 1.25, `CGO_ENABLED=0`, `scratch` image (~12 MB), assets embedded.
-  No database, no runtime, no `node_modules`.
-- **Offline by default.** Every network-touching feature — models, embeddings, OIDC, R2,
-  GitHub — is an opt-in accessory. The core never phones home.
-- **Verifiable supply chain.** Images are signed with **cosign** (keyless Sigstore) and ship
-  **SLSA build provenance**. Tests, `go vet` and `gofmt` gate every publish.
-- **Your data stays yours.** Notes are Markdown files in a folder you own. Delete COGO and you
-  still have everything — readable in any text editor, versionable in git.
+### The color is a fold of an append-only log
+
+Since the current version, the color isn't computed from the note's fields — it's computed by
+folding a **hash-chained event journal** through a **9-state machine**, then resolving a
+**greatest fixed point** over the dependency graph.
+
+- **Bitemporal.** Each event carries when it happened in the world and when COGO recorded it.
+- **Tamper-evident.** Each event's hash includes the previous one: altering an old event
+  invalidates everything after it, and the war room says so at the top.
+- **Multi-process safe.** Writes take an OS lock (`flock` / `LockFileEx`) — a rolling deploy
+  briefly runs two containers on one volume, and without it they'd both claim the same sequence
+  number and fork the chain.
+
+The state machine is generated from a single YAML table, and the generator **fails the build**
+on a malformed one: a state with no rank, duplicated or gapped ranks, a transition to a
+nonexistent state, an orphan guard, an unreachable state, two transitions sharing a guard, or
+an uncovered decision.
+
+**And only the internal runner can produce `verified`.** That isn't a convention: the emitter
+is reserved, the journal *rejects* it through the ordinary door, and a single function emits it
+— so one `grep` shows every place in the system capable of producing a verification.
+
+### Five invariants, on hundreds of random vaults
+
+Checked on every run of the suite, over generated vaults with cycles and arbitrary
+dependencies:
+
+1. **Determinism** — Go's map iteration order is deliberately random; the result isn't.
+2. **Propagation only lowers** — leaning on something can't make you more trustworthy.
+3. **A contradiction never improves anything** — or the system would reward hiding them.
+4. **Removing evidence never raises** — what's asserted is asserted because there's something
+   behind it.
+5. **Nobody reaches `verified` without executing.**
+
+> The original plan called for TLA+. A formal model is a *separate artifact*, and what it
+> verifies is the model: nothing guarantees the model and the Go say the same thing, and the
+> moment they drift the checker certifies a system that isn't the one running. These properties
+> are weaker — they cover generated cases, not all of them — and they're true of **the code that
+> ships**.
+
+Invariant 3 found a real defect the day it was written: opening a contradiction on an
+already-refuted note *raised* it from `refuted` to `contradicted`. Recording a problem improved
+the note. Both states are red, so no color test would ever have seen it.
+
+### And COGO forgets
+
+It used to grade everything that came in and never take anything out. Color isolates red but
+doesn't remove it — a three-year-old vault is thousands of notes, nearly all expired, **and the
+dead cover the living**.
+
+Forgetting by age would have been the obvious mistake: the oldest note in a vault might be the
+most consulted one. So a note goes **dormant** only when all of these hold: it expired (twice
+its window), nothing depends on it, and nobody consulted it in 180 days. Constraints, pinned
+notes, contradicted notes and open questions never go dormant.
+
+**Dormant isn't deleted.** It's still a file, still opens by id, still shows in the viewer with
+its reason — it just stops entering the pack. Search still returns it, marked, because search
+is how you find it to wake it.
+
+**And it's computed, not written** — like the color. Consult it and it stops being unconsulted,
+so it stops being dormant. There's no state anyone has to remember to undo.
+
+### And it records who decided
+
+An agent proposes Fastify. You say "sure". The agent records *"we decided on Fastify"*, with
+its author and its evidence. Tomorrow it reads that back as an established project fact. Each
+round launders an opinion into a fact.
+
+The other axes can't see it: the evidence can be impeccable — a `file_read` of the
+`package.json` the agent itself wrote — and attestation says who ran the check, not who had
+the idea.
+
+So normative notes (`decision`, `constraint`) carry an **origin**: `human`, `agent` or
+`instrument`. Only those two types, because a `bug` describes how the world is and evidence
+answers for it; a decision asserts that somebody **chose**, and no command output can prove a
+choice.
+
+In the pack:
+
+```
+- origin: **proposed by an agent** — no human chose this; it is open to revision
+```
 
 ## How it compares
 
@@ -228,19 +407,29 @@ Being precise about what's actually different:
 | Re-checks the evidence | — | — | ✅ | ✅ |
 | **Doubt propagates through dependencies** | — | — | — | ✅ |
 | **Tells the agent what *not* to use** | — | — | — | ✅ |
+| **Separates "somebody said" from "a machine ran it"** | — | — | — | ✅ |
+| **Stores what the project does NOT know** | — | — | — | ✅ |
+| **Can refuse an action for lack of backing** | — | — | — | ✅ |
+| **Forgets what nobody uses** | — | — | — | ✅ |
 
-The three that are actually ours:
+The ones that are actually ours:
 
 - **A color the model is forbidden to write.** Where other tools have a confidence field,
   it's usually the LLM that fills it in — and once written it never changes. COGO computes
   it from the evidence, and recomputes it every time you look.
 - **Doubt that propagates.** Everyone else resolves contradictions *pairwise* and stops
   there. A survey of 435 papers on agent memory names this as an open problem: *"supersession
-  is local; derived records are not re-examined."* COGO's `min()` over the weakest dependency
+  is local; derived records are not re-examined."* COGO's `meet` over the weakest dependency
   is exactly that missing piece.
 - **Quarantine instead of filtering.** Other systems use verification to *hide* the doubtful
   from the agent. COGO hands it over labeled as an assumption, with instructions not to act
   on it. Hiding it means the agent doesn't know what it doesn't know.
+- **Declared ≠ executed.** Every tool that "verifies" takes the model's word for it. COGO
+  stores *who said so*, and reserves the top of the lattice for checks a machine actually ran.
+- **Absence as a first-class object.** `gap` notes make "nobody investigated this" different
+  from "this doesn't exist" — two things that look identical everywhere else: silence.
+- **Memory that forgets.** Storing is easy. Deciding what stops deserving to be remembered —
+  by use and structure, not by age — is the part nobody does.
 
 ## Philosophy
 
@@ -258,7 +447,8 @@ exactly what you want to hear.
 |---|---|
 | [Installation](docs/instalacion.md) | get it running, step by step |
 | [Deploy](docs/deploy.md) | your machine, a server, or a whole team |
-| [Manual](docs/manual.md) | how to actually use it |
+| [Manual](docs/manual.md) | **the full manual** — from "what is this" to the lattice and the fixed point |
+| [Parameters](docs/parametros.md) | the 21 knobs behind god mode, one by one |
 | [For AI agents](docs/COGO-para-agentes.md) | put this in front of your agent |
 | [Autonomy engine](docs/motor-autonomia.md) | Guard, in depth |
 | [Veracity engine](docs/motor-veracidad.md) | xray, in depth |

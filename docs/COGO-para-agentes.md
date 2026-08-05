@@ -184,6 +184,54 @@ configurados busca por significado; si no, por palabra.
 **`open(id)`** — la nota entera con su color recalculado y, si la hay, la traza
 de con qué otra nota choca.
 
+### Decir que NO se sabe
+
+**`gap(question, blocks[], cost_to_resolve, attempted[])`** — registrar algo que
+el proyecto **no** sabe, como pregunta abierta.
+
+Usala cuando no puedas tomar una decisión porque falta un dato, cuando hayas
+tenido que asumir algo para seguir, o cuando una investigación quede sin
+conclusión.
+
+**Una brecha no es una nota de baja confianza.** Una nota roja *afirma* algo sin
+respaldo; una brecha no afirma nada — dice que hay algo que no se sabe. Por eso no
+lleva color, no entra en el grafo de confianza, y el pack te la devuelve en su
+propia sección, ordenada por cuántas decisiones traba.
+
+`attempted` es lo que evita que el próximo choque contra la misma pared que vos.
+
+> **Si estás por adivinar, registrá la brecha.**
+
+### Declarar de dónde salió una decisión
+
+Cuando captures una `decision` o una `constraint`, pasá `origin`:
+
+```
+origin: human       lo dijo la persona
+origin: agent       lo propusiste, lo elegiste o lo dedujiste vos
+origin: instrument  salió de un comando, un test o un archivo
+```
+
+Solo en esos dos tipos. Un `bug` o un `runbook` describen cómo es el mundo, y ahí
+responde la evidencia; una decisión afirma que **alguien eligió**, y ninguna salida
+de comando puede probar una elección.
+
+**Si lo decidiste vos, decilo.** No baja el color, y una propuesta registrada con
+honestidad sirve más que una decisión que nadie tomó — el que la lea mañana va a
+saber que se puede revisar en vez de tratarla como cerrada.
+
+Si no declarás nada en una normativa, COGO asume `agent`: sos un agente, y esa es
+la suposición conservadora.
+
+### Notas latentes
+
+Una nota que expiró, de la que nada depende y que nadie consultó en mucho tiempo
+sale de circulación: **no te va a llegar en el `pack`**.
+
+No desapareció. La búsqueda te la devuelve marcada `[dormant]`, y si la abrís por
+su id vuelve a circulación sola. Si en una búsqueda ves algo latente que te sirve,
+abrilo: eso alcanza para que vuelva.
+
 ### Al arrancar y al cerrar
 
 **`recall(project, since)`** — re-anclarte. Sin argumentos devuelve el

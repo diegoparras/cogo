@@ -92,3 +92,60 @@ juicio ya computado en vez de re-derivarlo. El gasto (Guard/lint, opcional y
 acotado) lo ves en el menú (**≈ N tokens IA**), persistido en `.cogo/usage.json`.
 Para gasto casi nulo: modelo **local (Ollama)** para el Guard; Tier2/steelman
 apagado salvo que lo necesites.
+
+---
+
+## El runner: el modelo de amenaza más grande de COGO
+
+Ejecutar comandos que salen de notas escritas por un LLM es la superficie de ataque
+más grande que COGO puede tener. Y **una lista de comandos permitidos no la acota**.
+
+Si el agente escribe la nota *y* el comando, y `go test` está en la lista, entonces
+el agente hace que `go test` corra código que él mismo escribió — porque `go test`
+ejecuta `TestMain` e `init()`. Lo mismo con `npm test`, que corre lo que diga el
+`package.json`.
+
+Por eso **el comando no sale de la nota**. Los declara una persona en
+`.cogo/runner.yaml`, con su directorio y su timeout; la nota solo **elige** cuál de
+esos checks le aplica, por nombre.
+
+```yaml
+enabled: false          # viene apagado: un COGO recién instalado no ejecuta nada
+checks:
+  - id: go-test
+    command: ["go", "test", "./..."]   # argv, no una línea de shell: sin shell no
+    workdir: /ruta/absoluta/al/repo    # hay expansión, ni tuberías, ni ";" para
+    timeout: 2m                        # encadenar otra cosa
+```
+
+Un agente puede pedir que se corra `go-test`. **No puede inventar qué se ejecuta.**
+
+Y el emisor que produce una verificación está reservado: `internal_runner` no se
+puede escribir por la puerta común del registro, y una sola función lo emite. Un
+`grep` de `AppendEjecucion` muestra todos los lugares del sistema capaces de
+producir un `verified`.
+
+## Dos procesos sobre el mismo vault
+
+El número de secuencia del registro y su encadenado viven **en memoria** de cada
+proceso. Con dos COGO sobre el mismo volumen, los dos creerían que el último evento
+es el N y los dos escribirían el N+1: dos eventos con el mismo número y dos ramas
+de la cadena de hashes.
+
+No es hipotético — un despliegue rodante levanta el contenedor nuevo antes de bajar
+el viejo. Está cubierto: escribir toma un cerrojo del sistema operativo (`flock` en
+Unix, `LockFileEx` en Windows) y, con él, relee la punta del registro del disco.
+
+Se eligió un cerrojo del kernel y no un archivo centinela porque el kernel lo
+libera cuando el proceso muere, muera como muera. Un centinela dejado por un
+proceso que se cayó trabaría todas las escrituras futuras para siempre.
+
+**Lo que no cubre:** dos máquinas distintas contra un NFS compartido. Ahí los
+cerrojos de red no son confiables. Si necesitás varias instancias, dales un vault a
+cada una y federalas.
+
+## El olvido no borra
+
+Una nota que sale de circulación por falta de uso (§ el manual) **sigue en disco**.
+No hay ninguna ruta de COGO que borre una nota sin que alguien lo pida
+explícitamente con `remove`, y esa deja lápida en el log.
