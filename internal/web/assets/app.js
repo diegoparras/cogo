@@ -3701,6 +3701,7 @@ async function pintarSalaGuerra() {
     ? (reg.total || 0) + " eventos encadenados por hash; ninguno fue alterado"
     : reg.problema || ""));
   cad.appendChild(cab);
+  cad.classList.add("ancho");
   c.appendChild(cad);
 
   // 2 · el retículo: ocho estados, no tres colores
@@ -3784,11 +3785,11 @@ async function pintarSalaGuerra() {
     cajaE.appendChild(f);
   });
   c.appendChild(bloqueSG("El registro · últimos " + (reg.ultimos || []).length + " de " + (reg.total || 0),
-    "Es el recibo de cada color que COGO calcula: de acá se pliega todo. Append-only y encadenado por hash — alterar un evento viejo invalida todos los que siguen.", cajaE));
+    "Es el recibo de cada color que COGO calcula: de acá se pliega todo. Append-only y encadenado por hash — alterar un evento viejo invalida todos los que siguen.", cajaE, true));
 }
 
-function bloqueSG(titulo, sub, contenido) {
-  const b = el("div", "sg-bloque");
+function bloqueSG(titulo, sub, contenido, ancho) {
+  const b = el("div", "sg-bloque" + (ancho ? " ancho" : ""));
   b.appendChild(el("h3", "sg-tit", titulo));
   if (sub) b.appendChild(el("div", "sg-sub", sub));
   b.appendChild(contenido);

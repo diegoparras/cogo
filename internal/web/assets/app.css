@@ -749,7 +749,27 @@ canvas.graph-canvas:active { cursor: grabbing; }
 .deidad-puerta { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hairline);
   font-size: 12.5px; color: var(--muted); }
-.deidad-card { max-width: 780px; }
+/* El modo deidad va a pantalla completa. No es capricho: son 21 controles y seis
+   bloques de estado, y en una columna de 780px eso son cinco pantallas de
+   scroll. A ancho completo entran en dos o tres columnas y se ven de una.
+   Encabezado y pestañas quedan fijos; lo único que scrollea es el contenido. */
+#deidadModal { padding: 0; }
+.deidad-card { width: 100vw; max-width: none; height: 100dvh; max-height: none;
+  border-radius: 0; border: none; padding: 0; overflow: hidden;
+  display: flex; flex-direction: column; }
+.deidad-card > .modal-tit { padding: 20px 26px 10px; margin: 0; font-size: 19px; }
+.deidad-card > .modal-cuerpo { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 26px 60px; }
+.deidad-card .modal-x { top: 16px; right: 20px; }
+
+/* En pantalla ancha, en columnas. auto-fit hace que en una notebook angosta
+   vuelva a una sola sin que haya que decidir nada. */
+#salaGuerra { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 4px 34px; align-items: start; }
+#deidadGrupos { display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+  gap: 0 36px; align-items: start; }
+.sg-bloque.ancho, .deidad-card .deidad-h3, .deidad-card .deidad-sub,
+.deidad-card #deidadSalud, .deidad-card .deidad-barra, .deidad-card .deidad-intro { grid-column: 1 / -1; }
+.sg-eventos { max-height: 420px; }
 .deidad-intro { color: var(--muted-2); }
 .deidad-barra { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; margin: 16px 0 4px; font-size: 12.5px; color: var(--muted); }
