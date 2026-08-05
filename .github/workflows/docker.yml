@@ -45,6 +45,16 @@ jobs:
       - run: go vet ./...
       - run: go test ./... -count=1
 
+      # El visor es JavaScript embebido con go:embed: no pasa por ningún
+      # compilador, así que un error de sintaxis se despliega tal cual y deja la
+      # pantalla EN BLANCO. No lo atrapa ningún test de Go, y el binario compila
+      # perfecto. Pasó una vez; este chequeo cuesta un segundo.
+      - name: el javascript del visor parsea
+        run: |
+          for f in internal/web/assets/*.js; do
+            node --check "$f" || { echo "sintaxis rota en $f"; exit 1; }
+          done
+
   build-push:
     needs: test
     runs-on: ubuntu-latest

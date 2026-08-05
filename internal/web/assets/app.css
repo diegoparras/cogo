@@ -807,3 +807,69 @@ canvas.graph-canvas:active { cursor: grabbing; }
 /* Ayuda debajo de un campo del editor: explica el campo sin que haya que
    pasar el mouse por encima para enterarse. */
 .campo-ayuda { font-size: 12px; color: var(--muted); line-height: 1.45; margin-top: 6px; max-width: 46ch; }
+
+/* ── El portón del modo deidad ────────────────────────────────────────────
+   Escribir "acepto" es lo único que separa entrar a propósito de entrar por
+   curiosidad. El modal tiene que pesar sin ser melodramático. */
+.porton-card { max-width: 620px; }
+.porton-lead { font-size: 15px; color: var(--text); }
+.porton-lista { margin: 16px 0 20px; padding-left: 18px; display: flex; flex-direction: column; gap: 11px; }
+.porton-lista li { font-size: 13px; color: var(--muted-2); line-height: 1.5; }
+.porton-lista b { color: var(--text); }
+#portonInput { width: 100%; margin-top: 6px; font-family: var(--mono); }
+.porton-error { color: var(--err); font-size: 12.5px; margin-top: 8px; }
+
+/* ── Pestañas del panel ──────────────────────────────────────────────────── */
+.deidad-tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--hairline); }
+.deidad-tab { background: none; border: none; padding: 9px 14px; font-size: 13px; font-weight: 600;
+  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.deidad-tab.on { color: var(--text); border-bottom-color: var(--accent); }
+
+/* ── La sala de guerra ───────────────────────────────────────────────────── */
+.sg-bloque { margin: 22px 0; }
+.sg-tit { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); font-weight: 600; margin: 0 0 4px; }
+.sg-sub { font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-bottom: 10px; max-width: 62ch; }
+.sg-vacio { font-size: 12.5px; color: var(--muted); padding: 10px 0; }
+
+.sg-cadena { display: flex; align-items: center; gap: 9px; padding: 12px 14px;
+  border-radius: var(--radius); border: 1px solid var(--hairline); background: var(--card); }
+.sg-cadena .sg-punto { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
+.sg-cadena.mal { border-color: var(--err); background: color-mix(in srgb, var(--err) 8%, transparent); }
+.sg-cadena.mal .sg-punto { background: var(--err); }
+.sg-cadena .sg-sub { margin: 0; font-size: 12px; }
+
+.sg-barras { display: flex; flex-direction: column; gap: 5px; }
+.sg-barra-fila { display: grid; grid-template-columns: 130px 1fr 34px; gap: 10px; align-items: center; }
+.sg-barra-lbl { font-size: 12px; font-family: var(--mono); color: var(--muted-2); }
+.sg-barra-track { height: 16px; background: var(--card); border-radius: 4px; overflow: hidden; }
+.sg-barra { height: 100%; border-radius: 4px; min-width: 2px; background: var(--muted); transition: width .3s ease; }
+.sg-barra.c-green { background: var(--ok); }
+.sg-barra.c-yellow { background: var(--warn); }
+.sg-barra.c-red { background: var(--err); }
+.sg-barra-n { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted-2); }
+
+.sg-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
+.sg-cifra { padding: 11px 12px; border-radius: var(--radius); background: var(--card);
+  border: 1px solid var(--hairline); }
+.sg-cifra-n { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.sg-cifra-lbl { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+.sg-roto { font-size: 12.5px; color: var(--err); font-family: var(--mono);
+  padding: 5px 0; border-top: 1px solid var(--hairline); }
+.sg-cmd { font-family: var(--mono); font-size: 11.5px; color: var(--muted-2); }
+
+.sg-eventos { max-height: 340px; overflow-y: auto; border: 1px solid var(--hairline);
+  border-radius: var(--radius); }
+.sg-ev { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 11.5px;
+  border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+.sg-ev:last-child { border-bottom: none; }
+.sg-seq { font-family: var(--mono); color: var(--muted); min-width: 42px; }
+.sg-kind { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 4px;
+  background: var(--card); color: var(--muted-2); }
+.sg-kind.k-CheckExecuted { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.sg-kind.k-ContradictionOpened, .sg-kind.k-Quarantined { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err); }
+.sg-nota { flex: 1; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.sg-guarda { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.sg-emisor { font-size: 11px; color: var(--muted); }
+.sg-cuando { font-size: 11px; color: var(--muted); min-width: 74px; text-align: right; }

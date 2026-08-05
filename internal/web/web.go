@@ -119,6 +119,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/note/history", s.handleHistory)
 	mux.HandleFunc("/api/parametros", s.handleParametros)
 	mux.HandleFunc("/api/salud", s.handleSalud)
+	mux.HandleFunc("/api/salaguerra", s.handleSalaGuerra)
 	mux.HandleFunc("/api/verify", s.handleVerify)
 	mux.HandleFunc("/api/archive", s.handleArchive)
 	mux.HandleFunc("/api/restore", s.handleRestore)

@@ -1247,49 +1247,49 @@ function notaCard(n) {
   // La procedencia del respaldo. Es un eje distinto del color: el color dice
   // cuánto sostiene la evidencia, esto dice quién lo comprobó. Se muestra
   // discreto porque no compite con el semáforo, lo matiza.
-  if (n.attested) {
-    const ejec = n.attested === "executed";
-    const s = el("span", "nc-sello" + (ejec ? " ok" : ""), ejec ? "✓ ejecutado" : "declarado");
-    s.title = ejec
-      ? "COGO ejecutó el check y vio su código de salida" + (n.attested_by ? " (" + n.attested_by + ")" : "")
-      : "Alguien declaró que el check pasa; nadie lo ejecutó" + (n.attested_by ? " — lo declaró " + n.attested_by : "");
+  // La procedencia, pero SOLO cuando dice algo. "declarado" está en el 84% de las
+  // tarjetas —hasta que el runner corra, todo check pasado es una declaración— y
+  // una etiqueta que está siempre enseña a no leer las etiquetas. "✓ ejecutado"
+  // es la contraria: rara, y la buena noticia que uno quiere cazar de un vistazo.
+  // La declaración sigue estando en el detalle y en el pack.
+  if (n.attested === "executed") {
+    const s = el("span", "nc-sello ok", "✓ ejecutado");
+    s.title = "COGO ejecutó el check y vio su código de salida" +
+      (n.attested_by ? " (" + n.attested_by + ")" : "");
     head.appendChild(s);
   }
-  if (n.stale_at) {
+  // Una nota latente no necesita que le digan que venció: estar fuera de
+  // circulación EXIGE haber vencido, así que mostrar las dos cosas es decir lo
+  // mismo dos veces.
+  if (n.stale_at && !n.latent) {
     const f = freshnessLabel(n.stale_at);
     const stl = el("span", "nc-stale " + f.cls, f.text);
     stl.title = "Fresca hasta " + n.stale_at + " · después conviene revalidar (pestaña Vigencia).";
     head.appendChild(stl);
   }
-  // Quién decidió. Solo en decisiones y restricciones: en las demás la evidencia
-  // ya responde por la nota. "Lo propuso el agente" no es un reproche — es el
-  // dato que dice que eso se puede discutir.
-  if (n.origin) {
-    const esProp = n.origin === "agent";
-    const o = el("span", "nc-origen" + (esProp ? " prop" : ""), {
-      agent: "propuesta", human: "decidida", instrument: "medida", unrecorded: "sin origen",
-    }[n.origin] || n.origin);
-    o.title = {
-      agent: "La propuso un agente. Nadie con autoridad para elegir la eligió: se puede revisar.",
-      human: "La decidió una persona.",
-      instrument: "Salió de un instrumento: nadie la eligió, se midió.",
-      unrecorded: "No consta quién la decidió (se capturó antes de que COGO registrara el origen).",
-    }[n.origin] || "";
-    head.appendChild(o);
-  }
-  if (n.pinned) {
-    const p = el("span", "nc-fijada", "fijada");
-    p.title = "Fijada a mano: nunca sale de circulación, por vieja que quede.";
-    head.appendChild(p);
-  }
-  // Una nota latente salió del camino: no llega a los agentes. Tiene que verse
-  // ACÁ, porque el visor es el único lugar donde se puede recuperar, y algo que
-  // no se ve no se recupera.
-  if (n.latent) {
-    const l = el("span", "nc-latente", "latente");
-    l.title = (n.latent_reason || "") +
-      ". No entra en el pack ni en las búsquedas. Abrila o fijala para devolverla a circulación.";
-    head.appendChild(l);
+  // UN solo chip de estado, el más grave, y el resto en el tooltip.
+  //
+  // Las tres cosas —fuera de circulación, fijada a mano, propuesta sin ratificar—
+  // son verdaderas a la vez a veces, pero solo una cambia lo que hacés ahora. Las
+  // otras dos no se pierden: están a un hover, que es gratis.
+  const estados = [];
+  if (n.latent) estados.push(["latente", "nc-latente",
+    (n.latent_reason || "") + ". No entra en el pack ni en las búsquedas. Abrila o fijala para devolverla."]);
+  if (n.pinned) estados.push(["fijada", "nc-fijada",
+    "Fijada a mano: nunca sale de circulación, por vieja que quede."]);
+  if (n.origin === "agent") estados.push(["propuesta", "nc-origen prop",
+    "La propuso un agente. Nadie con autoridad para elegir la eligió: se puede revisar."]);
+  else if (n.origin === "unrecorded") estados.push(["sin origen", "nc-origen",
+    "No consta quién la decidió (se capturó antes de que COGO registrara el origen)."]);
+  else if (n.origin === "human") estados.push(["decidida", "nc-origen",
+    "La decidió una persona."]);
+  else if (n.origin === "instrument") estados.push(["medida", "nc-origen",
+    "Salió de un instrumento: nadie la eligió, se midió."]);
+  if (estados.length) {
+    const [txt, cls2, tit] = estados[0];
+    const chip = el("span", cls2, txt);
+    chip.title = estados.map(e => e[2]).join("\n\n");
+    head.appendChild(chip);
   }
   body.appendChild(head);
   body.appendChild(el("div", "nc-claim", n.claim || "—"));
@@ -3476,11 +3476,43 @@ function showTokenGate(withLockatusBack) {
 // rango, opciones y efecto vienen de la definición del parámetro en Go. No hay
 // una lista de controles escrita acá que pueda quedar desincronizada del motor
 // — agregar un parámetro es agregarlo en un lado solo.
+// El portón.
+//
+// Escribir "acepto" no es un trámite ni un susto decorativo: es lo único que
+// distingue entrar a propósito de entrar por curiosidad, y del otro lado hay
+// perillas que cambian el color de notas que ya existen sin re-verificar nada.
+//
+// Se pregunta UNA VEZ por sesión del navegador. Preguntar en cada clic sería
+// castigar a quien vive adentro, que es exactamente el que ya entendió.
+function deidadAceptada() { try { return sessionStorage.getItem("cogo.deidad") === "1"; } catch { return false; } }
+function aceptarDeidad() { try { sessionStorage.setItem("cogo.deidad", "1"); } catch {} }
+
 async function abrirDeidad() {
   $("#settingsModal").classList.add("hidden");
+  if (!deidadAceptada()) { abrirPorton(); return; }
+  await entrarADeidad();
+}
+
+function abrirPorton() {
+  const m = $("#deidadPorton"), inp = $("#portonInput"), btn = $("#portonEntrar"), err = $("#portonError");
+  inp.value = ""; err.classList.add("hidden"); btn.disabled = true;
+  m.classList.remove("hidden");
+  setTimeout(() => inp.focus(), 50);
+}
+
+async function entrarADeidad() {
+  $("#deidadPorton").classList.add("hidden");
   $("#deidadModal").classList.remove("hidden");
+  mostrarTab("estado");
   await pintarDeidad();
   pintarSalud();
+  pintarSalaGuerra();
+}
+
+function mostrarTab(cual) {
+  $$(".deidad-tab").forEach(b => b.classList.toggle("on", b.dataset.tab === cual));
+  $("#tabEstado").classList.toggle("hidden", cual !== "estado");
+  $("#tabControles").classList.toggle("hidden", cual !== "controles");
 }
 
 async function pintarDeidad() {
@@ -3610,6 +3642,32 @@ function montarDeidad() {
   const b = $("#deidadAbrir");
   if (!b) return;
   b.addEventListener("click", abrirDeidad);
+
+  // El portón. La palabra se compara sin acentos ni mayúsculas: la barrera es la
+  // intención, no la ortografía.
+  const inp = $("#portonInput"), entrar = $("#portonEntrar"), err = $("#portonError");
+  const normal = v => (v || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const revisar = () => { entrar.disabled = normal(inp.value) !== "acepto"; };
+  inp.addEventListener("input", () => { err.classList.add("hidden"); revisar(); });
+  inp.addEventListener("keydown", e => { if (e.key === "Enter" && !entrar.disabled) entrar.click(); });
+  entrar.addEventListener("click", async () => {
+    if (normal(inp.value) !== "acepto") {
+      err.textContent = "Escribí exactamente: acepto";
+      err.classList.remove("hidden");
+      return;
+    }
+    aceptarDeidad();
+    await entrarADeidad();
+  });
+  $("#portonCancelar").addEventListener("click", () => $("#deidadPorton").classList.add("hidden"));
+  $("#deidadPorton").addEventListener("click", e => {
+    if (e.target.id === "deidadPorton") $("#deidadPorton").classList.add("hidden");
+  });
+
+  $$(".deidad-tab").forEach(t => t.addEventListener("click", () => {
+    mostrarTab(t.dataset.tab);
+    if (t.dataset.tab === "estado") pintarSalaGuerra();
+  }));
   const m = $("#deidadModal");
   $("#deidadClose").addEventListener("click", () => m.classList.add("hidden"));
   m.addEventListener("click", e => { if (e.target.id === "deidadModal") m.classList.add("hidden"); });
@@ -3617,4 +3675,150 @@ function montarDeidad() {
     if (!confirm("Vuelve todos los parámetros a sus valores por defecto. ¿Seguimos?")) return;
     await guardarParametro({ restaurar_todo: true });
   });
+}
+
+// ── La sala de guerra ───────────────────────────────────────────────────────
+//
+// Lo que el motor está haciendo, no lo que se le puede tocar. El orden no es
+// estético: la integridad de la cadena va primero porque es el único dato que
+// invalida a todos los demás — si alguien editó un evento pasado, nada de lo que
+// COGO diga sobre confianza vale.
+async function pintarSalaGuerra() {
+  const c = $("#salaGuerra");
+  c.innerHTML = "";
+  let d;
+  try { d = await api("/api/salaguerra"); } catch { c.textContent = "no se pudo leer el estado"; return; }
+  if (d.error) { c.textContent = d.error; return; }
+
+  const reg = d.registro || {};
+  // 1 · la cadena
+  const cad = el("div", "sg-bloque");
+  const ok = reg.integra !== false;
+  const cab = el("div", "sg-cadena" + (ok ? " ok" : " mal"));
+  cab.appendChild(el("span", "sg-punto"));
+  cab.appendChild(el("strong", null, ok ? "Cadena íntegra" : "CADENA ROTA"));
+  cab.appendChild(el("span", "sg-sub", ok
+    ? (reg.total || 0) + " eventos encadenados por hash; ninguno fue alterado"
+    : reg.problema || ""));
+  cad.appendChild(cab);
+  c.appendChild(cad);
+
+  // 2 · el retículo: ocho estados, no tres colores
+  c.appendChild(bloqueSG("Los ocho estados", 
+    "El Vault muestra tres colores porque es lo que hace falta de un vistazo. Acá está la verdad completa: " +
+    "verificado y declarado-como-pasado son los dos verdes, y no son lo mismo.",
+    barras(d.reticulo || [])));
+
+  // 3 · el vault
+  const v = d.vault || {};
+  c.appendChild(bloqueSG("El vault", "", cifras([
+    ["notas", v.notas], ["latentes", v.latentes], ["fijadas", v.fijadas],
+    ["preguntas abiertas", v.brechas], ["propuestas sin ratificar", v.propuestas],
+    ["sin origen", v.sin_origen],
+  ])));
+
+  // 4 · el runner
+  const r = d.runner || {};
+  const cajaR = el("div");
+  if (!r.habilitado) {
+    cajaR.appendChild(el("div", "sg-vacio",
+      "Apagado. Sin runner, todo check pasado es una declaración: nadie llega a `verified`."));
+  } else {
+    cajaR.appendChild(el("div", "sg-sub", r.ejecuciones_ok + " ejecuciones OK · " + r.ejecuciones_falladas + " fallidas"));
+    const t = el("table", "dtab");
+    t.innerHTML = "<tr><th>check</th><th>comando</th><th>última corrida</th></tr>";
+    (r.checks || []).forEach(x => {
+      const tr = el("tr");
+      tr.innerHTML = `<td>${x.id}</td><td class="sg-cmd">${(x.comando || []).join(" ")}</td>` +
+        `<td>${x.ultima ? (x.ultima.ok ? "✓ " : "✗ ") + haceCuanto(x.ultima.cuando) : "—"}</td>`;
+      t.appendChild(tr);
+    });
+    cajaR.appendChild(t);
+  }
+  c.appendChild(bloqueSG("Verificación ejecutada", "El único componente que puede producir un `verified`.", cajaR));
+
+  // 5 · autorizaciones
+  const a = d.autorizaciones || {};
+  const cajaA = el("div");
+  if (!a.total) {
+    cajaA.appendChild(el("div", "sg-vacio", "Ningún agente pidió autorización todavía."));
+  } else {
+    cajaA.appendChild(el("div", "sg-sub", a.total + " consultas · " + a.bloqueadas + " bloqueadas"));
+    const t = el("table", "dtab");
+    t.innerHTML = "<tr><th></th><th>clase</th><th>pedía</th><th>se apoyaba en</th><th>cuándo</th></tr>";
+    (a.ultimas || []).forEach(x => {
+      const tr = el("tr");
+      tr.innerHTML = `<td>${x.autoriza ? "✓" : "✗"}</td><td>${x.clase}</td><td>${x.necesita}</td>` +
+        `<td class="motivo">${x.notas || "—"}</td><td>${haceCuanto(x.cuando)}</td>`;
+      t.appendChild(tr);
+    });
+    cajaA.appendChild(t);
+  }
+  c.appendChild(bloqueSG("Autorizaciones", "Toda consulta queda, autorice o no: lo que se quiere poder reconstruir es en qué se apoyó cada acción — sobre todo las que pasaron.", cajaA));
+
+  // 6 · salud del grafo
+  const g = d.grafo || {};
+  const cajaG = el("div");
+  const roto = (g.faltantes || []).length + (g.ciclos || []).length;
+  if (!roto) {
+    cajaG.appendChild(el("div", "sg-vacio", "Sin ciclos ni dependencias colgadas."));
+  } else {
+    (g.faltantes || []).forEach(f => cajaG.appendChild(
+      el("div", "sg-roto", `${f.nota} depende de "${f.nombre}", que no existe`)));
+    (g.ciclos || []).forEach(c2 => cajaG.appendChild(
+      el("div", "sg-roto", "ciclo: " + c2.join(" → ") + " → " + c2[0])));
+  }
+  c.appendChild(bloqueSG("Salud del grafo",
+    "Una dependencia rota se arregla apuntando bien; un ciclo, decidiendo cuál nota va primero. En el Vault las dos se ven como un rojo cualquiera.", cajaG));
+
+  // 7 · el registro, al final porque es lo más largo
+  const cajaE = el("div", "sg-eventos");
+  (reg.ultimos || []).forEach(e => {
+    const f = el("div", "sg-ev");
+    f.appendChild(el("span", "sg-seq", "#" + e.seq));
+    f.appendChild(el("span", "sg-kind k-" + e.tipo, e.tipo));
+    f.appendChild(el("span", "sg-nota", e.nota));
+    if (e.guarda) f.appendChild(el("span", "sg-guarda", e.guarda));
+    f.appendChild(el("span", "sg-emisor", e.emisor));
+    f.appendChild(el("span", "sg-cuando", haceCuanto(e.cuando)));
+    cajaE.appendChild(f);
+  });
+  c.appendChild(bloqueSG("El registro · últimos " + (reg.ultimos || []).length + " de " + (reg.total || 0),
+    "Es el recibo de cada color que COGO calcula: de acá se pliega todo. Append-only y encadenado por hash — alterar un evento viejo invalida todos los que siguen.", cajaE));
+}
+
+function bloqueSG(titulo, sub, contenido) {
+  const b = el("div", "sg-bloque");
+  b.appendChild(el("h3", "sg-tit", titulo));
+  if (sub) b.appendChild(el("div", "sg-sub", sub));
+  b.appendChild(contenido);
+  return b;
+}
+
+function barras(items) {
+  const box = el("div", "sg-barras");
+  const max = Math.max(1, ...items.map(x => x.n));
+  items.forEach(x => {
+    const f = el("div", "sg-barra-fila");
+    f.appendChild(el("span", "sg-barra-lbl", x.nombre));
+    const t = el("div", "sg-barra-track");
+    const b = el("div", "sg-barra c-" + (x.color || "muted"));
+    b.style.width = Math.round(x.n / max * 100) + "%";
+    t.appendChild(b);
+    f.appendChild(t);
+    f.appendChild(el("span", "sg-barra-n", String(x.n)));
+    box.appendChild(f);
+  });
+  return box;
+}
+
+function cifras(pares) {
+  const box = el("div", "sg-cifras");
+  pares.forEach(([k, v]) => {
+    const c = el("div", "sg-cifra");
+    c.appendChild(el("div", "sg-cifra-n", String(v ?? 0)));
+    c.appendChild(el("div", "sg-cifra-lbl", k));
+    box.appendChild(c);
+  });
+  return box;
 }

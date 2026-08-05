@@ -190,22 +190,62 @@
 </div>
 
 
+<div class="modal-back hidden" id="deidadPorton">
+  <div class="modal-card porton-card">
+    <h2 class="modal-tit">Estás por abrir el modo deidad</h2>
+    <div class="modal-cuerpo">
+      <p class="porton-lead">Del otro lado están los veintiún números con los que COGO decide
+      qué merece confianza. No son preferencias: son el motor.</p>
+      <ul class="porton-lista">
+        <li><b>Lo que muevas cambia notas que ya existen.</b> Bajar una ventana de frescura
+        puede pasar decenas de verdes a amarillas en el acto, sin que nadie las
+        haya re-verificado. El color se recalcula, no se guarda.</li>
+        <li><b>Algunos aflojan el sistema.</b> Están marcados. El más peligroso deja que una
+        acción irreversible —borrar, publicar, enviar— se autorice con la palabra
+        de un agente en vez de un check ejecutado.</li>
+        <li><b>Todo queda registrado.</b> Cada cambio va a la auditoría con quién lo hizo y
+        cuándo. Esto no es un modo secreto: es un modo con testigos.</li>
+        <li><b>Los defaults son los que están probados.</b> Nada de acá adentro hace falta
+        para usar COGO. Si entrás por curiosidad, mirá y salí — y si movés algo,
+        hay un botón que devuelve todo a su valor original.</li>
+      </ul>
+      <label class="field-lbl" for="portonInput">Escribí <b>acepto</b> para entrar</label>
+      <input id="portonInput" autocomplete="off" spellcheck="false" placeholder="acepto">
+      <div class="porton-error hidden" id="portonError"></div>
+    </div>
+    <div class="modal-acciones">
+      <button class="ghost" id="portonCancelar">Mejor no</button>
+      <button id="portonEntrar" disabled>Entrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-back hidden" id="deidadModal">
   <div class="modal-card deidad-card">
     <button class="modal-x" id="deidadClose" aria-label="Cerrar">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
     <h2 class="modal-tit">Modo deidad</h2>
+    <div class="deidad-tabs">
+      <button class="deidad-tab on" data-tab="estado">Estado</button>
+      <button class="deidad-tab" data-tab="controles">Controles</button>
+    </div>
     <div class="modal-cuerpo">
-      <p class="deidad-intro">Todos los números que gobiernan a COGO, sin nada escondido. Los defaults están pensados para no tener que tocar ninguno — y el dia que haga falta, estan todos. Cada cambio queda en la auditoría.</p>
-      <div class="deidad-barra">
-        <span id="deidadCuenta"></span>
-        <button class="mini ghost hidden" id="deidadReset" type="button">restaurar todo</button>
+      <div id="tabEstado">
+        <p class="deidad-intro">Qué está pasando adentro del motor ahora mismo. Nada de acá se toca: se mira.</p>
+        <div id="salaGuerra"></div>
       </div>
-      <div id="deidadGrupos"></div>
-      <h3 class="deidad-h3">Lo que el vault aprendió</h3>
-      <p class="deidad-sub">La calibración por emisor y las ventanas por supervivencia vienen apagadas: necesitan datos que solo se juntan con el uso. Acá se ve qué dirían si las encendieras, y con cuánto respaldo.</p>
-      <div id="deidadSalud"></div>
+      <div id="tabControles" class="hidden">
+        <p class="deidad-intro">Los números con los que COGO decide. Cada cambio queda en la auditoría.</p>
+        <div class="deidad-barra">
+          <span id="deidadCuenta"></span>
+          <button class="mini ghost hidden" id="deidadReset" type="button">restaurar todo</button>
+        </div>
+        <div id="deidadGrupos"></div>
+        <h3 class="deidad-h3">Lo que el vault aprendió</h3>
+        <p class="deidad-sub">La calibración por emisor y las ventanas por supervivencia vienen apagadas: necesitan datos que solo se juntan con el uso. Acá se ve qué dirían si las encendieras, y con cuánto respaldo.</p>
+        <div id="deidadSalud"></div>
+      </div>
     </div>
   </div>
 </div>
