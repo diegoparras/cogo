@@ -1886,7 +1886,7 @@ async function renderGraph(main) {
 }
 
 // ---------- editor / capture (the user-friendly front door) ----------
-const TYPES = [["bug", "bug"], ["decision", "decisión"], ["architecture", "arquitectura"], ["runbook", "runbook"], ["constraint", "restricción"], ["command", "comando"], ["mistake", "error aprendido"]];
+const TYPES = [["bug", "bug"], ["decision", "decisión"], ["architecture", "arquitectura"], ["runbook", "runbook"], ["constraint", "restricción"], ["command", "comando"], ["mistake", "error aprendido"], ["gap", "pregunta abierta"]];
 const KINDS = [["file_read", "archivo leído"], ["direct_log", "log observado"], ["command_output", "salida de comando"], ["test_result", "resultado de test"], ["doc", "documentación"], ["testimony", "testimonio"], ["inference", "inferencia"], ["hypothesis", "hipótesis"], ["absence", "ausencia (no hay señal)"]];
 
 function colorWord(c) {
@@ -2742,7 +2742,9 @@ async function openEditor(id) {
   let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "", depends_on: [], supersedes: "", caused_by: "" };
   if (id) {
     const n = await api("/api/note?id=" + encodeURIComponent(id));
-    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status, detail: e.detail })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "", origin: n.origin || "", pinned: !!n.pinned };
+    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status, detail: e.detail })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "", origin: n.origin || "", pinned: !!n.pinned,
+      question: n.question || "", blocks: n.blocks || [], cost_to_resolve: n.cost_to_resolve || "",
+      attempted: n.attempted || [], scope: n.scope || {} };
   }
   state.editing = d;
   render();
@@ -2780,7 +2782,7 @@ function renderEditor(main) {
   }
 
   const row1 = el("div", "form-row");
-  row1.appendChild(field("Tipo", select(TYPES, d.type, v => { d.type = v; renderNormativa(); preview(); })));
+  row1.appendChild(field("Tipo", select(TYPES, d.type, v => { d.type = v; renderNormativa(); renderBrecha(); preview(); })));
   const proj = el("input"); proj.value = d.project; proj.placeholder = "proyecto";
   proj.addEventListener("input", () => { d.project = proj.value; preview(); });
   row1.appendChild(field("Proyecto", proj));
@@ -2898,11 +2900,90 @@ function renderEditor(main) {
     evWrap.appendChild(actions);
   }
   renderEv();
-  form.appendChild(field("Evidencia", evWrap));
+  const campoEv = field("Evidencia", evWrap);
+  form.appendChild(campoEv);
 
   const chk = el("input"); chk.value = d.check_test; chk.placeholder = "test mínimo que verificaría el claim";
   chk.addEventListener("input", () => { d.check_test = chk.value; preview(); });
-  form.appendChild(field("Check mínimo", chk));
+  const campoChk = field("Check mínimo", chk);
+  form.appendChild(campoChk);
+
+  // ---- pregunta abierta (type: gap) ----
+  //
+  // Una brecha no lleva evidencia ni check, y no es un detalle de formulario: es
+  // lo que la distingue de una nota floja. Una nota roja AFIRMA algo sin
+  // respaldo; una brecha no afirma nada — dice que hay algo que el proyecto no
+  // sabe. Por eso los dos campos desaparecen en vez de quedar vacíos: pedirlos
+  // sugeriría que a la brecha le falta algo, y no le falta nada.
+  const brechaWrap = el("div");
+  function renderBrecha() {
+    const esG = d.type === "gap";
+    campoEv.classList.toggle("hidden", esG);
+    campoChk.classList.toggle("hidden", esG);
+    brechaWrap.classList.toggle("hidden", !esG);
+    if (!esG || brechaWrap.childElementCount) return;
+
+    const q = el("textarea", "md"); q.setAttribute("rows", "2");
+    q.value = d.question || ""; q.placeholder = "¿Qué es lo que no se sabe?";
+    q.addEventListener("input", () => { d.question = q.value; preview(); });
+    const fq = field("La pregunta", q);
+    fq.appendChild(el("div", "campo-ayuda",
+      "Escribila como pregunta. Una brecha bien planteada es media brecha resuelta."));
+    brechaWrap.appendChild(fq);
+
+    const bl = el("input"); bl.value = (d.blocks || []).join(", ");
+    bl.placeholder = "ids separados por coma";
+    bl.addEventListener("input", () => {
+      d.blocks = bl.value.split(",").map(x => x.trim()).filter(Boolean); preview();
+    });
+    const fb = field("Qué decisiones traba", bl);
+    fb.appendChild(el("div", "campo-ayuda",
+      "Cuántas cosas dependen de esta respuesta es lo que ordena la lista: primero lo que destraba más."));
+    brechaWrap.appendChild(fb);
+
+    const fc = field("Cuánto cuesta averiguarlo", select(
+      [["", "— sin estimar —"], ["bajo", "bajo"], ["medio", "medio"], ["alto", "alto"]],
+      d.cost_to_resolve || "", v => { d.cost_to_resolve = v; preview(); }));
+    brechaWrap.appendChild(fc);
+
+    const at = el("textarea", "md"); at.setAttribute("rows", "3");
+    at.value = (d.attempted || []).join("\n");
+    at.placeholder = "una por línea: qué se probó y por qué no alcanzó";
+    at.addEventListener("input", () => {
+      d.attempted = at.value.split("\n").map(x => x.trim()).filter(Boolean);
+    });
+    const fa = field("Qué se intentó ya", at);
+    fa.appendChild(el("div", "campo-ayuda",
+      "Es lo que evita que tres personas distintas choquen contra la misma pared."));
+    brechaWrap.appendChild(fa);
+  }
+  renderBrecha();
+  form.appendChild(brechaWrap);
+
+  // ---- alcance ----
+  //
+  // Dónde vale la afirmación. Un claim cierto en Windows puede ser falso en
+  // Linux, y sin esto un agente en otra máquina lo usa sin enterarse. El pack
+  // compara este alcance contra el entorno de quien pregunta y marca los que no
+  // coinciden.
+  const sc = el("input");
+  sc.value = Object.entries(d.scope || {}).map(([k, v]) => k + "=" + v).join(", ");
+  sc.placeholder = "os=linux, go=1.25, commit=abc123";
+  sc.addEventListener("input", () => {
+    const m = {};
+    sc.value.split(",").forEach(par => {
+      const i = par.indexOf("=");
+      if (i > 0) {
+        const k = par.slice(0, i).trim(), v = par.slice(i + 1).trim();
+        if (k && v) m[k] = v;
+      }
+    });
+    d.scope = m;
+  });
+  const fs2 = field("Dónde vale (opcional)", sc);
+  fs2.appendChild(el("div", "campo-ayuda",
+    "Las condiciones bajo las que el claim es cierto. Un agente en otra máquina ve marcadas las notas cuyo alcance no coincide con el suyo."));
+  form.appendChild(fs2);
 
   // ---- relaciones (manuales) ----
   // El color de las notas ya relacionadas se resuelve en UNA consulta por id, y se

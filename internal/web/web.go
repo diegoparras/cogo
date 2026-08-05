@@ -110,7 +110,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	if err != nil {
 		panic(err)
 	}
-	mux.Handle("/", http.FileServer(http.FS(sub)))
+	mux.Handle("/", servidorDeAssets(sub)) // con ETag por contenido: ver assets_http.go
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/notes", s.handleNotes)
 	mux.HandleFunc("/api/pack", s.handlePack)
@@ -1110,6 +1110,12 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		"depends_on": n.DependsOn, "supersedes": n.Supersedes, "caused_by": n.CausedBy,
 		"color": v.Color.String(), "reason": v.Reason, "stale_at": v.StaleAt.String(),
 		"contradictions": conflicts, "author": n.Author, "scope": n.Scope,
+		// Todo lo que el editor puede escribir tiene que poder leerse de vuelta, o
+		// abrir una nota para tocarle una coma le borra el resto. Es la simetría
+		// que hay que revisar cada vez que se agrega un campo.
+		"origin": n.Origin, "pinned": n.Pinned,
+		"question": n.Question, "blocks": n.Blocks,
+		"cost_to_resolve": n.CostToResolve, "attempted": n.Attempted,
 	})
 }
 
