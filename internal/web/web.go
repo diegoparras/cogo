@@ -1370,6 +1370,13 @@ type draft struct {
 	CausedBy   string            `json:"caused_by"`
 	Scope      map[string]string `json:"scope,omitempty"`
 
+	// Origin y Pinned son los dos campos que el humano tiene que poder tocar
+	// desde SU interfaz. `pinned` sobre todo: es la excepción por nota al
+	// olvido automático, y una excepción que hay que editar el .md a mano para
+	// activar no es una excepción, es un obstáculo.
+	Origin string `json:"origin,omitempty"`
+	Pinned bool   `json:"pinned,omitempty"`
+
 	// Notas de brecha (type: gap). No tienen evidencia ni check porque no
 	// afirman nada: lo que llevan es la pregunta y qué está trabando.
 	Question  string   `json:"question,omitempty"`
@@ -1399,6 +1406,13 @@ func (s *Server) noteFromDraft(d draft) *core.Note {
 		Supersedes:   strings.TrimSpace(d.Supersedes),
 		CausedBy:     strings.TrimSpace(d.CausedBy),
 		Scope:        d.Scope,
+		Pinned:       d.Pinned,
+	}
+	// El origen solo se guarda donde significa algo. Escribirlo en un `bug`
+	// dejaría un campo que nadie mira y que el pack no muestra: ruido en el
+	// frontmatter, que es lo que este formato existe para no tener.
+	if core.EsNormativa(n) {
+		n.Origin = string(core.NormalizarOrigen(d.Origin))
 	}
 	if core.EsBrecha(n) {
 		// Una brecha no lleva evidencia ni check: no hay nada que respaldar

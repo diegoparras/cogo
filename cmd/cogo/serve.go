@@ -346,6 +346,12 @@ func newMCPServer(dir string) *mcp.Server {
 			if h.State != "" {
 				fmt.Fprintf(&b, " [%s]", h.State)
 			}
+			if h.Latent {
+				// Aparece en la búsqueda pero NO en el pack. Decirlo evita que un
+				// agente la dé por parte de su contexto: si la quiere usar tiene
+				// que abrirla, y abrirla es exactamente lo que la devuelve.
+				b.WriteString(" [dormant — not in your pack; open it to bring it back]")
+			}
 			b.WriteString("\n")
 		}
 		return textResult(b.String()), nil, nil

@@ -2742,7 +2742,7 @@ async function openEditor(id) {
   let d = { id: "", type: "bug", project: state.project || "", body: "## Claim\n", evidence: [], check_test: "", depends_on: [], supersedes: "", caused_by: "" };
   if (id) {
     const n = await api("/api/note?id=" + encodeURIComponent(id));
-    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status, detail: e.detail })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "" };
+    d = { id: n.id, type: n.type, project: n.project || "", body: n.body || "## Claim\n", evidence: (n.evidence || []).map(e => ({ kind: e.kind, ref: e.ref, status: e.status, detail: e.detail })), check_test: n.check_test || "", depends_on: n.depends_on || [], supersedes: n.supersedes || "", caused_by: n.caused_by || "", origin: n.origin || "", pinned: !!n.pinned };
   }
   state.editing = d;
   render();
@@ -2780,11 +2780,56 @@ function renderEditor(main) {
   }
 
   const row1 = el("div", "form-row");
-  row1.appendChild(field("Tipo", select(TYPES, d.type, v => { d.type = v; preview(); })));
+  row1.appendChild(field("Tipo", select(TYPES, d.type, v => { d.type = v; renderNormativa(); preview(); })));
   const proj = el("input"); proj.value = d.project; proj.placeholder = "proyecto";
   proj.addEventListener("input", () => { d.project = proj.value; preview(); });
   row1.appendChild(field("Proyecto", proj));
   form.appendChild(row1);
+
+  // Quién decidió, y si la nota se fija.
+  //
+  // El origen aparece SOLO en las normativas, y por eso se redibuja al cambiar
+  // el tipo: en un bug la evidencia ya responde por la nota, y preguntar quién
+  // lo decidió no tendría sentido. Fijar, en cambio, vale para cualquiera: es
+  // la excepción por nota al olvido automático.
+  const row2 = el("div", "form-row");
+  const cajaOrigen = el("div");
+  function renderNormativa() {
+    cajaOrigen.innerHTML = "";
+    if (d.type !== "decision" && d.type !== "constraint") { d.origin = ""; return; }
+    const ops = [
+      ["", "— sin declarar —"],
+      ["human", "la decidió una persona"],
+      ["agent", "la propuso el agente"],
+      ["instrument", "salió de un instrumento"],
+    ];
+    const sel = select(ops, d.origin || "", v => { d.origin = v; preview(); });
+    const f = field("Quién lo decidió", sel);
+    f.appendChild(el("div", "campo-ayuda",
+      "Una decisión afirma que alguien ELIGIÓ, y eso ninguna evidencia lo puede probar. " +
+      "Si la elegiste vos, poné “una persona”; si la eligió el agente, decilo — una propuesta " +
+      "registrada con honestidad sirve más que una decisión que nadie tomó."));
+    cajaOrigen.appendChild(f);
+  }
+  renderNormativa();
+  row2.appendChild(cajaOrigen);
+
+  const fij = el("div", "dsw");
+  fij.setAttribute("role", "switch");
+  fij.setAttribute("tabindex", "0");
+  fij.setAttribute("aria-checked", String(!!d.pinned));
+  const alternarFij = () => {
+    d.pinned = !d.pinned;
+    fij.setAttribute("aria-checked", String(!!d.pinned));
+  };
+  fij.addEventListener("click", alternarFij);
+  fij.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); alternarFij(); } });
+  const ff = field("Fijar", fij);
+  ff.appendChild(el("div", "campo-ayuda",
+    "Una nota fijada nunca sale de circulación, por vieja que quede y aunque nadie la consulte. " +
+    "Es la excepción a mano al olvido automático."));
+  row2.appendChild(ff);
+  form.appendChild(row2);
 
   const body = el("textarea", "md"); body.value = d.body; body.setAttribute("rows", "10");
   const mdEd = mdEditor(body, () => { d.body = body.value; preview(); }, {

@@ -160,6 +160,14 @@ func instalarMotor(dir string) error {
 			n.StaleAt = previos[id].StaleAt
 		}
 		refrescarEstimaciones(vault, evs)
+		// El registro de consultas se limpia de las notas que ya no están. Va
+		// acá porque es el único punto que ve el vault entero en cada pasada, y
+		// sin esto uso.json acumularía para siempre el id de cada nota borrada.
+		existen := make(map[string]bool, len(vault))
+		for id := range vault {
+			existen[id] = true
+		}
+		registroUso.Olvidar(existen)
 		return motor.EvaluarCon(vault, contras, hoy, evs, motor.Opciones{
 			Penalizados: emisoresPenalizados(evs),
 		})

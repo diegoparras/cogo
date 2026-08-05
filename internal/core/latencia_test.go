@@ -173,3 +173,24 @@ func TestSiempreDiceElMotivo(t *testing.T) {
 		}
 	}
 }
+
+// La búsqueda SÍ devuelve las latentes, y marcadas. Es a propósito: buscar es
+// cómo se las encuentra para despertarlas, y una nota que no se puede encontrar
+// no está olvidada, está perdida. Pero devolverlas sin marca haría creer que un
+// agente las va a ver.
+func TestLaBusquedaLasDevuelveMarcadas(t *testing.T) {
+	conOlvido(t, 180, map[string]int{"muerta": 400, "viva": 1})
+	v := map[string]*Note{
+		"muerta": vieja("muerta", "command", 400),
+		"viva":   vieja("viva", "architecture", 5),
+	}
+	hits := Search(v, nil, "", "", MustDate(hoyTxt), 0, false)
+	if len(hits) != 2 {
+		t.Fatalf("la búsqueda devolvió %d de 2: una latente que no se puede encontrar está perdida, no olvidada", len(hits))
+	}
+	for _, h := range hits {
+		if (h.ID == "muerta") != h.Latent {
+			t.Errorf("%s: latent=%v", h.ID, h.Latent)
+		}
+	}
+}

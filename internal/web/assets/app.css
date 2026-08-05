@@ -803,3 +803,7 @@ canvas.graph-canvas:active { cursor: grabbing; }
   border: 1px solid var(--hairline); color: var(--accent); }
 .nc-latente { font-size: 11px; padding: 1px 7px; border-radius: 999px;
   background: var(--card); color: var(--muted); border: 1px dashed var(--hairline); }
+
+/* Ayuda debajo de un campo del editor: explica el campo sin que haya que
+   pasar el mouse por encima para enterarse. */
+.campo-ayuda { font-size: 12px; color: var(--muted); line-height: 1.45; margin-top: 6px; max-width: 46ch; }

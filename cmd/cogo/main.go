@@ -295,7 +295,11 @@ func cmdSearch(args []string) error {
 		return nil
 	}
 	for _, h := range hits {
-		fmt.Printf("%-9s %-28s %s\n", colorTag(h.Color), h.ID, h.Summary)
+		marca := ""
+		if h.Latent {
+			marca = " · latente" // fuera del pack; abrirla la devuelve
+		}
+		fmt.Printf("%-9s %-28s %s%s\n", colorTag(h.Color), h.ID, h.Summary, marca)
 	}
 	return nil
 }
