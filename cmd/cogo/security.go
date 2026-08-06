@@ -74,6 +74,37 @@ func mcpToolName(body []byte) string {
 	return msg.Params.Name
 }
 
+// mcpBlanco saca de la llamada SOBRE QUÉ se llamó: la nota, el proyecto, el
+// permiso. Es lo que convierte la auditoría de "alguien está vivo" en "alguien
+// está trabajando acá", que es lo único accionable para el que llega después.
+//
+// Guarda identificadores, nunca texto libre: el `query` de un `search` o el
+// cuerpo de un `capture` pueden decir cosas que no corresponde dejar en un log
+// que se lee entero para armar un aviso. Un id no dice nada que el vault no
+// diga ya.
+func mcpBlanco(body []byte) (nota, proyecto string) {
+	var msg struct {
+		Params struct {
+			Arguments struct {
+				ID      string `json:"id"`
+				Note    string `json:"note"`
+				Name    string `json:"name"`
+				Project string `json:"project"`
+			} `json:"arguments"`
+		} `json:"params"`
+	}
+	if json.Unmarshal(body, &msg) != nil {
+		return "", ""
+	}
+	a := msg.Params.Arguments
+	for _, v := range []string{a.ID, a.Note, a.Name} {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v), strings.TrimSpace(a.Project)
+		}
+	}
+	return "", strings.TrimSpace(a.Project)
+}
+
 func isWriteMCPCall(body []byte) bool {
 	switch mcpToolName(body) {
 	case "capture", "verify", "archive", "restore", "remove":
@@ -91,6 +122,11 @@ type auditEntry struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
 	IP     string `json:"ip"`
+	// Sobre qué se llamó. Es lo que lee internal/presencia para avisarle a un
+	// agente que otro está en lo mismo — sin esto solo se sabría que hay alguien
+	// conectado, que no alcanza para decidir nada.
+	Nota     string `json:"nota,omitempty"`
+	Proyecto string `json:"proyecto,omitempty"`
 }
 
 // defaultAuditMax caps the audit log so it can't grow without bound: the writer
@@ -142,7 +178,7 @@ func auditMiddleware(dir string) func(http.Handler) http.Handler {
 	sinceTrim := 0
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var tool string
+			var tool, nota, proyecto string
 			record := false
 			if r.URL.Path == "/mcp" && r.Method == http.MethodPost {
 				body, _ := io.ReadAll(io.LimitReader(r.Body, 2<<20))
@@ -150,6 +186,7 @@ func auditMiddleware(dir string) func(http.Handler) http.Handler {
 				r.Body = io.NopCloser(bytes.NewReader(body)) // restore for downstream
 				if tool = mcpToolName(body); tool != "" {
 					record = true
+					nota, proyecto = mcpBlanco(body)
 				}
 			} else if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != http.MethodGet &&
 				!strings.HasPrefix(r.URL.Path, "/api/audit") { // don't audit audit-management itself
@@ -160,7 +197,8 @@ func auditMiddleware(dir string) func(http.Handler) http.Handler {
 				if caller == "" {
 					caller = "anon"
 				}
-				e := auditEntry{Time: time.Now().UTC().Format(time.RFC3339), Caller: caller, Tool: tool, Method: r.Method, Path: r.URL.Path, IP: clientIP(r)}
+				e := auditEntry{Time: time.Now().UTC().Format(time.RFC3339), Caller: caller, Tool: tool,
+					Method: r.Method, Path: r.URL.Path, IP: clientIP(r), Nota: nota, Proyecto: proyecto}
 				mu.Lock()
 				if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 					b, _ := json.Marshal(e)

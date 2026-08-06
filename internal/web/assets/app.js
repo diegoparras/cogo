@@ -1337,6 +1337,41 @@ function fechaLarga(iso) {
   return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + (iso.length > 10 ? " " + p(d.getHours()) + ":" + p(d.getMinutes()) : "");
 }
 
+// esc escapa para interpolar en innerHTML.
+//
+// Hace falta porque buena parte de lo que muestra el visor lo escribió un
+// AGENTE, no el dueño del vault: el nombre de un permiso, el id de una nota, la
+// etiqueta de un token. Un `<img onerror>` ahí adentro se ejecutaría con la
+// sesión de quien está mirando la sala de guerra — que es justo la persona con
+// el modo deidad a mano.
+function esc(v) {
+  return String(v == null ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// haceRato: lo mismo que haceCuanto pero en minutos, para la presencia.
+//
+// Ahí la escala es otra: una ventana de coordinación dura media hora, y decir
+// "hoy" de alguien que llamó hace dos minutos no responde la única pregunta que
+// importa, que es si sigue trabajando ahora.
+function haceRato(iso) {
+  const m = Math.round((new Date() - asDate(iso)) / 60000);
+  if (m < 1) return "recién";
+  if (m < 60) return "hace " + m + " min";
+  const h = Math.round(m / 60);
+  return "hace " + h + (h === 1 ? " hora" : " horas");
+}
+
+// enCuanto: cuánto falta ("en 12 min"), para lo que vence.
+function enCuanto(iso) {
+  const m = Math.round((asDate(iso) - new Date()) / 60000);
+  if (m <= 0) return "vencido";
+  if (m < 60) return "en " + m + " min";
+  const h = Math.round(m / 60);
+  return "en " + h + (h === 1 ? " hora" : " horas");
+}
+
 // haceCuanto: fecha en relativo ("hace 3 días"), que es como uno tría.
 function haceCuanto(iso) {
   const d = Math.round((new Date() - asDate(iso)) / 86400000);
@@ -3698,7 +3733,7 @@ async function pintarSalud() {
     t.innerHTML = "<tr><th>emisor</th><th>declaró</th><th>a prueba</th><th>desmentidas</th><th>piso</th><th></th></tr>";
     (c.emisores || []).forEach(e => {
       const tr = el("tr");
-      tr.innerHTML = `<td>${e.nombre}</td><td class="num">${e.declaraciones}</td>` +
+      tr.innerHTML = `<td>${esc(e.nombre)}</td><td class="num">${e.declaraciones}</td>` +
         `<td class="num">${e.comprobadas}</td><td class="num">${e.desmentidas}</td>` +
         `<td class="num">${(e.cota_inferior * 100).toFixed(1)}%</td>` +
         `<td class="motivo">${e.penalizado ? "su palabra ya no alcanza" : (e.suficiente ? "dentro de lo tolerado" : "muestra chica")}</td>`;
@@ -3715,10 +3750,10 @@ async function pintarSalud() {
   t.innerHTML = "<tr><th>tipo</th><th>en uso</th><th>los datos dicen</th><th>notas</th><th>fallaron</th><th></th></tr>";
   (s.ventanas || []).forEach(v => {
     const tr = el("tr");
-    tr.innerHTML = `<td>${v.tipo}</td><td class="num">${v.en_uso} d</td>` +
+    tr.innerHTML = `<td>${esc(v.tipo)}</td><td class="num">${v.en_uso} d</td>` +
       `<td class="num">${v.aplicable ? v.estimada + " d" : "—"}</td>` +
       `<td class="num">${v.observaciones || 0}</td><td class="num">${v.fallos || 0}</td>` +
-      `<td class="motivo">${v.aplicable ? "" : (v.motivo || "")}</td>`;
+      `<td class="motivo">${esc(v.aplicable ? "" : (v.motivo || ""))}</td>`;
     t.appendChild(tr);
   });
   vt.appendChild(t);
@@ -3791,13 +3826,67 @@ async function pintarSalaGuerra() {
   cad.classList.add("ancho");
   c.appendChild(cad);
 
-  // 2 · el retículo: ocho estados, no tres colores
+  // 2 · quién más está acá ahora mismo
+  const ag = d.agentes || {};
+  const cajaAg = el("div");
+  if (ag.apagado) {
+    cajaAg.appendChild(el("div", "sg-vacio",
+      "Apagado. Nadie se entera de nadie: cada agente recibe su respuesta como si fuera el único " +
+      "conectado. Se enciende en Controles (coordinacion.ventana_minutos)."));
+  } else {
+    const vivos = ag.agentes || [], permisos = ag.permisos || [];
+    if (!vivos.length && !permisos.length) {
+      cajaAg.appendChild(el("div", "sg-vacio",
+        "Nadie más en los últimos " + ag.ventana + " minutos. Solo se ven sesiones por HTTP con " +
+        "token identificado: un COGO local por stdio no deja rastro acá."));
+    }
+    if (ag.escriben_sin_permiso > 0) {
+      cajaAg.appendChild(el("div", "sg-roto",
+        ag.escriben_sin_permiso + " agente(s) escribiendo sin haber tomado ningún permiso. " +
+        "El bloqueo solo actúa cuando alguien tomó algo: acá nadie tomó nada, así que nadie va a frenar a nadie."));
+    }
+    if (vivos.length) {
+      const t = el("table", "dtab");
+      t.innerHTML = "<tr><th>agente</th><th>qué hace</th><th>sobre</th><th>última</th></tr>";
+      vivos.forEach(a => {
+        const tr = el("tr");
+        tr.innerHTML = `<td><strong>${esc(a.token)}</strong></td>` +
+          `<td>${a.escrituras > 0 ? "<b>escribe</b>" : "lee"} · ${esc((a.herramientas || []).join(", ") || "—")}</td>` +
+          `<td class="motivo">${esc((a.notas || []).join(", ") || (a.proyectos || []).join(", ") || "—")}</td>` +
+          `<td>${haceRato(a.ultima)}</td>`;
+        t.appendChild(tr);
+      });
+      cajaAg.appendChild(t);
+    }
+    if (permisos.length) {
+      const t2 = el("table", "dtab");
+      t2.innerHTML = "<tr><th>permiso</th><th>lo tiene</th><th>hasta</th><th>por qué</th></tr>";
+      permisos.forEach(l => {
+        const tr = el("tr");
+        tr.innerHTML = `<td><strong>${esc(l.name)}</strong></td><td>${esc(l.holder)}</td>` +
+          `<td>${enCuanto(l.expires)}</td><td class="motivo">${esc(l.note || "")}</td>`;
+        t2.appendChild(tr);
+      });
+      cajaAg.appendChild(t2);
+    }
+    const pie = el("div", "sg-sub");
+    pie.style.marginTop = "8px";
+    pie.textContent = ag.bloquear
+      ? "Una acción que nombre un permiso ajeno se RECHAZA, no se avisa."
+      : "Bloqueo por permiso APAGADO: dos agentes pueden hacer la misma migración a la vez, cada uno creyendo que es el único.";
+    cajaAg.appendChild(pie);
+  }
+  c.appendChild(bloqueSG("Quién más está acá",
+    "COGO no puede interrumpir a un agente: MCP es pregunta y respuesta. Lo que hace es contestar más de lo que le preguntaron — el aviso viaja colgado del pack y del authorize, que son justo los llamados que preceden a una acción.",
+    cajaAg, true));
+
+  // 3 · el retículo: ocho estados, no tres colores
   c.appendChild(bloqueSG("Los ocho estados", 
     "El Vault muestra tres colores porque es lo que hace falta de un vistazo. Acá está la verdad completa: " +
     "verificado y declarado-como-pasado son los dos verdes, y no son lo mismo.",
     barras(d.reticulo || [])));
 
-  // 3 · el vault
+  // 4 · el vault
   const v = d.vault || {};
   c.appendChild(bloqueSG("El vault", "", cifras([
     ["notas", v.notas], ["latentes", v.latentes], ["fijadas", v.fijadas],
@@ -3805,7 +3894,7 @@ async function pintarSalaGuerra() {
     ["sin origen", v.sin_origen],
   ])));
 
-  // 4 · el runner
+  // 5 · el runner
   const r = d.runner || {};
   const cajaR = el("div");
   if (!r.habilitado) {
@@ -3817,7 +3906,7 @@ async function pintarSalaGuerra() {
     t.innerHTML = "<tr><th>check</th><th>comando</th><th>última corrida</th></tr>";
     (r.checks || []).forEach(x => {
       const tr = el("tr");
-      tr.innerHTML = `<td>${x.id}</td><td class="sg-cmd">${(x.comando || []).join(" ")}</td>` +
+      tr.innerHTML = `<td>${esc(x.id)}</td><td class="sg-cmd">${esc((x.comando || []).join(" "))}</td>` +
         `<td>${x.ultima ? (x.ultima.ok ? "✓ " : "✗ ") + haceCuanto(x.ultima.cuando) : "—"}</td>`;
       t.appendChild(tr);
     });
@@ -3825,7 +3914,7 @@ async function pintarSalaGuerra() {
   }
   c.appendChild(bloqueSG("Verificación ejecutada", "El único componente que puede producir un `verified`.", cajaR));
 
-  // 5 · autorizaciones
+  // 6 · autorizaciones
   const a = d.autorizaciones || {};
   const cajaA = el("div");
   if (!a.total) {
@@ -3836,15 +3925,15 @@ async function pintarSalaGuerra() {
     t.innerHTML = "<tr><th></th><th>clase</th><th>pedía</th><th>se apoyaba en</th><th>cuándo</th></tr>";
     (a.ultimas || []).forEach(x => {
       const tr = el("tr");
-      tr.innerHTML = `<td>${x.autoriza ? "✓" : "✗"}</td><td>${x.clase}</td><td>${x.necesita}</td>` +
-        `<td class="motivo">${x.notas || "—"}</td><td>${haceCuanto(x.cuando)}</td>`;
+      tr.innerHTML = `<td>${x.autoriza ? "✓" : "✗"}</td><td>${esc(x.clase)}</td><td>${esc(x.necesita)}</td>` +
+        `<td class="motivo">${esc(x.notas || "—")}</td><td>${haceCuanto(x.cuando)}</td>`;
       t.appendChild(tr);
     });
     cajaA.appendChild(t);
   }
   c.appendChild(bloqueSG("Autorizaciones", "Toda consulta queda, autorice o no: lo que se quiere poder reconstruir es en qué se apoyó cada acción — sobre todo las que pasaron.", cajaA));
 
-  // 6 · el sello del registro
+  // 7 · el sello del registro
   const sel = d.sellos || {};
   const cajaS = el("div");
   if (!sel.activo) {
@@ -3870,8 +3959,8 @@ async function pintarSalaGuerra() {
     (sel.resultados || []).forEach(r => {
       const tr = el("tr");
       tr.innerHTML = `<td>${r.ok ? "[ok]" : "[x]"}</td><td class="num">${r.sello.seq}</td>` +
-        `<td>${r.sello.donde}${r.sello.nota ? " · " + r.sello.nota : ""}</td>` +
-        `<td class="motivo">${r.ok ? "" : r.dice}</td>`;
+        `<td>${esc(r.sello.donde)}${r.sello.nota ? " · " + esc(r.sello.nota) : ""}</td>` +
+        `<td class="motivo">${esc(r.ok ? "" : r.dice)}</td>`;
       t.appendChild(tr);
     });
     cajaS.appendChild(t);
@@ -3885,7 +3974,7 @@ async function pintarSalaGuerra() {
   c.appendChild(bloqueSG("El sello del registro",
     "La cadena prueba que el registro es internamente consistente. Publicar su cabeza afuera es lo que prueba que es el MISMO registro de antes.", cajaS, true));
 
-  // 7 · salud del grafo
+  // 8 · salud del grafo
   const g = d.grafo || {};
   const cajaG = el("div");
   const roto = (g.faltantes || []).length + (g.ciclos || []).length;
@@ -3900,7 +3989,7 @@ async function pintarSalaGuerra() {
   c.appendChild(bloqueSG("Salud del grafo",
     "Una dependencia rota se arregla apuntando bien; un ciclo, decidiendo cuál nota va primero. En el Vault las dos se ven como un rojo cualquiera.", cajaG));
 
-  // 8 · el registro, al final porque es lo más largo
+  // 9 · el registro, al final porque es lo más largo
   const cajaE = el("div", "sg-eventos");
   (reg.ultimos || []).forEach(e => {
     const f = el("div", "sg-ev");

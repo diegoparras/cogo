@@ -44,6 +44,10 @@ type Veredicto struct {
 	// Brechas son preguntas abiertas citadas como si fueran respaldo. Merecen su
 	// propio campo porque no son notas flojas: son notas que dicen "no se sabe".
 	Brechas []string `json:"brechas,omitempty"`
+	// Bloqueo es un rechazo que NO viene de la evidencia: otro agente ya tomó
+	// esto. Va en su propio campo porque la salida es distinta — no se arregla
+	// verificando nada, se arregla hablando con el otro o esperando.
+	Bloqueo string `json:"bloqueo,omitempty"`
 }
 
 // Fuente es lo que Autorizar necesita saber del vault. Es una interfaz chica a

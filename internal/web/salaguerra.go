@@ -14,7 +14,9 @@ import (
 	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/journal"
+	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/motor"
+	"github.com/diegoparras/cogo/internal/presencia"
 	"github.com/diegoparras/cogo/internal/runner"
 )
 
@@ -101,6 +103,7 @@ func (s *Server) handleSalaGuerra(w http.ResponseWriter, r *http.Request) {
 		"brechas": brechas, "propuestas": propuestas, "sin_origen": sinOrigen,
 	}
 
+	out["agentes"] = s.vistaAgentes()
 	out["sellos"] = s.vistaSellos()
 	out["grafo"] = saludDelGrafo(vault)
 	out["autorizaciones"] = s.vistaAutorizaciones()
@@ -346,6 +349,58 @@ func (s *Server) vistaAutorizaciones() map[string]any {
 		filas = filas[:40]
 	}
 	return map[string]any{"total": len(filas), "bloqueadas": bloqueadas, "ultimas": filas}
+}
+
+// vistaAgentes muestra quién más está conectado a este vault y sobre qué anda.
+//
+// # POR QUÉ ESTÁ EN LA SALA DE GUERRA Y NO EN EL VAULT
+//
+// Porque no es un dato del contenido sino de la operación. Un humano mirando
+// esta pantalla necesita saber si hay dos agentes trabajando sobre lo mismo
+// ANTES de que colisionen: el aviso que COGO le cuelga a un `pack` lo lee la
+// máquina, esto lo lee la persona.
+//
+// # LO QUE MUESTRA Y LO QUE NO
+//
+// Muestra sesiones que pasaron por HTTP con un token identificado. No muestra
+// procesos locales por stdio —esos no dejan auditoría— ni llamadas anónimas,
+// que no se le pueden atribuir a nadie.
+func (s *Server) vistaAgentes() map[string]any {
+	minutos := s.parametros().Entero("coordinacion.ventana_minutos")
+	out := map[string]any{
+		"ventana":  minutos,
+		"bloquear": s.parametros().Bool("coordinacion.bloquear_por_permiso"),
+	}
+	if minutos <= 0 {
+		out["apagado"] = true
+		return out
+	}
+	ags := presencia.Ver(s.dir, time.Now().Add(-time.Duration(minutos)*time.Minute))
+	if len(ags) > 12 {
+		ags = ags[:12]
+	}
+	out["agentes"] = ags
+
+	// Los permisos vigentes van acá también: son la parte de la coordinación que
+	// bloquea de verdad, y verlos separados de quién los tiene no dice nada.
+	ls := lease.Open(s.dir).List(time.Now())
+	out["permisos"] = ls
+
+	// Y cuántos de los que están escribiendo NO tomaron permiso: es la señal
+	// que anticipa la colisión, porque el choque solo bloquea si alguien tomó
+	// algo.
+	tomado := map[string]bool{}
+	for _, l := range ls {
+		tomado[strings.TrimSpace(l.Holder)] = true
+	}
+	sinPermiso := 0
+	for _, a := range ags {
+		if a.Escribiendo() && !tomado[a.Token] {
+			sinPermiso++
+		}
+	}
+	out["escriben_sin_permiso"] = sinPermiso
+	return out
 }
 
 // vistaSellos muestra el estado del ancla: qué se publicó, dónde, y si el

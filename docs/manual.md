@@ -427,9 +427,105 @@ secreto filtrado, duplicado). Deja una lápida en el log.
 **`lease(name, ttl, holder)`** — coordinarse con otros agentes sobre un vault
 compartido: un permiso acotado en el tiempo antes de un trabajo riesgoso y no
 idempotente (una migración, un deploy). **Expira solo**, así que un agente que se
-cuelga no traba el vault para siempre. Es *advisory*, como git: COGO reporta el
-conflicto, no lo impide a nivel sistema de archivos. El valor es que la colisión se
-vuelve visible.
+cuelga no traba el vault para siempre. Es *advisory*, como git: COGO no lo impide
+a nivel sistema de archivos. Lo que sí hace es rechazar el `authorize` de una
+acción que nombre un permiso ajeno — ver §15b.
+
+## 15b. Dos máquinas, dos agentes, un vault
+
+Este es el escenario para el que COGO existe y el que más cuesta ver: **la sesión
+de Claude en tu notebook y la sesión de Claude en el servidor de la oficina son
+dos procesos que no se conocen.** No comparten contexto, no comparten ventana, no
+se pueden hablar. Comparten una sola cosa: el vault.
+
+Compartir memoria, sin embargo, **no es coordinarse**. Durante mucho tiempo COGO
+hizo lo primero y no lo segundo, y el agujero era exactamente este:
+
+> El agente A está corriendo una migración. El agente B pide contexto sobre la
+> base. Recibe un pack impecable —notas verdes, evidencia fresca, todo bien— y
+> **no se entera de nada**, porque la respuesta contestó exactamente lo que le
+> preguntaron.
+
+Los permisos ya existían, pero eran una isla: un agente solo se enteraba de que
+otro había tomado uno **si preguntaba**. Nadie pregunta por algo que no sabe que
+existe.
+
+### Por qué COGO no puede llamarte
+
+MCP es pregunta y respuesta. El servidor no tiene forma de hablar si no le
+hablan, y no hay ningún mecanismo para interrumpir a un agente en la mitad de un
+turno. Nada de lo que sigue es "notificaciones push", porque no se pueden hacer.
+
+**Y no hacen falta.** El protocolo de COGO ya obliga a llamar *antes* de actuar:
+`pack` primero, `authorize` antes de tocar nada. Esos llamados son el canal. COGO
+no interrumpe: **contesta más de lo que le preguntaron**, y el aviso llega
+exactamente en el momento en que es accionable.
+
+### Las tres piezas
+
+**1 · Presencia.** COGO sabe quién está conectado porque cada llamada
+autenticada deja una línea en `.cogo/audit.jsonl`: quién, cuándo, qué
+herramienta, y **sobre qué nota o proyecto**. De ahí sale la lista de agentes
+activos en los últimos *N* minutos, con qué están tocando.
+
+Sale de ahí y **deliberadamente no del registro de eventos**, aunque el registro
+tenga un campo `emitter`: ese campo es un *rol* —"sembrado", el runner, quien
+atestiguó un check— y no la sesión que está conectada ahora. Usarlo daría una
+lista de agentes llamados "sembrado", que es peor que no dar ninguna.
+
+**2 · El aviso que viaja colgado.** Cuando hay algo que decir, `pack` y
+`authorize` agregan al final de su respuesta un bloque que nombra al otro agente,
+qué está haciendo, sobre qué, y qué permisos tiene tomados.
+
+La regla que lo hace útil es cuándo **no** aparece: si no hay nadie más, o si el
+otro trabaja en otro proyecto, o si el único permiso vigente es el tuyo, el
+bloque no sale. *Un aviso que aparece siempre es un aviso que nadie lee.*
+
+**3 · El bloqueo.** `authorize` siempre preguntó *"¿te alcanza lo que sabés?"*.
+Ahora pregunta también ***"¿ya lo está haciendo otro?"***, y las dos respuestas
+tienen que ser sí. Si la acción que declarás **nombra** un permiso que tiene otro
+agente, la autorización se **rechaza**:
+
+```
+NOT AUTHORIZED — …
+
+BLOCKED BY ANOTHER AGENT — maquina-B holds the lease `migrar-db` until
+2026-08-06T19:40:00Z, and your action names it. They said: moviendo la tabla usuarios
+This is not about your evidence: verifying more will not unblock it.
+```
+
+Es el único rechazo de COGO que **no habla de evidencia**, y por eso va en su
+propio campo: verificar mejor no lo destraba. Se destraba esperando, o hablando
+con el humano.
+
+El criterio es una **coincidencia de nombre**, no una inferencia: si alguien tomó
+`migrar-db` y tu acción dice "migrar-db", eso no es una sospecha, es la misma
+cosa. Un criterio más flojo produciría bloqueos falsos, y **un bloqueo falso en
+una herramienta de seguridad se paga con que la apaguen**.
+
+### Lo que no ve
+
+Solo lo que pasa por HTTP con un token identificado. Dos procesos locales por
+stdio sobre el mismo vault no se ven acá —no dejan auditoría— y a esos los cubre
+otra capa: el cerrojo de archivo del registro, que impide que dos procesos se
+pisen los números de secuencia.
+
+Tampoco ve a un agente que decide no usar COGO. Nada de esto es una barrera de
+sistema operativo: es un acuerdo, con la diferencia de que ahora el acuerdo se
+ve, se registra, y en el caso del permiso, se hace cumplir sobre el `authorize`.
+
+### Las perillas
+
+| parámetro | qué hace |
+|---|---|
+| `coordinacion.ventana_minutos` | hasta cuándo cuenta como "ahora mismo" (30 por defecto; **0 lo apaga**) |
+| `coordinacion.bloquear_por_permiso` | si el choque **rechaza** o solo avisa (encendido por defecto) |
+
+Y en la sala de guerra, el panel **"Quién más está acá"** muestra lo mismo para
+el humano: agentes activos, qué tocan, permisos vigentes, y —la señal que
+anticipa la colisión— **cuántos están escribiendo sin haber tomado ningún
+permiso**. Porque el bloqueo solo actúa si alguien tomó algo: si nadie tomó nada,
+nadie va a frenar a nadie.
 
 ## 16. Las dos radiografías
 

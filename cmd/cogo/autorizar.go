@@ -56,6 +56,12 @@ func textoAutorizacion(v accion.Veredicto) string {
 	if v.Apoyo != "" {
 		fmt.Fprintf(&b, "\nweakest support cited: %s", v.Apoyo)
 	}
+	// El bloqueo por otro agente va antes que el consejo de siempre: es de otra
+	// naturaleza, y quien lo lee tiene que ver primero que el problema no es lo
+	// que sabe.
+	if v.Bloqueo != "" {
+		fmt.Fprintf(&b, "\n\n%s", v.Bloqueo)
+	}
 	if !v.Autoriza {
 		b.WriteString("\n\nDo not proceed. Either raise the support to the required level, " +
 			"or tell the human what is missing and let them decide. " +

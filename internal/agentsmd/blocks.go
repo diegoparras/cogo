@@ -118,7 +118,14 @@ func Curated(o BlockOptions) []Block {
 				"Antes de una tarea **no idempotente** (una migración, un deploy, una edición masiva), tomá un permiso:\n\n" +
 				"- `lease(action: \"acquire\", name: \"<recurso>\", ttl_seconds: 900, note: \"<qué estás haciendo>\")`\n" +
 				"- Si otro agente lo tiene, COGO te dice **quién** y **hasta cuándo** → **no arranques**, esperá o coordiná.\n" +
-				"- Al terminar: `lease(action: \"release\", name: \"<recurso>\")`. Los leases expiran solos.\n",
+				"- Al terminar: `lease(action: \"release\", name: \"<recurso>\")`. Los leases expiran solos.\n\n" +
+				"El permiso no es burocracia: es lo único que **frena** a otro agente. " +
+				"Un `authorize` cuya acción nombre un permiso ajeno se **rechaza**, y ese rechazo no se destraba " +
+				"verificando mejor — se destraba esperando o hablando. Si vos no tomás nada, nadie te va a frenar " +
+				"y nadie te va a poder frenar.\n\n" +
+				"Y si otro agente estuvo activo acá hace poco, `pack` y `authorize` te lo dicen al final de su " +
+				"respuesta, sin que preguntes. Cuando aparezca ese bloque, leelo antes de escribir: " +
+				"decir \"hay otro haciendo esto\" es un resultado válido de tu turno.\n",
 		},
 		{
 			ID: "evidencia", Title: "Evidencia que se pierde (stash)",

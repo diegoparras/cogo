@@ -170,6 +170,17 @@ var Registro = []Def{
 		"Cuánto tiempo tiene que pasar sin que nadie consulte una nota YA VENCIDA para que deje de entrar en el pack. Cero apaga el olvido por completo.",
 		"Bajarlo saca notas de circulación antes; subirlo las conserva más tiempo aunque nadie las use. En cero, el vault crece para siempre.", false),
 
+	// ── Coordinación entre agentes ──────────────────────────────────────────
+	// COGO ya era memoria compartida, pero compartir memoria no es coordinarse.
+	// Estos dos deciden cuándo un agente se entera de que otro está trabajando
+	// en lo mismo — y si eso alcanza para frenarlo.
+	entero("coordinacion.ventana_minutos", "hasta cuándo cuenta como \"ahora mismo\"", 30, 0, 1440, "minutos",
+		"Un agente que tocó algo hace menos que esto se considera activo, y se le avisa al que llega. En 0, no se avisa nunca.",
+		"Muy chico deja pasar colisiones reales; muy grande avisa de gente que ya terminó, y un aviso que aparece siempre es un aviso que nadie lee.", false),
+	booleano("coordinacion.bloquear_por_permiso", "bloquear si otro tomó el permiso", true,
+		"Cuando la acción nombra un permiso que tiene otro agente, `authorize` la rechaza en vez de solo avisar.",
+		"Apagarlo deja que dos agentes hagan la misma migración al mismo tiempo, cada uno creyendo que es el único.", true),
+
 	// ── El sello del registro ───────────────────────────────────────────────
 	// La cadena de hashes prueba que el registro es internamente consistente. No
 	// prueba nada contra quien tiene el archivo: puede regenerarlo entero y los
@@ -253,7 +264,7 @@ func grupoDe(clave string) string {
 
 // GruposOrdenados es el orden en que el panel muestra las secciones: de lo que
 // más se toca a lo que casi nunca.
-var GruposOrdenados = []string{"frescura", "olvido", "accion", "ancla", "calibracion", "supervivencia", "sello", "runner"}
+var GruposOrdenados = []string{"frescura", "olvido", "accion", "ancla", "calibracion", "supervivencia", "coordinacion", "sello", "runner"}
 
 // TituloGrupo es cómo se llama cada sección para un humano.
 var TituloGrupo = map[string]string{
@@ -261,6 +272,7 @@ var TituloGrupo = map[string]string{
 	"olvido":        "Cuándo una nota sale del camino",
 	"accion":        "Cuánto respaldo pide cada tipo de acción",
 	"ancla":         "Cuándo un archivo que cambió invalida una nota",
+	"coordinacion":  "Cuándo un agente se entera de otro",
 	"sello":         "Sellar el registro afuera",
 	"calibracion":   "Cuánto vale la palabra de cada emisor",
 	"supervivencia": "Ventanas derivadas de los datos, no de la tabla",

@@ -169,8 +169,12 @@ func newMCPServer(dir string) *mcp.Server {
 		// nadie. Y es lo que DESPIERTA a una latente, porque la latencia se calcula
 		// —no se escribe— así que dejar de estar sin consultar alcanza.
 		Consultadas(p.Incluidas...)
+		// Y le cuelga quién más está trabajando acá. COGO no puede empujar, pero
+		// el agente ya está obligado a pedir contexto antes de actuar: esta
+		// respuesta es el canal, y el aviso llega justo cuando sirve.
+		aviso := avisoDeOtros(ctx, dir, in.Project)
 		savings.Add(dir, p.RawTokens-p.Tokens, today().String())
-		return textResult(p.Markdown), nil, nil
+		return textResult(p.Markdown + aviso), nil, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -459,12 +463,16 @@ func newMCPServer(dir string) *mcp.Server {
 		v := accion.Autorizar(
 			accion.Peticion{Accion: in.Action, Clase: in.Class, Notas: in.Notes},
 			fuenteVault{estados: estados, vault: vault}, pars)
+		// Y antes de dejar pasar: mirar a los otros. Una acción impecablemente
+		// respaldada sigue siendo un desastre si otro agente la está haciendo
+		// ahora mismo.
+		v = aplicarChoque(ctx, dir, v, in.Action)
 		// Toda consulta queda registrada, autorice o no. Un control que solo deja
 		// rastro cuando bloquea no sirve para auditar: lo que se quiere poder
 		// reconstruir es en qué se apoyó cada acción, sobre todo las que pasaron.
 		_ = appendLog(dir, fmt.Sprintf("authorize %s [%s] %v -> %v",
 			v.Clase, v.Necesita, in.Notes, v.Autoriza))
-		return textResult(textoAutorizacion(v)), v, nil
+		return textResult(textoAutorizacion(v) + avisoDeOtros(ctx, dir, "")), v, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
