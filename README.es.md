@@ -146,7 +146,7 @@ Lo que Claude aprende hoy, mañana lo lee Cursor: **el mismo vault.**
 | `stash` | guardar un artefacto por hash → citarlo como `artifact://<sha256>` |
 | `recall` | re-anclarse tras una compactación, o ponerse al día con otro agente |
 | `reflect` | entregar lo que hiciste; COGO propone notas graduadas que vale guardar |
-| `lease` | tomar un permiso con TTL antes de una migración, un deploy o una edición masiva |
+| `lease` | tomar un permiso con TTL antes de una migración, un deploy o una edición masiva — y un `authorize` cuya acción nombre el permiso de otro se **rechaza**, no se avisa |
 | `guard` | radiografiar un turno del modelo por presión de manipulación |
 | `xray` | radiografiar una respuesta por veracidad |
 
@@ -465,7 +465,7 @@ exactamente lo que querés escuchar.
 | [Instalación](docs/instalacion.md) | ponerlo a andar, paso a paso |
 | [Deploy](docs/deploy.md) | tu compu, un servidor, o todo un equipo |
 | [Manual](docs/manual.md) | **el manual completo** — de "qué es esto" hasta el retículo y el punto fijo |
-| [Parámetros](docs/parametros.md) | las 21 perillas del modo deidad, una por una |
+| [Parámetros](docs/parametros.md) | las 22 perillas del modo deidad, una por una |
 | [Para agentes de IA](docs/COGO-para-agentes.md) | ponele esto adelante a tu agente |
 | [Motor de autonomía](docs/motor-autonomia.md) | Guard, en profundidad |
 | [Motor de veracidad](docs/motor-veracidad.md) | xray, en profundidad |

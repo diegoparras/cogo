@@ -1117,7 +1117,7 @@ Se pregunta una vez por sesión del navegador. No es un susto decorativo: es lo
 
 ### La sala de guerra
 
-Dos pestañas. **Controles** son las 21 perillas. **Estado** es lo que el motor está
+Dos pestañas. **Controles** son las 22 perillas. **Estado** es lo que el motor está
 haciendo ahora mismo:
 
 - **La cadena, primero.** Íntegra o rota. Va arriba de todo porque es el único dato
@@ -1141,7 +1141,7 @@ archivo de parámetros**, y actualizar COGO mueve los defaults hacia adelante si
 pisar lo que alguien decidió a mano. Es la misma razón por la que un `.gitconfig`
 no lista las 400 opciones de git.
 
-El detalle de los 21 está en [`parametros.md`](parametros.md).
+El detalle de los 22 está en [`parametros.md`](parametros.md).
 
 ## 33. Desplegarlo
 
@@ -1265,7 +1265,7 @@ Si algo de acá resulta falso, es un bug — y hay dónde reportarlo.
 **Documentos hermanos**
 
 - [`COGO-para-agentes.md`](COGO-para-agentes.md) — la guía que lee tu agente
-- [`parametros.md`](parametros.md) — los 21 parámetros, uno por uno
+- [`parametros.md`](parametros.md) — los 22 parámetros, uno por uno
 - [`deploy.md`](deploy.md) — desplegarlo en serio
 - [`instalacion.md`](instalacion.md) — instalación paso a paso
 - [`seguridad.md`](seguridad.md) — el modelo de seguridad

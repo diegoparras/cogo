@@ -170,6 +170,60 @@ action class: irreversible (declarada "informativa", pero el texto dice
 
 ---
 
+## Coordinación · cuándo un agente se entera de otro
+
+| parámetro | default | qué hace |
+|---|---|---|
+| `coordinacion.ventana_minutos` | 30 | hasta cuándo cuenta como "ahora mismo". **En 0 no se avisa nunca.** |
+| `coordinacion.bloquear_por_permiso` | encendido | si una acción que nombra un permiso ajeno se **rechaza** o solo se avisa |
+
+COGO no puede interrumpir a un agente: MCP es pregunta y respuesta. Lo que hace
+es **contestar más de lo que le preguntaron** — el aviso de que hay otro
+trabajando acá viaja colgado del `pack` y del `authorize`, que son justo los
+llamados que preceden a una acción.
+
+**La ventana es el compromiso entero.** Muy chica deja pasar colisiones reales;
+muy grande avisa de gente que ya terminó, y *un aviso que aparece siempre es un
+aviso que nadie lee*. Por eso el bloque no sale nunca que no haya algo concreto
+que decir: si el otro está en otro proyecto, o el único permiso vigente es el
+propio, la respuesta sale como si el parámetro estuviera apagado.
+
+**El bloqueo es el único rechazo de COGO que no habla de evidencia.** `authorize`
+siempre preguntó *"¿te alcanza lo que sabés?"*; con esto pregunta también *"¿ya
+lo está haciendo otro?"*. Verificar mejor no lo destraba — se destraba esperando
+o hablando.
+
+El criterio es una **coincidencia de nombre**, no una inferencia: si alguien tomó
+el permiso `migrar-db` y la acción dice "migrar-db", eso no es una sospecha, es
+la misma cosa. Un criterio más flojo produciría bloqueos falsos, y **un bloqueo
+falso en una herramienta de seguridad se paga con que la apaguen**.
+
+Apagar `bloquear_por_permiso` deja que dos agentes hagan la misma migración al
+mismo tiempo, cada uno creyendo que es el único.
+
+---
+
+## Sello · probar que es el mismo registro
+
+| parámetro | default | qué hace |
+|---|---|---|
+| `sello.activo` | apagado | habilita publicar la cabeza de la cadena afuera |
+| `sello.url` | vacío | a dónde se publica (vacío = `manual`: imprime y no manda nada) |
+| `sello.cada_eventos` | 500 | cada cuántos eventos conviene sellar de nuevo |
+
+La cadena de hashes detecta que alguien **alteró** un evento viejo. No detecta
+que el dueño del vault haya **rehecho la historia entera**, porque ahí recalcula
+todos los digests y la cadena queda internamente perfecta.
+
+Sellar publica la cabeza en un lugar que el dueño no controla, y es lo único que
+cierra ese hueco: un sello que ya no coincide es la prueba de que el registro se
+reescribió después de publicarse.
+
+Viene apagado porque publicar es una decisión, no un default: cada sello revela
+que este vault existe y cuánto se escribió en él.
+
+---
+
 ## Los dos módulos que vienen apagados
 
 Calibración y supervivencia necesitan datos que solo se juntan con el uso.

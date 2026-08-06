@@ -24,7 +24,7 @@ import (
 //
 // # POR QUÉ ES OTRA COSA QUE EL PANEL DE PARÁMETROS
 //
-// Veintiún controles son un panel de configuración. Lo que lo convierte en una
+// Veintidós controles son un panel de configuración. Lo que lo convierte en una
 // sala de guerra es lo que NO se toca: qué está pasando ahora mismo.
 //
 // Y lo más importante que faltaba mostrar es el registro de eventos. Es,
