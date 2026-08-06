@@ -42,6 +42,10 @@ func main() {
 		err = cmdLint(args)
 	case "serve":
 		err = cmdServe(args)
+	case "sellar":
+		err = cmdSellar(args)
+	case "sellos":
+		err = cmdVerificarSellos(args)
 	case "agents":
 		err = cmdAgents(args)
 	case "install":
@@ -74,6 +78,8 @@ commands:
   verify <id>          mark a note's check passed, re-date and re-color
   lint                 deterministic checks + (optional) LLM contradiction scan
   serve                run as an MCP server over stdio (any LLM connects)
+  sellar               publish the journal head so history can be proven later
+  sellos               check every published seal against today's journal
   agents               print an AGENTS.md/CLAUDE.md that teaches an agent the COGO protocol
   install              wire COGO into an agent's .mcp.json (stdio by default, or --http)
 

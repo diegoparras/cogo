@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/cogo/internal/ancla"
 	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/journal"
@@ -100,6 +101,7 @@ func (s *Server) handleSalaGuerra(w http.ResponseWriter, r *http.Request) {
 		"brechas": brechas, "propuestas": propuestas, "sin_origen": sinOrigen,
 	}
 
+	out["sellos"] = s.vistaSellos()
 	out["grafo"] = saludDelGrafo(vault)
 	out["autorizaciones"] = s.vistaAutorizaciones()
 	writeJSON(w, out)
@@ -344,6 +346,48 @@ func (s *Server) vistaAutorizaciones() map[string]any {
 		filas = filas[:40]
 	}
 	return map[string]any{"total": len(filas), "bloqueadas": bloqueadas, "ultimas": filas}
+}
+
+// vistaSellos muestra el estado del ancla: qué se publicó, dónde, y si el
+// registro de hoy todavía coincide.
+//
+// Un sello que no coincide es la única señal que COGO puede dar de que alguien
+// rehizo la historia entera — la cadena de hashes no puede, porque quien la
+// rehace recalcula todos los digests y queda internamente perfecta.
+func (s *Server) vistaSellos() map[string]any {
+	p := s.parametros()
+	out := map[string]any{
+		"activo":  p.Bool("sello.activo"),
+		"destino": p.Texto("sello.destino"),
+		"url":     p.Texto("sello.url"),
+	}
+	j, err := s.journal()
+	if err != nil {
+		return out
+	}
+	seq, cabeza := j.Cabeza()
+	out["cabeza"], out["seq"] = cabeza, seq
+
+	xs, err := ancla.Abrir(s.dir).Todos()
+	if err != nil || len(xs) == 0 {
+		out["ninguno"] = true
+		return out
+	}
+	res := ancla.Verificar(xs, j.DigestDe)
+	rotos := 0
+	for _, r := range res {
+		if !r.OK {
+			rotos++
+		}
+	}
+	if len(res) > 12 {
+		res = res[:12]
+	}
+	out["resultados"] = res
+	out["total"] = len(xs)
+	out["rotos"] = rotos
+	out["desde_el_ultimo"] = int(seq) - int(xs[0].Seq)
+	return out
 }
 
 func aConteos(m map[string]int) []conteo {

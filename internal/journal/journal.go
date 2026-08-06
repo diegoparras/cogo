@@ -368,5 +368,35 @@ func (j *Journal) Verificar() error {
 	return nil
 }
 
+// Cabeza es el estado del registro en un solo par de valores: hasta qué número
+// de secuencia llegó, y el digest de ese último evento.
+//
+// Ese digest resume TODA la historia anterior, porque el hash de cada evento
+// incluye el del anterior. Es lo único que hace falta publicar afuera para que
+// después se pueda probar que el registro no se reescribió: un hash de 64
+// caracteres contra el que se compara la cadena entera.
+func (j *Journal) Cabeza() (uint64, string) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.seq, j.prev
+}
+
+// DigestDe recalcula el digest del evento con ese número de secuencia, leyendo
+// del disco. Es lo que permite comprobar un sello viejo: si alguien reescribió
+// el registro, el digest que sale de los eventos de hoy no va a coincidir con el
+// que se publicó entonces.
+func (j *Journal) DigestDe(seq uint64) (string, bool) {
+	evs, err := j.All()
+	if err != nil {
+		return "", false
+	}
+	for _, e := range evs {
+		if e.Seq == seq {
+			return e.digest(), true
+		}
+	}
+	return "", false
+}
+
 // Seq es el último número de secuencia escrito.
 func (j *Journal) Seq() uint64 { j.mu.Lock(); defer j.mu.Unlock(); return j.seq }

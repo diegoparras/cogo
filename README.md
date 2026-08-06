@@ -368,6 +368,25 @@ is how you find it to wake it.
 **And it's computed, not written** — like the color. Consult it and it stops being unconsulted,
 so it stops being dormant. There's no state anyone has to remember to undo.
 
+### Sealing the journal, and why it isn't a blockchain
+
+The hash chain proves the journal is *internally consistent*. It proves nothing
+against whoever owns the file: they can regenerate the whole journal from scratch
+— new events, recomputed hashes, a perfect chain — and there's no way to notice,
+because no reference point exists outside their disk.
+
+Publishing **one hash** somewhere you don't control closes that. `cogo sellar`
+gives you the chain head; you publish it in a signed commit, an email, anything
+with a date you can't rewrite alone. `cogo sellos` later recomputes it and tells
+you if the journal changed after the fact.
+
+COGO already has the useful half of a blockchain: blocks linked by hashes. What a
+chain adds on top is **distributed consensus**, which solves ordering between
+parties that distrust each other — and COGO has **one writer per vault**, enforced
+by an OS lock. Buying consensus for a single writer means paying for a problem you
+don't have, and it would force a network dependency on a tool where everything
+that touches the network is optional.
+
 ### And it records who decided
 
 An agent proposes Fastify. You say "sure". The agent records *"we decided on Fastify"*, with

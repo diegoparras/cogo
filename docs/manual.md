@@ -602,6 +602,74 @@ de producir una verificación.
 
 Todo lo demás, por más verde que se vea, es una **declaración**.
 
+## 22b. El sello: probar que es el mismo registro
+
+La cadena de hashes prueba que el registro es **internamente consistente**. No
+prueba nada contra quien tiene el archivo.
+
+> Quien es dueño del vault puede regenerar el registro entero desde cero —eventos
+> nuevos, hashes recalculados, cadena perfecta— y no hay forma de notarlo, porque
+> no existe ningún punto de referencia fuera de su disco.
+
+Alcanza con publicar **un hash** en algún lugar que no controles: la cabeza de la
+cadena, que resume toda la historia anterior. Si el registro se reescribe, la
+cabeza que sale de los eventos de hoy no coincide con la que se publicó entonces.
+
+```bash
+cogo sellar -nota "commit a1b2c3 del repo de actas"
+
+  COGO · sello del registro
+    evento:  45
+    cabeza:  1fe2d4f6b5dbefcf072ec84c500fc17ca0fce05e5bc1f01b3d46b33bd9706d1e
+    cuando:  2026-08-06T11:30:43Z
+
+  Publicá ESTAS TRES LÍNEAS en algún lugar que no puedas reescribir solo.
+```
+
+Y después, en cualquier momento:
+
+```bash
+cogo sellos
+
+  MAL  evento 45   NO COINCIDE — el evento 45 sellado el 2026-08-06 tenía la
+                   cabeza 1fe2d4f6b5db… y hoy da 582d5938af7f…. El registro se
+                   reescribió después de publicar este sello
+```
+
+**Dos destinos, y ninguno automático por default.** `manual` te da el sello y lo
+publicás vos donde quieras — un commit firmado, un mail, un mensaje con fecha.
+`https` lo manda a una URL que le des. COGO no trae un destino "que anda solo":
+eso sería mandar la cabeza de tu registro al servidor de un tercero sin que lo
+hayas pedido.
+
+**Un sello que COGO se manda a sí mismo no prueba nada contra COGO.** Por eso el
+destino manual no publica: imprime y te dice que lo publiques. Y el archivo local
+guarda siempre **dónde** fue, porque un hash guardado al lado del registro que
+resume no vale nada.
+
+### Qué prueba y qué no
+
+Prueba que en el momento en que se publicó, el registro era exactamente el que
+produce esa cabeza. Si el lugar donde lo publicaste tiene fecha propia, prueba
+además **cuándo**.
+
+**No prueba que lo que dicen los eventos sea cierto.** Un sello es sobre la
+historia, no sobre los hechos.
+
+### Por qué no es una blockchain
+
+COGO ya tiene la parte útil: una cadena de bloques enlazados por hash. Lo que una
+blockchain agrega encima es **consenso distribuido**, que resuelve el problema de
+ordenar escrituras entre partes que desconfían entre sí.
+
+COGO no tiene esa forma: hay **un escritor por vault**, forzado por un cerrojo del
+sistema operativo (§21). Comprar consenso para un solo escritor es pagar por un
+problema que no se tiene — y obligaría a que COGO dependa de una red, cuando hoy
+todo lo que la toca es un accesorio opcional.
+
+Y anclaría lo equivocado: las notas **deben** ser editables y el color **debe**
+recalcularse. Lo inmutable es el registro de lo que pasó, y ya lo es.
+
 ## 23. El punto fijo sobre el grafo
 
 Las notas dependen unas de otras, y esas dependencias pueden tener ciclos. "¿Qué

@@ -372,6 +372,25 @@ es cómo se la encuentra para despertarla.
 **Y se calcula, no se escribe** — igual que el color. Consultala y deja de estar sin consultar,
 así que deja de ser latente. No hay un estado que alguien tenga que acordarse de revertir.
 
+### El sello, y por qué no es una blockchain
+
+La cadena de hashes prueba que el registro es *internamente consistente*. No prueba
+nada contra quien tiene el archivo: puede regenerarlo entero desde cero —eventos
+nuevos, hashes recalculados, cadena perfecta— y no hay forma de notarlo, porque no
+existe ningún punto de referencia fuera de su disco.
+
+Publicar **un hash** en algún lugar que no controles cierra ese hueco. `cogo
+sellar` te da la cabeza de la cadena; la publicás en un commit firmado, un mail,
+cualquier cosa con fecha que no puedas reescribir solo. `cogo sellos` la recalcula
+después y te dice si el registro cambió.
+
+COGO ya tiene la mitad útil de una blockchain: bloques enlazados por hash. Lo que
+una cadena agrega encima es **consenso distribuido**, que resuelve el orden entre
+partes que desconfían entre sí — y COGO tiene **un escritor por vault**, forzado
+por un cerrojo del sistema operativo. Comprar consenso para un solo escritor es
+pagar por un problema que no se tiene, y obligaría a depender de una red en una
+herramienta donde todo lo que la toca es opcional.
+
 ### Y dice quién decidió
 
 Un agente propone Fastify. Decís "dale". El agente registra *"se decidió usar Fastify"*, con su

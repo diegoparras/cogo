@@ -3668,7 +3668,13 @@ async function guardarParametro(body) {
   });
   if (r && r.error) { alert(r.error); }
   await pintarDeidad();
-  // Mover una ventana de frescura mueve el semáforo: lo que se está mirando
+  // Mover una perilla puede cambiar lo que muestra la otra pestaña —encender el
+  // sello, apagar el olvido— así que el estado se repinta también. Si no, la
+  // sala de guerra queda mostrando el mundo de antes del cambio que acabás de
+  // hacer, que es la peor forma de un tablero.
+  pintarSalaGuerra();
+  pintarSalud();
+  // Y mover una ventana de frescura mueve el semáforo: lo que se está mirando
   // detrás del panel puede haber cambiado de color.
   if (typeof render === "function") render();
 }
@@ -3838,7 +3844,48 @@ async function pintarSalaGuerra() {
   }
   c.appendChild(bloqueSG("Autorizaciones", "Toda consulta queda, autorice o no: lo que se quiere poder reconstruir es en qué se apoyó cada acción — sobre todo las que pasaron.", cajaA));
 
-  // 6 · salud del grafo
+  // 6 · el sello del registro
+  const sel = d.sellos || {};
+  const cajaS = el("div");
+  if (!sel.activo) {
+    cajaS.appendChild(el("div", "sg-vacio",
+      "Apagado. La cadena de hashes detecta que alguien alteró un evento viejo — pero no que " +
+      "el dueño del vault haya rehecho la historia entera, porque ahí recalcula todos los " +
+      "digests y queda internamente perfecta. Sellar publica la cabeza afuera, y es lo único " +
+      "que cierra ese hueco. Se enciende en Controles."));
+  } else if (sel.ninguno) {
+    cajaS.appendChild(el("div", "sg-vacio",
+      "Encendido, sin ningún sello todavía. `cogo sellar` publica el primero."));
+  } else {
+    const cab = el("div", "sg-cadena" + (sel.rotos ? " mal" : " ok"));
+    cab.appendChild(el("span", "sg-punto"));
+    cab.appendChild(el("strong", null, sel.rotos
+      ? sel.rotos + " sello(s) NO COINCIDEN" : sel.total + " sellos, todos coinciden"));
+    cab.appendChild(el("span", "sg-sub", sel.rotos
+      ? "el registro se reescribió después de publicarlos"
+      : (sel.desde_el_ultimo || 0) + " eventos desde el último sello"));
+    cajaS.appendChild(cab);
+    const t = el("table", "dtab");
+    t.innerHTML = "<tr><th></th><th>evento</th><th>publicado en</th><th></th></tr>";
+    (sel.resultados || []).forEach(r => {
+      const tr = el("tr");
+      tr.innerHTML = `<td>${r.ok ? "[ok]" : "[x]"}</td><td class="num">${r.sello.seq}</td>` +
+        `<td>${r.sello.donde}${r.sello.nota ? " · " + r.sello.nota : ""}</td>` +
+        `<td class="motivo">${r.ok ? "" : r.dice}</td>`;
+      t.appendChild(tr);
+    });
+    cajaS.appendChild(t);
+  }
+  if (sel.cabeza) {
+    const linea = el("div", "sg-sub");
+    linea.style.marginTop = "8px";
+    linea.textContent = "cabeza actual · evento " + sel.seq + " · " + sel.cabeza.slice(0, 24) + "…";
+    cajaS.appendChild(linea);
+  }
+  c.appendChild(bloqueSG("El sello del registro",
+    "La cadena prueba que el registro es internamente consistente. Publicar su cabeza afuera es lo que prueba que es el MISMO registro de antes.", cajaS, true));
+
+  // 7 · salud del grafo
   const g = d.grafo || {};
   const cajaG = el("div");
   const roto = (g.faltantes || []).length + (g.ciclos || []).length;
@@ -3853,7 +3900,7 @@ async function pintarSalaGuerra() {
   c.appendChild(bloqueSG("Salud del grafo",
     "Una dependencia rota se arregla apuntando bien; un ciclo, decidiendo cuál nota va primero. En el Vault las dos se ven como un rojo cualquiera.", cajaG));
 
-  // 7 · el registro, al final porque es lo más largo
+  // 8 · el registro, al final porque es lo más largo
   const cajaE = el("div", "sg-eventos");
   (reg.ultimos || []).forEach(e => {
     const f = el("div", "sg-ev");

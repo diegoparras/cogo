@@ -51,6 +51,7 @@ const (
 	TEntero   Tipo = "entero"
 	TBooleano Tipo = "booleano"
 	TOpcion   Tipo = "opcion"
+	TTexto    Tipo = "texto"
 )
 
 // Def describe un parámetro: lo suficiente como para poder dibujarlo, validarlo
@@ -169,6 +170,25 @@ var Registro = []Def{
 		"Cuánto tiempo tiene que pasar sin que nadie consulte una nota YA VENCIDA para que deje de entrar en el pack. Cero apaga el olvido por completo.",
 		"Bajarlo saca notas de circulación antes; subirlo las conserva más tiempo aunque nadie las use. En cero, el vault crece para siempre.", false),
 
+	// ── El sello del registro ───────────────────────────────────────────────
+	// La cadena de hashes prueba que el registro es internamente consistente. No
+	// prueba nada contra quien tiene el archivo: puede regenerarlo entero y los
+	// hashes cierran igual. Publicar la cabeza afuera es lo único que cierra ese
+	// hueco — y hace falta publicarla EN SERIO, en un lugar que no puedas
+	// reescribir solo.
+	booleano("sello.activo", "sellar el registro", false,
+		"Calcular la cabeza de la cadena para publicarla afuera y poder probar después que el registro no se reescribió.",
+		"Apagado, la cadena sigue detectando alteraciones parciales — pero no que el dueño del vault haya rehecho la historia entera.", false),
+	opciones("sello.destino", "dónde se publica", "manual", []string{"manual", "https"},
+		"`manual` te da el sello para que lo publiques vos donde quieras. `https` lo manda a la URL de abajo.",
+		"Con `https`, COGO manda la cabeza de tu registro a esa URL cada vez que sella. Es un hash, no tus notas — pero es una llamada de red que antes no existía."),
+	texto("sello.url", "URL del destino", "", "https://…",
+		"Adónde mandar el sello cuando el destino es `https`: un log de transparencia, un endpoint de un tercero, un bucket con object-lock.",
+		"Una URL equivocada hace fallar el sellado; una URL tuya lo vuelve inútil, porque el punto es que NO la controles."),
+	entero("sello.cada_eventos", "sellar cada tantos eventos", 0, 0, 100000, "eventos",
+		"Con 0, solo se sella cuando alguien lo pide. Con un número, COGO propone sellar cuando el registro creció eso desde el último sello.",
+		"Un número muy chico llena de sellos; uno muy grande deja ventanas largas sin cubrir.", false),
+
 	// ── Ejecución ───────────────────────────────────────────────────────────
 	entero("runner.timeout_maximo", "techo del timeout de un check", 15, 1, 240, "minutos",
 		"Ningún check declarado en runner.yaml puede pedir más que esto.",
@@ -184,6 +204,16 @@ func dias(clave, rotulo string, def int, explica, efecto string) Def {
 func entero(clave, rotulo string, def, min, max int, unidad, explica, efecto string, afloja ...bool) Def {
 	return Def{Clave: clave, Grupo: grupoDe(clave), Rotulo: rotulo, Explica: explica, Efecto: efecto,
 		Unidad: unidad, Tipo: TEntero, Default: def, Min: min, Max: max, Afloja: len(afloja) > 0 && afloja[0]}
+}
+
+func texto(clave, rotulo, def, ejemplo, explica, efecto string) Def {
+	return Def{Clave: clave, Grupo: grupoDe(clave), Rotulo: rotulo, Explica: explica, Efecto: efecto,
+		Tipo: TTexto, Default: def, Max: 400, Unidad: ejemplo}
+}
+
+func opciones(clave, rotulo, def string, ops []string, explica, efecto string) Def {
+	return Def{Clave: clave, Grupo: grupoDe(clave), Rotulo: rotulo, Explica: explica, Efecto: efecto,
+		Tipo: TOpcion, Default: def, Opciones: ops}
 }
 
 func booleano(clave, rotulo string, def bool, explica, efecto string, afloja bool) Def {
@@ -223,7 +253,7 @@ func grupoDe(clave string) string {
 
 // GruposOrdenados es el orden en que el panel muestra las secciones: de lo que
 // más se toca a lo que casi nunca.
-var GruposOrdenados = []string{"frescura", "olvido", "accion", "ancla", "calibracion", "supervivencia", "runner"}
+var GruposOrdenados = []string{"frescura", "olvido", "accion", "ancla", "calibracion", "supervivencia", "sello", "runner"}
 
 // TituloGrupo es cómo se llama cada sección para un humano.
 var TituloGrupo = map[string]string{
@@ -231,6 +261,7 @@ var TituloGrupo = map[string]string{
 	"olvido":        "Cuándo una nota sale del camino",
 	"accion":        "Cuánto respaldo pide cada tipo de acción",
 	"ancla":         "Cuándo un archivo que cambió invalida una nota",
+	"sello":         "Sellar el registro afuera",
 	"calibracion":   "Cuánto vale la palabra de cada emisor",
 	"supervivencia": "Ventanas derivadas de los datos, no de la tabla",
 	"runner":        "Ejecución de checks",
@@ -446,6 +477,16 @@ func normalizar(d Def, v any) (any, error) {
 			return b, nil
 		}
 		return nil, fmt.Errorf("%s: se esperaba verdadero o falso", d.Clave)
+	case TTexto:
+		str, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s: se esperaba texto", d.Clave)
+		}
+		str = strings.TrimSpace(str)
+		if d.Max > 0 && len(str) > d.Max {
+			return nil, fmt.Errorf("%s: no puede pasar de %d caracteres", d.Clave, d.Max)
+		}
+		return str, nil
 	case TOpcion:
 		str, ok := v.(string)
 		if !ok {
