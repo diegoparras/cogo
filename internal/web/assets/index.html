@@ -5,16 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>COGO</title>
 <script>if(localStorage.getItem("cogo.theme")==="dark")document.documentElement.dataset.theme="dark"</script>
-<link rel="icon" href="/cogo.svg">
+<link rel="icon" type="image/svg+xml" href="/cogo.svg">
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/escriba-ui.css">
+<!-- Sin ?v=: el servidor les pone un ETag derivado del contenido (ver
+     internal/web/assets_http.go), así que el navegador revalida solo y no hay
+     ningún número que acordarse de subir al tocar el visor. -->
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <header class="app-header">
   <a class="logo-link" href="#" title="COGO">
     <img class="logo brand" src="/cogo.svg" alt="">
-    <h1>COGO</h1>
+    <h1>COGO<small>Memoria · Suite Escriba</small></h1>
   </a>
   <span class="sp"></span>
   <div class="menu-wrap">
@@ -36,10 +39,45 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
         Ajustes · Modelo IA
       </a>
+      <a class="menu-item" id="tokensBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.5 12.5 20 3"/><path d="m16 7 3 3"/><path d="m13 10 3 3"/></svg>
+        Conexiones MCP
+      </a>
+      <a class="menu-item" id="trashBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14"/></svg>
+        Papelera
+      </a>
+      <a class="menu-item" id="auditBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
+        Auditoría MCP
+      </a>
+      <a class="menu-item" id="repoBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h7"/><path d="M8 11h5"/></svg>
+        Explorar repositorio
+      </a>
+      <a class="menu-item" id="leasesBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Leases (coordinación)
+      </a>
+      <a class="menu-item" id="evrootsBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2"/><path d="M3 7h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        Raíces de evidencia
+      </a>
+      <a class="menu-item" id="exportBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        Exportar (backup)
+      </a>
+      <a class="menu-item" id="agentsBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+        Instrucciones para agentes
+      </a>
       <a class="menu-item" id="aboutBtn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
         Acerca de COGO
       </a>
+      <div class="menu-sep"></div>
+      <div class="menu-meta" id="menuSaved" title="Tokens que el `pack` le ahorró a tu agente: el contexto coloreado y presupuestado en vez de leer las notas enteras. Acumulado.">💚 ≈ 0 tokens ahorrados</div>
+      <div class="menu-meta" id="menuTokens" title="Tokens que el modelo opcional de COGO consumió (detección de contradicciones + Guard). Aproximado; acumulado.">≈ 0 tokens IA</div>
       <div class="menu-sep hidden" id="logoutSep"></div>
       <a class="menu-item hidden" id="logoutBtn" href="/auth/logout">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -49,22 +87,37 @@
   </div>
 </header>
 
+<!-- Dos ejes, no siete pestañas sueltas: la memoria (¿cuánto confío en esta
+     nota?) y la autonomía (¿este turno del modelo me empuja?). Se separan por
+     agrupación y no por color, porque acá el color significa confianza. -->
 <nav class="tabs">
-  <button class="tab active" data-view="vault">Vault</button>
-  <button class="tab" data-view="fresh">Frescura</button>
-  <button class="tab" data-view="pack">Pack</button>
-  <button class="tab" data-view="graph">Grafo</button>
-  <button class="tab" data-view="lint">Revisión</button>
+  <span class="tab-group">
+    <span class="tab-glabel">Memoria</span>
+    <span class="tab-row">
+      <button class="tab active" data-view="vault">Vault</button>
+      <button class="tab" data-view="fresh">Vigencia</button>
+      <button class="tab" data-view="agents">Agentes</button>
+      <button class="tab" data-view="graph">Grafo</button>
+      <button class="tab" data-view="lint">Revisión</button>
+    </span>
+  </span>
+  <span class="tab-div" aria-hidden="true"></span>
+  <span class="tab-group">
+    <span class="tab-glabel">Autonomía</span>
+    <span class="tab-row">
+      <button class="tab" data-view="guard">Guard</button>
+      <button class="tab" data-view="xray">Veracidad</button>
+    </span>
+  </span>
 </nav>
 
 <main id="main"></main>
 
-<div class="login-overlay hidden" id="loginGate">
+<div class="login-overlay" id="loginGate">
   <div class="login-card">
     <img class="logo" src="/cogo.svg" alt="">
     <h2>COGO</h2>
-    <p class="login-sub">La memoria con color de tu proyecto.</p>
-    <a class="login-sso" href="/auth/login">Entrar con Lockatus</a>
+    <p class="login-sub" id="loginSub">Cargando…</p>
   </div>
 </div>
 
@@ -80,6 +133,7 @@
         <dt>Versión</dt><dd id="aboutVersion">—</dd>
         <dt>Rol en la suite</dt><dd>memoria · épica</dd>
         <dt>Notas en el vault</dt><dd id="aboutCount">—</dd>
+        <dt>Artefactos</dt><dd id="aboutStorage">—</dd>
       </dl>
     </div>
     <div class="about-foot">Diego Parras · Ecosistema Escriba</div>
@@ -95,7 +149,23 @@
     <div class="modal-cuerpo">
       <p>Opcional. Conectá un modelo y COGO detecta <strong>contradicciones</strong> entre notas. Local (Ollama) o remoto (OpenRouter, DeepSeek…). Sin esto, COGO anda igual — solo sin esa detección.</p>
       <div class="field"><label class="field-lbl">Servidor (base URL)</label><input id="setBase" placeholder="https://openrouter.ai/api/v1"></div>
-      <div class="field"><label class="field-lbl">Modelo</label><input id="setModel" placeholder="deepseek/deepseek-chat"></div>
+      <div class="field">
+        <label class="field-lbl">Modelo</label>
+        <div class="model-row">
+          <input id="setModel" placeholder="ej: deepseek/deepseek-chat">
+          <button class="mini ghost" id="setLoadModels" type="button">cargar modelos</button>
+        </div>
+        <select id="setModelSelect" class="hidden"><option value="">— elegí un modelo —</option></select>
+        <div class="model-hint" id="setModelHint"></div>
+      </div>
+      <div class="field">
+        <label class="field-lbl">Modelo de embeddings <span class="field-opt">· opcional</span></label>
+        <div class="model-row">
+          <input id="setEmbed" placeholder="ej: text-embedding-3-small">
+          <button class="mini ghost" id="setTestEmbed" type="button">probar</button>
+        </div>
+        <div class="model-hint" id="setEmbedHint">Prende la <b>búsqueda semántica</b> (encontrar notas por significado, no por palabra). Usa el mismo servidor y key.</div>
+      </div>
       <div class="field"><label class="field-lbl">API key</label>
         <div class="pass-wrap">
           <input id="setKey" type="password" placeholder="tu API key">
@@ -105,6 +175,10 @@
         </div>
       </div>
       <div class="set-status" id="setStatus"></div>
+      <div class="deidad-puerta">
+        <span id="deidadResumen">Motor · todo en sus valores por defecto</span>
+        <button class="mini ghost" id="deidadAbrir" type="button">ver los controles</button>
+      </div>
     </div>
     <div class="modal-acciones">
       <button class="ghost" id="setTest">Probar</button>
@@ -113,6 +187,68 @@
   </div>
 </div>
 
+
+<div class="modal-back hidden" id="deidadPorton">
+  <div class="modal-card porton-card">
+    <h2 class="modal-tit">Estás por abrir el modo deidad</h2>
+    <div class="modal-cuerpo">
+      <p class="porton-lead">Del otro lado están los veintiún números con los que COGO decide
+      qué merece confianza. No son preferencias: son el motor.</p>
+      <ul class="porton-lista">
+        <li><b>Lo que muevas cambia notas que ya existen.</b> Bajar una ventana de frescura
+        puede pasar decenas de verdes a amarillas en el acto, sin que nadie las
+        haya re-verificado. El color se recalcula, no se guarda.</li>
+        <li><b>Algunos aflojan el sistema.</b> Están marcados. El más peligroso deja que una
+        acción irreversible —borrar, publicar, enviar— se autorice con la palabra
+        de un agente en vez de un check ejecutado.</li>
+        <li><b>Todo queda registrado.</b> Cada cambio va a la auditoría con quién lo hizo y
+        cuándo. Esto no es un modo secreto: es un modo con testigos.</li>
+        <li><b>Los defaults son los que están probados.</b> Nada de acá adentro hace falta
+        para usar COGO. Si entrás por curiosidad, mirá y salí — y si movés algo,
+        hay un botón que devuelve todo a su valor original.</li>
+      </ul>
+      <label class="field-lbl" for="portonInput">Escribí <b>acepto</b> para entrar</label>
+      <input id="portonInput" autocomplete="off" spellcheck="false" placeholder="acepto">
+      <div class="porton-error hidden" id="portonError"></div>
+    </div>
+    <div class="modal-acciones">
+      <button class="ghost" id="portonCancelar">Mejor no</button>
+      <button id="portonEntrar" disabled>Entrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-back hidden" id="deidadModal">
+  <div class="modal-card deidad-card">
+    <button class="modal-x" id="deidadClose" aria-label="Cerrar">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2 class="modal-tit">Modo deidad</h2>
+    <div class="deidad-tabs">
+      <button class="deidad-tab on" data-tab="estado">Estado</button>
+      <button class="deidad-tab" data-tab="controles">Controles</button>
+    </div>
+    <div class="modal-cuerpo">
+      <div id="tabEstado">
+        <p class="deidad-intro">Qué está pasando adentro del motor ahora mismo. Nada de acá se toca: se mira.</p>
+        <div id="salaGuerra"></div>
+      </div>
+      <div id="tabControles" class="hidden">
+        <p class="deidad-intro">Los números con los que COGO decide. Cada cambio queda en la auditoría.</p>
+        <div class="deidad-barra">
+          <span id="deidadCuenta"></span>
+          <button class="mini ghost hidden" id="deidadReset" type="button">restaurar todo</button>
+        </div>
+        <div id="deidadGrupos"></div>
+        <h3 class="deidad-h3">Lo que el vault aprendió</h3>
+        <p class="deidad-sub">La calibración por emisor y las ventanas por supervivencia vienen apagadas: necesitan datos que solo se juntan con el uso. Acá se ve qué dirían si las encendieras, y con cuánto respaldo.</p>
+        <div id="deidadSalud"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/graph.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

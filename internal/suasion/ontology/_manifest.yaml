@@ -1,0 +1,16 @@
+# Índice de la ontología de manipulación de COGO (motor de autonomía).
+# Metadatos: este archivo NO se carga como disciplina (prefijo "_").
+version: 1
+engine: suasion
+disciplines:
+  - { file: persuasion.yaml,      key: persuasion,      display: "Persuasión e influencia social" }
+  - { file: interrogation.yaml,   key: interrogation,   display: "Interrogatorio (policial y militar / HUMINT)" }
+  - { file: negotiation.yaml,     key: negotiation,     display: "Negociación" }
+  - { file: coercion.yaml,        key: coercion,        display: "Coerción y reforma del pensamiento" }
+  - { file: dark_psychology.yaml, key: dark_psychology, display: "Manipulación emocional (dark psychology)" }
+  - { file: rhetoric.yaml,        key: rhetoric,        display: "Propaganda, retórica y 'humo'" }
+enums:
+  axes: [presion, autonomia, asimetria, veracidad]
+  trajectory: [single, longitudinal, both]
+  severity: [low, medium, high, critical]
+  detector_type: [lexicon, speech_act, pragmatic, structure, trajectory, nli_transcript, frame, meta]

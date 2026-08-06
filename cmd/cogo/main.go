@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/cogo/internal/agentsmd"
+	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
 )
 
@@ -39,6 +42,14 @@ func main() {
 		err = cmdLint(args)
 	case "serve":
 		err = cmdServe(args)
+	case "sellar":
+		err = cmdSellar(args)
+	case "sellos":
+		err = cmdVerificarSellos(args)
+	case "agents":
+		err = cmdAgents(args)
+	case "install":
+		err = cmdInstall(args)
 	case "-h", "--help", "help":
 		usage()
 		return
@@ -67,6 +78,10 @@ commands:
   verify <id>          mark a note's check passed, re-date and re-color
   lint                 deterministic checks + (optional) LLM contradiction scan
   serve                run as an MCP server over stdio (any LLM connects)
+  sellar               publish the journal head so history can be proven later
+  sellos               check every published seal against today's journal
+  agents               print an AGENTS.md/CLAUDE.md that teaches an agent the COGO protocol
+  install              wire COGO into an agent's .mcp.json (stdio by default, or --http)
 
 common flags:
   -vault <dir>         vault directory (default $COGO_VAULT or ./vault)
@@ -83,6 +98,15 @@ func vaultFlag(fs *flag.FlagSet) *string {
 		def = "vault"
 	}
 	return fs.String("vault", def, "vault directory")
+}
+
+// conVault se llama después de parsear los flags de un subcomando, y es donde se
+// enchufan los parámetros del vault. Está separado de vaultFlag porque el valor
+// del flag no existe hasta después de Parse: declarar y resolver son dos
+// momentos distintos.
+func conVault(dir *string) string {
+	instalarParametros(*dir)
+	return *dir
 }
 
 func today() core.Date {
@@ -148,6 +172,7 @@ func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	dir := vaultFlag(fs)
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
 		return err
@@ -171,6 +196,7 @@ func cmdAdd(args []string) error {
 	dir := vaultFlag(fs)
 	force := fs.Bool("force", false, "overwrite even a note that is currently green")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	var data []byte
 	var err error
@@ -232,6 +258,7 @@ func cmdPack(args []string) error {
 	budget := fs.Int("budget", 0, "approx token budget (0 = unlimited)")
 	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD (default: real today)")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	t, err := resolveToday(*todayStr)
 	if err != nil {
@@ -258,6 +285,7 @@ func cmdSearch(args []string) error {
 	limit := fs.Int("limit", 0, "max results (0 = all)")
 	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	t, err := resolveToday(*todayStr)
 	if err != nil {
@@ -267,14 +295,139 @@ func cmdSearch(args []string) error {
 	if err != nil {
 		return err
 	}
-	hits := core.Search(vault, nil, strings.Join(fs.Args(), " "), *project, t, *limit)
+	hits := core.Search(vault, nil, strings.Join(fs.Args(), " "), *project, t, *limit, false)
 	if len(hits) == 0 {
 		fmt.Println("no matching notes")
 		return nil
 	}
 	for _, h := range hits {
-		fmt.Printf("%-9s %-28s %s\n", colorTag(h.Color), h.ID, h.Summary)
+		marca := ""
+		if h.Latent {
+			marca = " · latente" // fuera del pack; abrirla la devuelve
+		}
+		fmt.Printf("%-9s %-28s %s%s\n", colorTag(h.Color), h.ID, h.Summary, marca)
 	}
+	return nil
+}
+
+// cmdAgents emits the bootstrap file (AGENTS.md/CLAUDE.md) that teaches a coding
+// agent the COGO protocol and how to connect. --digest embeds a static snapshot
+// of the current green/yellow notes for an agent that can't speak MCP.
+func cmdAgents(args []string) error {
+	fs := flag.NewFlagSet("agents", flag.ExitOnError)
+	dir := vaultFlag(fs)
+	claude := fs.Bool("claude", false, "name it CLAUDE.md (Claude Code) instead of AGENTS.md")
+	httpURL := fs.String("http", "", "MCP-over-HTTP endpoint for the connection snippet (else a stdio snippet)")
+	digest := fs.Bool("digest", false, "embed a static snapshot of the current green/yellow notes")
+	out := fs.String("o", "", "write to this file instead of stdout")
+	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD")
+	_ = fs.Parse(args)
+	conVault(dir)
+
+	name := "AGENTS.md"
+	if *claude {
+		name = "CLAUDE.md"
+	}
+	opts := agentsmd.Options{Filename: name, HTTPURL: *httpURL, Vault: *dir}
+	if *httpURL == "" {
+		if exe, err := os.Executable(); err == nil {
+			opts.Binary = exe
+		}
+	}
+	if *digest {
+		t, err := resolveToday(*todayStr)
+		if err != nil {
+			return err
+		}
+		vault, err := core.LoadVault(*dir)
+		if err != nil {
+			return err
+		}
+		core.ResolveEvidence(vault, core.LoadEvidenceRoots(*dir))
+		verdicts := core.EvaluateVault(vault, contra.Open(*dir).OpenNoteSet(), t)
+		items := make([]agentsmd.DigestItem, 0, len(vault))
+		for id, n := range vault {
+			if n.Status != "" {
+				continue // skip archived/retracted — the snapshot is the live memory
+			}
+			items = append(items, agentsmd.DigestItem{Color: verdicts[id].Color.String(), ID: id, Claim: core.Claim(n)})
+		}
+		sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+		opts.Digest = agentsmd.RenderDigest(items)
+		opts.Date = t.String()
+	}
+	md := agentsmd.Generate(opts)
+	if *out != "" {
+		if err := os.WriteFile(*out, []byte(md), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "wrote %s\n", *out)
+		return nil
+	}
+	fmt.Print(md)
+	return nil
+}
+
+// cmdInstall wires COGO into an agent's .mcp.json — stdio (this binary + vault)
+// by default, or a remote HTTP endpoint with --http (+ optional --token). It
+// MERGES into an existing .mcp.json, preserving any other servers already there.
+func cmdInstall(args []string) error {
+	fs := flag.NewFlagSet("install", flag.ExitOnError)
+	dir := vaultFlag(fs)
+	httpURL := fs.String("http", "", "remote MCP endpoint (HTTP); default = local stdio using this binary")
+	token := fs.String("token", "", "Bearer token for the HTTP endpoint (optional)")
+	name := fs.String("name", "cogo", "server key under mcpServers")
+	out := fs.String("o", ".mcp.json", "path to the .mcp.json to write/merge")
+	claude := fs.Bool("claude", false, "also drop a CLAUDE.md with the COGO protocol next to it")
+	_ = fs.Parse(args)
+	conVault(dir)
+
+	bin, err := os.Executable()
+	if err != nil {
+		bin = "cogo"
+	}
+	vabs, _ := filepath.Abs(*dir)
+
+	server := map[string]any{"command": bin, "args": []any{"serve", "-vault", vabs}}
+	mode := "stdio"
+	if *httpURL != "" {
+		mode = "http"
+		server = map[string]any{"type": "http", "url": *httpURL}
+		if *token != "" {
+			server["headers"] = map[string]any{"Authorization": "Bearer " + *token}
+		}
+	}
+
+	// Merge into an existing .mcp.json, preserving any other servers.
+	root := map[string]any{}
+	if b, err := os.ReadFile(*out); err == nil {
+		_ = json.Unmarshal(b, &root)
+	}
+	servers, _ := root["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	servers[*name] = server
+	root["mcpServers"] = servers
+
+	b, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(*out, append(b, '\n'), 0o644); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "cogo: wired %q → mcpServers.%s (%s)\n", *out, *name, mode)
+
+	if *claude {
+		p := filepath.Join(filepath.Dir(*out), "CLAUDE.md")
+		md := agentsmd.Generate(agentsmd.Options{Filename: "CLAUDE.md", HTTPURL: *httpURL, Binary: bin, Vault: vabs})
+		if err := os.WriteFile(p, []byte(md), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "cogo: wrote %s\n", p)
+	}
+	fmt.Fprintln(os.Stderr, "  reiniciá tu agente para que tome la config.")
 	return nil
 }
 
@@ -284,6 +437,7 @@ func cmdStale(args []string) error {
 	within := fs.Int("within", 30, "also list notes going stale within N days")
 	todayStr := fs.String("today", "", "pin the date as YYYY-MM-DD")
 	_ = fs.Parse(args)
+	conVault(dir)
 
 	t, err := resolveToday(*todayStr)
 	if err != nil {
@@ -328,7 +482,9 @@ func cmdStale(args []string) error {
 func cmdVerify(args []string) error {
 	fs := flag.NewFlagSet("verify", flag.ExitOnError)
 	dir := vaultFlag(fs)
+	reanchor := fs.Bool("reanchor", false, "confirmá que comprobaste la afirmación contra el contenido ACTUAL de la evidencia que cambió")
 	_ = fs.Parse(args)
+	conVault(dir)
 	rest := fs.Args()
 	if len(rest) != 1 {
 		return fmt.Errorf("usage: cogo verify <id>")
@@ -344,9 +500,14 @@ func cmdVerify(args []string) error {
 		return fmt.Errorf("no note with id %q", id)
 	}
 
-	// Revalidate: the check passed, as of today. Re-color from there.
-	note.Check.Status = "passed"
-	note.LastVerified = today()
+	// Revalidar: se declara que el check pasa, con fecha de hoy. Queda asentado
+	// como declaración; solo el runner interno produce `executed`.
+	if err := core.Verificar(note, core.LoadEvidenceRoots(*dir), today(), core.Verificacion{
+		Por:      "cli",
+		Reanclar: *reanchor,
+	}); err != nil {
+		return err
+	}
 	v := core.Evaluate(note, vault, nil, today())
 	note.Apply(v)
 

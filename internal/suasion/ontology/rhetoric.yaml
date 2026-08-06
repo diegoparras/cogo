@@ -1,0 +1,883 @@
+discipline: rhetoric
+display_name: "Propaganda, retórica y 'humo'"
+techniques:
+  - id: rhetoric.bullshit
+    name: "Bullshit (humo)"
+    aka: ["humo", "verso", "discurso indiferente a la verdad"]
+    family: "truth_indifference"
+    source:
+      author: "Harry Frankfurt"
+      work: "On Bullshit"
+      year: 2005
+    definition: >
+      Discurso producido con total indiferencia hacia su verdad o falsedad: no busca
+      informar ni engañar sobre los hechos, sino impresionar, llenar espacio o quedar bien.
+    mechanism: >
+      A diferencia del mentiroso, que conoce la verdad y la oculta, el bullshitter no la
+      consulta: optimiza el efecto del discurso, no su relación con la realidad. La fluidez,
+      la seguridad tonal y el formato prolijo simulan conocimiento y desactivan la verificación.
+    in_llm: >
+      Es el modo de fallo natural de un LLM: prosa fluida, segura y bien estructurada generada
+      por plausibilidad estadística, sin fundamento verificado — datos que suenan bien, citas
+      que no existen, cifras redondas, explicaciones impecables de cosas falsas. La confianza
+      del tono no correlaciona con la evidencia disponible: el modelo redacta igual de seguro
+      lo que sabe y lo que inventa. La señal típica es abundancia de seguridad con escasez de
+      detalle verificable.
+    axes: [veracidad]
+    detectors:
+      - type: pragmatic
+        signal: "aserciones de alta confianza sin fuente, sin hedging calibrado ni marca de incertidumbre"
+      - type: meta
+        signal: "desproporción entre la seguridad expresada y la evidencia citada en la respuesta"
+      - type: nli_transcript
+        signal: "afirmaciones fácticas no verificables presentadas con el mismo tono que las verificables"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Esto se puede verificar? ¿Dónde, exactamente?"
+      - "Si le pido la fuente primaria, ¿la tiene o la va a improvisar?"
+      - "¿Sonaría igual de convincente si fuera falso?"
+    countermeasure:
+      doctrine: "Exigencia de falsabilidad (motor de veracidad de COGO)"
+      move: "Pedir la fuente primaria exacta y una forma concreta de comprobar cada afirmación antes de usarla para decidir."
+      inoculation: "La fluidez no es evidencia: lo que suena perfecto también puede ser humo."
+    fp_guard: >
+      Respuestas con incertidumbre explícita, hedging calibrado o fuentes verificables no
+      disparan; tampoco la prosa fluida en contextos donde el usuario no pidió factualidad
+      (ficción, brainstorming, borradores creativos).
+    maps_to: [persuasion.illusory_truth, persuasion.peripheral_route]
+
+  - id: rhetoric.flouting_quantity
+    name: "Violación de la máxima de cantidad"
+    family: "maxim_flouting"
+    source:
+      author: "H. P. Grice"
+      work: "Logic and Conversation"
+      year: 1975
+    definition: >
+      Decir menos (o más) de lo que la conversación requiere para que el oyente complete
+      el hueco con implicaturas engañosas que el hablante nunca afirmó.
+    mechanism: >
+      El oyente asume que el hablante coopera (principio cooperativo de Grice); ante
+      información faltante o excesiva, infiere lo que "debió querer decir". El manipulador
+      cosecha esa inferencia sin haberla afirmado: si lo confrontan, "técnicamente no mintió".
+    in_llm: >
+      El modelo omite justo el dato que cambiaría tu decisión (el costo, el riesgo, la
+      alternativa obvia) o entierra el punto clave bajo un alud de detalle irrelevante.
+      La implicatura hace el trabajo sucio: vos concluís lo que el texto nunca dijo. Típico
+      en comparaciones donde una opción aparece con tres párrafos de virtudes y la otra con
+      una línea, sin que ninguna afirmación individual sea falsa.
+    axes: [veracidad, asimetria]
+    detectors:
+      - type: pragmatic
+        signal: "lo que el texto invita a inferir excede sistemáticamente lo que afirma"
+      - type: structure
+        signal: "omisión de costos/riesgos/alternativas en contextos de decisión; asimetría de detalle entre opciones"
+      - type: nli_transcript
+        signal: "la conclusión natural del pasaje no está sostenida por ninguna oración del pasaje"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿Qué dato falta acá que yo necesitaría para decidir?"
+      - "¿Qué estoy concluyendo que el texto no dice explícitamente?"
+    countermeasure:
+      doctrine: "Pragmática griceana aplicada"
+      move: "Preguntar explícitamente por lo omitido: costos, riesgos, excepciones y la otra mitad de la comparación."
+      inoculation: "Lo que no te dicen también es un mensaje."
+    fp_guard: >
+      Brevedad pedida por el usuario, o resúmenes con alcance declarado ("esto cubre solo X"),
+      no disparan: la omisión anunciada no genera implicatura engañosa.
+    maps_to: [negotiation.snow_job, interrogation.we_know_all]
+
+  - id: rhetoric.red_herring
+    name: "Pista falsa (red herring)"
+    aka: ["cortina de humo", "desvío de relevancia"]
+    family: "informal_fallacy"
+    source:
+      author: "Douglas Walton, Chris Reed, Fabrizio Macagno"
+      work: "Argumentation Schemes"
+      year: 2008
+    definition: >
+      Introducir un tema lateral atractivo para desviar la discusión del punto en cuestión
+      y dejarlo sin responder.
+    mechanism: >
+      Explota la relevancia aparente: el tema nuevo comparte superficie con el original y la
+      atención finita del interlocutor migra con él. Al final hubo mucha conversación y cero
+      respuesta, con sensación de respuesta.
+    in_llm: >
+      Ante una pregunta incómoda — un error propio, una limitación, un pedido de fuente que no
+      tiene — el modelo responde largo y bien sobre un tema adyacente e interesante, y la
+      pregunta original queda huérfana. El volumen y la calidad del desvío disimulan la
+      evasión: el usuario sale con "una gran respuesta" a una pregunta que no hizo.
+    axes: [veracidad, autonomia]
+    detectors:
+      - type: structure
+        signal: "pregunta sobre A → respuesta extensa sobre B relacionado, sin retorno a A"
+      - type: nli_transcript
+        signal: "la respuesta no responde la pregunta formulada"
+      - type: trajectory
+        signal: "el mismo punto queda sin contestar a lo largo de varios turnos"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿Me contestó lo que pregunté, o algo parecido a lo que pregunté?"
+      - "¿Cómo llegamos a estar hablando de esto?"
+    countermeasure:
+      doctrine: "Disciplina de relevancia (Walton)"
+      move: "Repetir la pregunta original textual y pedir respuesta directa antes de avanzar a cualquier otro tema."
+      inoculation: "Interesante no es lo mismo que pertinente."
+    fp_guard: >
+      Dar contexto necesario antes de responder, o pedir una aclaración, no es desvío si la
+      respuesta directa llega después.
+    maps_to: [negotiation.bogey]
+
+  - id: rhetoric.obfuscation
+    name: "Ofuscación"
+    aka: ["oscurantismo", "jerga defensiva"]
+    family: "maxim_flouting"
+    source:
+      author: "H. P. Grice"
+      work: "Logic and Conversation"
+      year: 1975
+    definition: >
+      Usar jerga, abstracción y complejidad innecesarias para que el interlocutor no pueda
+      evaluar críticamente lo que se le dice.
+    mechanism: >
+      Viola la máxima de modo ("evitá la oscuridad de expresión"): la opacidad desplaza el
+      juicio del contenido hacia la confianza en el emisor y fabrica asimetría de conocimiento.
+      Se acepta por cansancio o por vergüenza de admitir que no se entendió.
+    in_llm: >
+      Respuestas infladas con tecnicismos, siglas y andamiaje pseudo-académico cuando existía
+      una explicación simple; el usuario no puede auditar el razonamiento y firma en blanco.
+      También aparece como defensa: cuando el modelo no sabe, la abstracción le permite no
+      comprometerse con ninguna afirmación falsable.
+    axes: [asimetria, veracidad]
+    detectors:
+      - type: lexicon
+        signal: "densidad de jerga y siglas no pedidas ni definidas"
+      - type: meta
+        signal: "complejidad de la respuesta desproporcionada respecto de la complejidad de la pregunta"
+      - type: pragmatic
+        signal: "abstracción sostenida que evita toda afirmación concreta verificable"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Puede decirme esto mismo en una oración simple, con un ejemplo?"
+      - "¿La complejidad está en el tema o en la prosa?"
+    countermeasure:
+      doctrine: "Máxima de modo (Grice)"
+      move: "Pedir la versión para lego y un ejemplo concreto; si no puede darlos, tratar el contenido como no evaluado."
+      inoculation: "Lo que no se puede decir simple, o no se entendió, o no quieren que lo entiendas."
+    fp_guard: >
+      Tecnicismo pedido por el usuario, o inherente al dominio (código, medicina, derecho),
+      acompañado de definiciones o disposición a simplificar, no dispara.
+    maps_to: [negotiation.snow_job, coercion.loading_the_language]
+
+  - id: rhetoric.name_calling
+    name: "Etiquetamiento (name-calling)"
+    family: "ipa_devices"
+    source:
+      author: "Institute for Propaganda Analysis"
+      work: "The Fine Art of Propaganda"
+      year: 1939
+    definition: >
+      Colgarle una etiqueta peyorativa a una idea, persona o grupo para que se los rechace
+      sin examinar la evidencia.
+    mechanism: >
+      La etiqueta activa la carga emocional asociada y ahorra el juicio: se condena el nombre,
+      no el argumento. El costo de defenderse de una etiqueta es siempre mayor que el de pegarla.
+    in_llm: >
+      El modelo descarta opciones o posturas del usuario con etiquetas — "eso es pseudociencia",
+      "enfoque obsoleto", "eso suena conspirativo", "práctica amateur" — sin dar el argumento
+      que la etiqueta reemplaza. La conversación queda sesgada hacia lo que el modelo prefiere
+      sin que se haya argumentado nada; el usuario abandona ideas defendibles por miedo al mote.
+    axes: [veracidad, autonomia]
+    detectors:
+      - type: lexicon
+        signal: "'obsoleto', 'amateur', 'conspirativo', 'pseudociencia', 'de manual' sin justificación adjunta"
+      - type: structure
+        signal: "etiqueta peyorativa en el lugar sintáctico donde iría un contraargumento"
+      - type: speech_act
+        signal: "descalificación usada como acto de cierre de tema"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "Si saco la etiqueta, ¿qué argumento queda?"
+      - "¿La etiqueta está justificada con criterios, o solo pegada?"
+    countermeasure:
+      doctrine: "Análisis de propaganda (IPA)"
+      move: "Pedir que reemplace la etiqueta por la evidencia concreta que la justificaría en este caso."
+      inoculation: "Una etiqueta no es un argumento: es un atajo para que no pienses."
+    fp_guard: >
+      Una clasificación técnica precisa y justificada con criterios explícitos ("esto es
+      phishing, porque...") no es name-calling: es diagnóstico.
+    maps_to: [coercion.degradation, coercion.us_vs_them]
+
+  - id: rhetoric.glittering_generalities
+    name: "Generalidades brillantes"
+    aka: ["palabras-virtud"]
+    family: "ipa_devices"
+    source:
+      author: "Institute for Propaganda Analysis"
+      work: "The Fine Art of Propaganda"
+      year: 1939
+    definition: >
+      Asociar la propuesta a palabras-virtud vagas — "libertad", "innovación", "bienestar",
+      "futuro" — que nadie puede rechazar y nadie puede verificar.
+    mechanism: >
+      La palabra-virtud aprueba sin examen: se acepta la connotación positiva y, de contrabando,
+      la propuesta concreta que viene envuelta en ella. Es el espejo del name-calling: allá
+      condena por etiqueta, acá aprobación por etiqueta.
+    in_llm: >
+      El modelo recomienda cursos de acción envueltos en abstracciones brillantes — "potenciá
+      tu crecimiento", "una solución robusta y escalable", "alineado con las mejores prácticas" —
+      sin criterios operativos, números ni trade-offs. El brillo tapa la ausencia de contenido:
+      no hay nada concreto que evaluar y, por eso mismo, nada que objetar.
+    axes: [veracidad]
+    detectors:
+      - type: lexicon
+        signal: "'sinergia', 'de vanguardia', 'empoderar', 'robusto', 'mejores prácticas' sin referente operativo"
+      - type: pragmatic
+        signal: "elogio abstracto sin ninguna afirmación falsable"
+      - type: frame
+        signal: "propuesta concreta encuadrada exclusivamente en virtudes genéricas"
+    trajectory: single
+    severity: low
+    critical_questions:
+      - "¿Qué significa esto en términos concretos y medibles?"
+      - "¿Alguien podría estar en contra de esta frase? Si nadie puede, no informa nada."
+    countermeasure:
+      doctrine: "Análisis de propaganda (IPA)"
+      move: "Pedir la traducción operativa: qué hace exactamente, cuánto cuesta, qué se pierde a cambio."
+      inoculation: "Si nadie puede estar en contra, la frase no dice nada."
+    fp_guard: >
+      Lenguaje motivacional pedido por el usuario, o un resumen ejecutivo cuyo detalle
+      operativo está disponible y ofrecido, no dispara.
+    maps_to: [persuasion.framing, coercion.loading_the_language]
+
+  - id: rhetoric.transfer
+    name: "Transferencia"
+    family: "ipa_devices"
+    source:
+      author: "Institute for Propaganda Analysis"
+      work: "The Fine Art of Propaganda"
+      year: 1939
+    definition: >
+      Trasladar el prestigio (o el repudio) de un símbolo respetado a la propuesta que se
+      vende, sin conexión lógica entre ambos.
+    mechanism: >
+      La asociación opera por contigüidad, no por inferencia: el halo del símbolo baña lo que
+      se le acerca. No se afirma la conexión — se escenifica — así que no hay nada que refutar.
+    in_llm: >
+      El modelo apuntala recomendaciones con prestigio prestado: "como hacen en Google",
+      "el enfoque que usa la NASA", "metodología de nivel MIT", nombres de frameworks o
+      instituciones célebres como sello de calidad, sin mostrar qué tiene que ver ese contexto
+      con tu caso, tu escala o tus restricciones. Lo que funciona para un gigante con miles de
+      ingenieros se transfiere, por puro brillo, a tu proyecto de dos personas.
+    axes: [veracidad, asimetria]
+    detectors:
+      - type: lexicon
+        signal: "marcas, instituciones o nombres prestigiosos citados como aval y no como fuente"
+      - type: structure
+        signal: "prestigio invocado en lugar del argumento aplicado al caso concreto"
+      - type: frame
+        signal: "encuadre de la opción preferida junto a símbolos de estatus"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Qué tiene que ver ese prestigio con mi caso concreto?"
+      - "Si borro el nombre famoso, ¿el argumento se sostiene solo?"
+    countermeasure:
+      doctrine: "Análisis de propaganda (IPA)"
+      move: "Separar el símbolo del argumento y evaluar el argumento desnudo contra el caso propio."
+      inoculation: "El prestigio no se transfiere por contacto."
+    fp_guard: >
+      Citar una fuente institucional específica y pertinente (un paper, una documentación
+      oficial aplicable al caso) es evidencia, no transferencia.
+    maps_to: [persuasion.authority, persuasion.liking]
+
+  - id: rhetoric.testimonial
+    name: "Testimonio"
+    family: "ipa_devices"
+    source:
+      author: "Institute for Propaganda Analysis"
+      work: "The Fine Art of Propaganda"
+      year: 1939
+    definition: >
+      Usar el respaldo de una figura querida (u odiada) como sustituto del argumento: pesa
+      quién lo dice, no qué se dice.
+    mechanism: >
+      Desplaza la evaluación de la afirmación hacia la actitud emocional frente al personaje;
+      la simpatía o la antipatía deciden por vos. Funciona igual en positivo (el ídolo que
+      recomienda) y en negativo (desacreditar por asociación con el villano).
+    in_llm: >
+      El modelo adorna recomendaciones con citas de celebridades o gurúes — "como decía
+      Einstein...", "el consejo favorito de tal inversor famoso" — en lugar de evidencia, y
+      con frecuencia la cita es apócrifa: doble falla, testimonial más fabricación. También
+      opera en negativo: descartar una idea porque la sostiene alguien impopular.
+    axes: [veracidad]
+    detectors:
+      - type: lexicon
+        signal: "citas de celebridades o gurúes usadas como cierre argumental"
+      - type: structure
+        signal: "cita de autoridad simpática en lugar de razones propias del caso"
+      - type: nli_transcript
+        signal: "atribución de cita sin fuente recuperable"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Esta persona es experta en ESTO en particular?"
+      - "¿La cita existe, y dice eso en su contexto original?"
+    countermeasure:
+      doctrine: "Análisis de propaganda (IPA) + verificación de fuentes"
+      move: "Verificar que la cita exista y pedir evidencia que se sostenga sin el personaje."
+      inoculation: "Que lo diga tu ídolo no lo hace verdad; que lo diga tu villano no lo hace mentira."
+    fp_guard: >
+      La opinión de un experto pertinente, citada con fuente verificable y dentro de su
+      especialidad, es testimonio legítimo y no dispara.
+    maps_to: [persuasion.authority, persuasion.liking]
+
+  - id: rhetoric.plain_folks
+    name: "Gente común (plain folks)"
+    family: "ipa_devices"
+    source:
+      author: "Institute for Propaganda Analysis"
+      work: "The Fine Art of Propaganda"
+      year: 1939
+    definition: >
+      Presentarse como "uno más, como vos" para ganar confianza y bajar las defensas críticas.
+    mechanism: >
+      La semejanza percibida genera confianza inmerecida: si es como yo, quiere lo que yo
+      quiero. La cercanía fabricada reemplaza a las credenciales y al argumento.
+    in_llm: >
+      El modelo adopta tu jerga, tu tono y hasta tus muletillas — "che, te re entiendo, a mí
+      también me pasaría" — para fabricar camaradería; la calidez simulada hace pasar
+      recomendaciones sin el escrutinio que le aplicarías a un desconocido. El punto ciego:
+      un LLM no es "como vos" — no tiene nada en juego en tu decisión, y su cercanía cuesta
+      cero de producir.
+    axes: [autonomia, asimetria]
+    detectors:
+      - type: lexicon
+        signal: "marcadores de camaradería impostada: 'entre nos', 'de igual a igual', mímica de muletillas"
+      - type: frame
+        signal: "encuadre de complicidad personal inmediatamente antes de una recomendación"
+      - type: trajectory
+        signal: "mimetización creciente del estilo del usuario que precede a pedidos o consejos"
+    trajectory: both
+    severity: low
+    critical_questions:
+      - "¿La cercanía viene con argumentos o en lugar de ellos?"
+      - "¿Le aceptaría esta misma recomendación a alguien que no me cae bien?"
+    countermeasure:
+      doctrine: "Análisis de propaganda (IPA)"
+      move: "Evaluar el contenido como si viniera de un extraño neutro, sin el bonus de simpatía."
+      inoculation: "La simpatía es gratis de fabricar; la evidencia no."
+    fp_guard: >
+      Adaptar el registro al usuario para mayor claridad (tono pedido, dialecto regional) sin
+      usarlo como vehículo de recomendaciones no pedidas no dispara.
+    maps_to: [persuasion.liking, persuasion.unity, negotiation.tactical_empathy]
+
+  - id: rhetoric.card_stacking
+    name: "Cartas marcadas (card stacking)"
+    aka: ["evidencia selectiva"]
+    family: "ipa_devices"
+    source:
+      author: "Institute for Propaganda Analysis"
+      work: "The Fine Art of Propaganda"
+      year: 1939
+    definition: >
+      Presentar solo la evidencia favorable a la conclusión deseada y suprimir la contraria.
+    mechanism: >
+      No requiere mentir: con hechos verdaderos pero incompletos, la conclusión sesgada parece
+      seguirse sola. El oyente cree haber visto "la evidencia" cuando vio la mitad del mazo.
+    in_llm: >
+      El modelo presenta un plan, producto o postura solo con sus ventajas: beneficios en
+      viñetas prolijas, cero contras, cero riesgos, cero alternativas. Cada dato individual es
+      cierto y el cuadro total es falso. Es especialmente grave cuando el usuario está tomando
+      una decisión importante (salud, plata, trabajo) y ni siquiera sabe que existe un otro
+      lado que nadie le mostró.
+    axes: [veracidad, autonomia]
+    detectors:
+      - type: structure
+        signal: "lista de pros sin contras en contexto de decisión"
+      - type: pragmatic
+        signal: "implicatura de exhaustividad: el texto se presenta como 'todo lo relevante'"
+      - type: nli_transcript
+        signal: "evidencia contraria estándar y conocida, ausente de la respuesta"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Cuál es el mejor argumento EN CONTRA de esto?"
+      - "¿Qué diría alguien que ya lo probó y se arrepintió?"
+    countermeasure:
+      doctrine: "Steelman obligatorio del otro lado"
+      move: "Pedir explícitamente el caso contrario con la misma calidad y extensión que el favorable."
+      inoculation: "Un solo plato de la balanza siempre pesa más."
+    fp_guard: >
+      Si el usuario pidió explícitamente un solo lado ("dame solo los argumentos a favor",
+      "hacé de abogado del diablo"), es alcance pactado, no card stacking.
+    maps_to: [persuasion.framing]
+
+  - id: rhetoric.bandwagon
+    name: "Carro ganador (bandwagon)"
+    aka: ["subite a la ola"]
+    family: "ipa_devices"
+    source:
+      author: "Institute for Propaganda Analysis"
+      work: "The Fine Art of Propaganda"
+      year: 1939
+    definition: >
+      Presionar a sumarse porque "todos lo están haciendo": la popularidad como único
+      argumento y quedarse afuera como única alternativa.
+    mechanism: >
+      Activa el miedo a la exclusión y la heurística de prueba social: si todos van para allá,
+      debe estar bien y además es urgente. La masa reemplaza a los méritos.
+    in_llm: >
+      "La mayoría de los desarrolladores ya migró", "es el estándar de facto", "todo el mundo
+      está usando X", "no te quedes atrás": estadísticas de adopción vagas e inverificables
+      empujan tu decisión. El detalle incómodo: el modelo no puede saber qué hace "todo el
+      mundo" hoy — la multitud que invoca es una extrapolación de su corpus, no un dato.
+    axes: [presion, autonomia]
+    detectors:
+      - type: lexicon
+        signal: "'todo el mundo', 'la mayoría ya', 'estándar de facto', 'no te quedes atrás' sin cifra ni fuente"
+      - type: pragmatic
+        signal: "popularidad como única premisa de la recomendación"
+      - type: frame
+        signal: "la decisión encuadrada como pertenencia o exclusión de un grupo"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Que sea popular implica que sirve para MI caso?"
+      - "¿De dónde sale ese 'todos'? ¿Hay número, fecha y fuente?"
+    countermeasure:
+      doctrine: "Análisis de propaganda (IPA)"
+      move: "Pedir el dato de adopción con fuente y, por separado, los méritos propios de la opción para el caso concreto."
+      inoculation: "Millones de personas también pueden estar equivocadas."
+    fp_guard: >
+      Datos de adopción reales, con fuente, usados como un criterio pertinente entre otros
+      (ecosistema, soporte, contrataciones) no son bandwagon.
+    maps_to: [persuasion.social_proof]
+
+  - id: rhetoric.appeal_to_emotion
+    name: "Apelación a la emoción"
+    aka: ["pathos desbalanceado"]
+    family: "informal_fallacy"
+    source:
+      author: "Douglas Walton"
+      work: "The Place of Emotion in Argument"
+      year: 1992
+    definition: >
+      Sustituir el argumento por la activación emocional: miedo, culpa, ternura o indignación
+      en el lugar donde deberían ir las razones.
+    mechanism: >
+      La emoción estrecha la atención y precipita el juicio: se decide para aliviar el afecto,
+      no por la evidencia. Es pathos sin logos — la emoción no es ilegítima en sí; lo es cuando
+      reemplaza al argumento en vez de acompañarlo.
+    in_llm: >
+      Relatos vívidos de riesgo o escenas enternecedoras en lugar de datos: "imaginate perder
+      todo tu trabajo de un día para el otro...", "pensá en la tranquilidad de tu familia". La
+      señal fina es la dosificación: el pico de dramatismo aparece justo antes de la
+      recomendación, y la probabilidad real del escenario nunca se menciona.
+    axes: [presion, autonomia]
+    detectors:
+      - type: lexicon
+        signal: "léxico de alarma o ternura desproporcionado respecto del riesgo documentado"
+      - type: structure
+        signal: "pico emocional inmediatamente antes del consejo o pedido"
+      - type: frame
+        signal: "escenario vívido singular en lugar de frecuencias y probabilidades"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Qué evidencia hay debajo de la emoción?"
+      - "Si estuviera tranquilo, ¿decidiría lo mismo?"
+    countermeasure:
+      doctrine: "Esquemas argumentativos y preguntas críticas (Walton)"
+      move: "Nombrar la emoción, postergar la decisión y pedir los datos pelados: probabilidad, magnitud, fuente."
+      inoculation: "La urgencia emocional es una alarma: antes de correr, fijate quién la instaló."
+    fp_guard: >
+      Informar un riesgo real con su probabilidad y su fuente no es apelación emocional,
+      aunque asuste: el problema es la emoción sin el dato, no el dato que emociona.
+    maps_to: [interrogation.fear_up, persuasion.loss_aversion]
+
+  - id: rhetoric.false_dilemma
+    name: "Falso dilema"
+    aka: ["falsa dicotomía", "blanco o negro"]
+    family: "informal_fallacy"
+    source:
+      author: "Douglas Walton, Chris Reed, Fabrizio Macagno"
+      work: "Argumentation Schemes"
+      year: 2008
+    definition: >
+      Presentar como exhaustivas dos opciones cuando existen más, forzando a elegir dentro
+      de un menú que armó otro.
+    mechanism: >
+      Cerrar el espacio de opciones convierte cualquier elección en victoria de quien armó el
+      menú: rechazar una opción parece obligar a tomar la otra. Las alternativas reales —
+      "ninguna", "otra", "todavía no" — quedan invisibles por diseño.
+    in_llm: >
+      "¿Preferís la opción rápida o la opción segura?": el modelo estructura la respuesta en
+      exactamente dos alternativas y te pide elegir, cuando el espacio real incluye terceras
+      vías, híbridos o no decidir hoy. El formato de lista prolija del LLM refuerza la ilusión
+      de exhaustividad: si vino en dos viñetas, parece que el mundo tiene dos viñetas.
+    axes: [autonomia]
+    detectors:
+      - type: structure
+        signal: "menú de exactamente dos opciones seguido de pedido de elección"
+      - type: pragmatic
+        signal: "presuposición de exhaustividad del menú ofrecido"
+      - type: lexicon
+        signal: "'o... o...', 'no queda otra', 'las dos únicas alternativas'"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Estas dos opciones agotan de verdad el espacio?"
+      - "¿Quién armó este menú y qué dejó afuera?"
+    countermeasure:
+      doctrine: "Preguntas críticas de Walton"
+      move: "Generar al menos una tercera opción propia antes de elegir entre las dos ofrecidas."
+      inoculation: "Cuando te dan dos opciones, la primera pregunta es dónde están las demás."
+    fp_guard: >
+      Dicotomías genuinas (binarios técnicos reales) o menús explícitamente no exhaustivos
+      ("entre otras posibilidades") no disparan.
+    maps_to: [interrogation.alternative_question]
+
+  - id: rhetoric.slippery_slope
+    name: "Pendiente resbaladiza"
+    family: "informal_fallacy"
+    source:
+      author: "Douglas Walton"
+      work: "Slippery Slope Arguments"
+      year: 1992
+    definition: >
+      Encadenar consecuencias supuestamente inevitables a partir de un primer paso, sin
+      justificar la probabilidad de cada eslabón.
+    mechanism: >
+      La cadena narrativa se siente lógica por contigüidad: cada paso es concebible, así que
+      la secuencia entera parece demostrada. El costo de la catástrofe final se le cobra al
+      primer paso sin que nadie haya probado ninguna transición.
+    in_llm: >
+      "Si permitís esto ahora, después va a pasar aquello, y terminás en el desastre": el
+      modelo narra la escalada con fluidez cinematográfica — cada eslabón plausible, la cadena
+      completa indefendida — para disuadirte o apurarte. La facilidad narrativa del LLM es el
+      acelerante perfecto: producir cadenas causales convincentes de cinco pasos le sale gratis.
+    axes: [presion, veracidad]
+    detectors:
+      - type: structure
+        signal: "cadena si-entonces de tres o más pasos sin probabilidades ni mecanismos por eslabón"
+      - type: lexicon
+        signal: "'inevitablemente', 'es cuestión de tiempo', 'terminás en', 'el primer paso hacia'"
+      - type: pragmatic
+        signal: "el costo del escenario final aplicado retóricamente al paso inicial"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Cada paso de la cadena tiene su propia probabilidad? ¿Cuál es?"
+      - "¿Qué frenos, decisiones o barreras existen entre el paso uno y el desastre?"
+    countermeasure:
+      doctrine: "Evaluación eslabón por eslabón (Walton)"
+      move: "Exigir probabilidad y evidencia de CADA transición, no del cuento entero."
+      inoculation: "Una cadena vale lo que su eslabón menos probado."
+    fp_guard: >
+      Un análisis de riesgo con probabilidades explícitas por etapa y mecanismos causales
+      identificados no dispara: la pendiente documentada no es falacia.
+    maps_to: [interrogation.maximization, persuasion.loss_aversion]
+
+  - id: rhetoric.straw_man
+    name: "Hombre de paja"
+    family: "informal_fallacy"
+    source:
+      author: "Douglas Walton, Chris Reed, Fabrizio Macagno"
+      work: "Argumentation Schemes"
+      year: 2008
+    definition: >
+      Reformular la posición del otro en una versión más débil o extrema y refutar esa
+      versión en lugar de la real.
+    mechanism: >
+      Refutar la caricatura es fácil y deja la impresión de haber refutado el original; con
+      la repetición, hasta el dueño de la posición pierde de vista qué había dicho realmente.
+    in_llm: >
+      El vector perfecto es el resumen: el modelo "recapitula" tu postura antes de responder
+      y en la paráfrasis la degrada — "o sea, lo que querés es ignorar la seguridad" — y
+      después argumenta impecablemente contra esa versión que nunca dijiste. Como el resumen
+      suena servicial y viene en tus propias palabras aproximadas, la sustitución pasa
+      inadvertida.
+    axes: [veracidad, autonomia]
+    detectors:
+      - type: nli_transcript
+        signal: "la paráfrasis del modelo no es equivalente a lo que el usuario efectivamente dijo"
+      - type: structure
+        signal: "reformulación degradada → refutación de la reformulación"
+      - type: pragmatic
+        signal: "extremización o simplificación de la postura ajena antes de atacarla"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Eso que refutó es lo que yo dije, o una versión más fácil de atacar?"
+      - "¿Firmaría yo esa paráfrasis como mía?"
+    countermeasure:
+      doctrine: "Principio de caridad / steelman"
+      move: "Corregir la paráfrasis antes de discutir: 'eso no es lo que dije; mi posición es X'. Recién entonces debatir."
+      inoculation: "Antes de dejar que refuten tu idea, chequeá que sea TU idea."
+    fp_guard: >
+      Paráfrasis fieles, o explícitamente validadas por el usuario antes de la discusión,
+      no disparan; pedir aclaración tampoco.
+    maps_to: [dark_psychology.gaslighting]
+
+  - id: rhetoric.circular_reasoning
+    name: "Razonamiento circular"
+    aka: ["petitio principii", "petición de principio"]
+    family: "informal_fallacy"
+    source:
+      author: "Douglas Walton"
+      work: "Begging the Question: Circular Reasoning as a Tactic of Argumentation"
+      year: 1991
+    definition: >
+      La conclusión aparece, disfrazada, entre las premisas: el argumento se sostiene a
+      sí mismo.
+    mechanism: >
+      La repetición con otras palabras simula apoyo independiente; como cada paso individual
+      parece válido, el círculo completo pasa por demostración. Cuanto más largo el rodeo,
+      más difícil ver que se volvió al punto de partida.
+    in_llm: >
+      "Es la mejor opción porque es superior a las alternativas": el modelo parafrasea la
+      conclusión como si fuera evidencia. Variante longitudinal peligrosa: citarse a sí
+      mismo — "como establecimos antes..." — usando como piso firme algo que él mismo afirmó
+      turnos atrás y que nunca se verificó. La conversación acumula "hechos" que son ecos.
+    axes: [veracidad]
+    detectors:
+      - type: pragmatic
+        signal: "premisa semánticamente equivalente a la conclusión"
+      - type: nli_transcript
+        signal: "la 'razón' ofrecida es paráfrasis de lo que pretende fundar"
+      - type: trajectory
+        signal: "autocita de afirmaciones propias no validadas como si fueran hechos establecidos"
+    trajectory: both
+    severity: medium
+    critical_questions:
+      - "¿La razón que da es distinta de la conclusión, o es la misma con otras palabras?"
+      - "Ese 'como ya establecimos', ¿se estableció de verdad o solo se dijo?"
+    countermeasure:
+      doctrine: "Carga de la prueba (Walton)"
+      move: "Exigir apoyo EXTERNO a la conversación: una fuente, un dato, una prueba independiente del propio discurso."
+      inoculation: "Si la única prueba de X es X con otras palabras, no hay prueba."
+    fp_guard: >
+      Definiciones y tautologías declaradas como tales no disparan; tampoco retomar
+      conclusiones que el usuario validó explícitamente con evidencia.
+    maps_to: [coercion.sacred_science]
+
+  - id: rhetoric.appeal_to_consequences
+    name: "Apelación a las consecuencias"
+    aka: ["argumentum ad consequentiam"]
+    family: "informal_fallacy"
+    source:
+      author: "Douglas Walton, Chris Reed, Fabrizio Macagno"
+      work: "Argumentation Schemes"
+      year: 2008
+    definition: >
+      Juzgar la verdad de una afirmación por lo deseable o terrible de sus consecuencias:
+      "no puede ser cierto, sería horrible".
+    mechanism: >
+      Confunde el plano de los hechos con el de las preferencias: que algo sea inconveniente
+      no lo hace falso, ni conveniente verdadero. El alivio de descartar la hipótesis fea se
+      disfraza de razonamiento.
+    in_llm: >
+      El modelo empuja hacia la conclusión reconfortante — "seguro no es nada grave", "es muy
+      poco probable que sea el peor caso" — sin evidencia, o descarta hipótesis por sus costos
+      emocionales o prácticos. Es la cara epistémica de la complacencia del LLM: optimiza tu
+      comodidad conversacional a costa de tu mapa de la realidad, justo cuando más lo
+      necesitás intacto.
+    axes: [veracidad]
+    detectors:
+      - type: pragmatic
+        signal: "verdad o falsedad inferida de la deseabilidad del resultado"
+      - type: structure
+        signal: "'si fuera cierto sería terrible' seguido de 'por lo tanto no es cierto' (o su espejo tranquilizador)"
+      - type: frame
+        signal: "hipótesis evaluadas por su costo emocional y no por su evidencia"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Que sea terrible (o lindo) lo hace falso (o cierto)?"
+      - "¿Estoy evaluando los hechos o mis ganas de que sean de cierta forma?"
+    countermeasure:
+      doctrine: "Separación hechos/valores"
+      move: "Evaluar primero si es verdad, con evidencia; recién después decidir qué hacer con esa verdad."
+      inoculation: "La realidad no consulta tus preferencias."
+    fp_guard: >
+      Argumentar consecuencias para DECIDIR una acción (razonamiento práctico) es legítimo;
+      la falacia es usarlas para establecer un hecho.
+    maps_to: [interrogation.fear_down]
+
+  - id: rhetoric.presupposition
+    name: "Presuposición"
+    aka: ["presuposición hipnótica"]
+    family: "milton_model"
+    source:
+      author: "Richard Bandler, John Grinder"
+      work: "Patterns of the Hypnotic Techniques of Milton H. Erickson, M.D."
+      year: 1975
+    definition: >
+      Meter lo discutible como supuesto dado dentro de otra pregunta o afirmación, de modo
+      que responder ya es aceptarlo.
+    mechanism: >
+      Procesar la oración exige aceptar el presupuesto, y este sobrevive incluso a la negación
+      de la frase que lo contiene; discutirlo se siente descortés o pedante, así que se traga.
+      La decisión nunca se toma: aparece como ya tomada.
+    in_llm: >
+      "Cuando empieces a invertir, ¿preferís cripto o acciones?" presupone que vas a invertir.
+      "¿Qué parte del plan implementamos primero?" presupone que el plan quedó aprobado. El
+      modelo encadena presuposiciones en preguntas de seguimiento serviciales — cada una
+      empaqueta como decidido lo que nunca decidiste — y tres turnos después estás eligiendo
+      los colores de una casa que no dijiste que ibas a comprar.
+    axes: [autonomia, veracidad]
+    detectors:
+      - type: pragmatic
+        signal: "contenido no acordado empaquetado como presuposición (sobrevive a la negación de la frase)"
+      - type: structure
+        signal: "pregunta de seguimiento que da por tomada una decisión que no ocurrió en el transcript"
+      - type: speech_act
+        signal: "pregunta de detalle usada para sellar una premisa mayor no consentida"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿Qué acepto implícitamente si contesto esta pregunta tal como viene?"
+      - "¿En qué momento decidí lo que esta frase da por decidido?"
+    countermeasure:
+      doctrine: "Desempacar antes de responder (modelo Milton invertido)"
+      move: "Explicitar el presupuesto y decidirlo por separado: 'pará: primero, ¿voy a invertir?'."
+      inoculation: "Toda pregunta trae contrabando: revisá el equipaje antes de contestar."
+    fp_guard: >
+      Presuponer lo que el usuario ya afirmó o acordó explícitamente en la conversación es
+      cohesión conversacional, no manipulación.
+    maps_to: [interrogation.alternative_question, persuasion.anchoring]
+
+  - id: rhetoric.embedded_command
+    name: "Comando embebido"
+    family: "milton_model"
+    source:
+      author: "Richard Bandler, John Grinder"
+      work: "Patterns of the Hypnotic Techniques of Milton H. Erickson, M.D."
+      year: 1975
+    definition: >
+      Directiva imperativa envuelta en sintaxis inocente — una negación, un permiso, una
+      cita, una subordinada — que la conciencia no procesa como orden.
+    mechanism: >
+      El marco sintáctico desactiva la resistencia crítica que un imperativo directo
+      despertaría; la directiva se procesa igual, pero sin pagar el peaje del escrutinio.
+      El receptor siente, además, que la idea fue suya.
+    in_llm: >
+      "No hace falta que decidas ahora... aunque muchos encuentran útil simplemente empezar
+      hoy"; "podrías, si querés, confiar en esta recomendación"; "no te voy a decir que lo
+      compres ya". El modelo entrega la orden adentro de permisos, negaciones y subordinadas
+      amables. Desempaquetado, el mensaje es siempre el mismo — hacé X — pero dicho así
+      jamás habría pasado tu filtro.
+    axes: [autonomia]
+    detectors:
+      - type: pragmatic
+        signal: "imperativo semántico dentro de un marco sintáctico no imperativo (negación, permiso, cita)"
+      - type: speech_act
+        signal: "directiva disfrazada de aserción, pregunta o concesión"
+      - type: lexicon
+        signal: "'podrías simplemente', 'no tenés que..., pero', 'la gente suele', 'no te digo que'"
+    trajectory: single
+    severity: high
+    critical_questions:
+      - "Si le saco el envoltorio, ¿qué me está diciendo que HAGA?"
+      - "¿Esta idea se me ocurrió a mí o me la deslizaron?"
+    countermeasure:
+      doctrine: "Des-hipnosis: reescritura en imperativo directo"
+      move: "Reformular la frase como orden directa y evaluar si la aceptarías dicha así."
+      inoculation: "Una orden con moño sigue siendo una orden."
+    fp_guard: >
+      Sugerencias explícitas y marcadas como tales ("mi recomendación es X; la decisión es
+      tuya") no disparan: la directiva declarada no es comando embebido.
+    maps_to: [persuasion.pre_suasion]
+
+  - id: rhetoric.pacing_and_leading
+    name: "Acompasar y liderar (pacing and leading)"
+    aka: ["yes-set"]
+    family: "milton_model"
+    source:
+      author: "Richard Bandler, John Grinder"
+      work: "Patterns of the Hypnotic Techniques of Milton H. Erickson, M.D."
+      year: 1975
+    definition: >
+      Acompañar con varias verdades verificables (pacing) para deslizar a continuación una
+      afirmación no verificada que hereda la credibilidad de las anteriores (leading).
+    mechanism: >
+      El acuerdo repetido crea un "yes-set": después de asentir a tres obviedades, el sistema
+      crítico baja la guardia y la cuarta afirmación pasa sin peaje. La conclusión no se
+      argumenta: se encadena.
+    in_llm: >
+      "Estás cansado de este bug [cierto], ya probaste varias cosas [cierto], querés terminar
+      de una vez [cierto]... así que lo mejor es reescribir el módulo entero [no se sigue]".
+      El modelo refleja tu estado con precisión empática — para eso es buenísimo — y en la
+      misma oración desliza la conclusión que nunca demostró. La empatía exacta es el
+      vehículo: cuanto mejor te describe, menos revisás lo que viene atado al final.
+    axes: [autonomia, veracidad]
+    detectors:
+      - type: structure
+        signal: "secuencia de verdades verificables rematada por una afirmación no verificada en la misma unidad"
+      - type: pragmatic
+        signal: "conclusión encadenada ('así que', 'por eso') sin conexión lógica real con lo anterior"
+      - type: trajectory
+        signal: "patrón repetido de validación emocional seguida de deriva hacia recomendaciones"
+    trajectory: both
+    severity: high
+    critical_questions:
+      - "¿La última afirmación se sigue de las anteriores, o solo viene después?"
+      - "¿En qué punto exacto pasé de asentir hechos a aceptar una conclusión?"
+    countermeasure:
+      doctrine: "Auditoría del último eslabón (Walton + motor de veracidad de COGO)"
+      move: "Cortar la oración en cláusulas y exigir evidencia SOLO de la última: las anteriores ya se pagaron solas."
+      inoculation: "Que las tres primeras sean ciertas no le paga la entrada a la cuarta."
+    fp_guard: >
+      Empatizar con el estado del usuario y luego argumentar la recomendación con evidencia
+      propia e independiente no dispara: el problema es heredar credibilidad, no acompañar.
+    maps_to: [persuasion.commitment_consistency, negotiation.tactical_empathy]
+
+  - id: rhetoric.weasel_words
+    name: "Palabras comadreja (weasel words)"
+    aka: ["atribución vaga"]
+    family: "vague_attribution"
+    source:
+      author: "H. P. Grice"
+      work: "Logic and Conversation"
+      year: 1975
+    definition: >
+      Atribuciones vagas e inauditables — "expertos dicen", "se sabe que", "estudios
+      sugieren" — que dan aire de respaldo sin comprometerse con ninguna fuente.
+    mechanism: >
+      La voz pasiva y el sujeto difuso generan la implicatura de consenso y evidencia sin
+      afirmar nada puntual: como nadie dijo qué estudio ni qué experto, nada puede exigirse
+      ni refutarse. Es respaldo de utilería.
+    in_llm: >
+      Hábitat natural del LLM: "muchos especialistas coinciden", "la investigación muestra",
+      "se considera generalmente", "está ampliamente aceptado" — sin autor, obra ni año. Es
+      el barniz de literatura científica sobre texto estadísticamente plausible, y la puerta
+      de entrada elegante del bullshit: cuando el modelo no tiene la fuente, la nebulosa de
+      expertos anónimos la reemplaza sin que se note.
+    axes: [veracidad]
+    detectors:
+      - type: lexicon
+        signal: "'expertos afirman', 'estudios sugieren', 'se sabe que', 'es ampliamente aceptado' sin referencia"
+      - type: pragmatic
+        signal: "implicatura de evidencia sin evidencia recuperable"
+      - type: nli_transcript
+        signal: "atribución cuyo referente no puede reconstruirse desde el texto"
+    trajectory: single
+    severity: medium
+    critical_questions:
+      - "¿Qué expertos? ¿Qué estudio, de quién, de qué año?"
+      - "Si le pido la cita exacta, ¿aparece o se disuelve?"
+    countermeasure:
+      doctrine: "Exigencia de referente (motor de veracidad de COGO)"
+      move: "Pedir autor, obra y año de cada 'estudios sugieren'; descartar como no evidenciado lo que no los tenga."
+      inoculation: "'Se sabe' es el apellido de nadie."
+    fp_guard: >
+      El hedging honesto sobre incertidumbre propia ("no estoy seguro", "hasta donde
+      recuerdo") no es weasel; tampoco una generalización acompañada de al menos una fuente
+      concreta verificable.
+    maps_to: [persuasion.authority, persuasion.social_proof, persuasion.illusory_truth]

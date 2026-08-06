@@ -9,7 +9,7 @@ import (
 func TestLoadVault(t *testing.T) {
 	dir := t.TempDir()
 	a := &Note{ID: "a", Type: "bug", LastVerified: MustDate("2026-06-20"), Evidence: obs("x.go:1"), Check: Check{Status: "passed"}, Body: "## Claim\nA."}
-	b := &Note{ID: "b", Type: "command", LastVerified: MustDate("2026-06-20"), Evidence: []Evidence{{"doc", "d"}}, Body: "## Claim\nB."}
+	b := &Note{ID: "b", Type: "command", LastVerified: MustDate("2026-06-20"), Evidence: []Evidence{{Kind: "doc", Ref: "d"}}, Body: "## Claim\nB."}
 	if err := WriteNoteFile(filepath.Join(dir, "a.md"), a); err != nil {
 		t.Fatal(err)
 	}

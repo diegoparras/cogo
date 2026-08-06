@@ -1,0 +1,233 @@
+# Máquina de estados de evidencia — FUENTE ÚNICA.
+#
+# De acá se genera el código Go (states_gen.go) y la sección del contrato de
+# colores de la documentación. Si esta tabla vive en dos lugares se desincroniza
+# en la primera semana, así que no la copies: editá este archivo y corré
+# `go generate ./internal/confidence`.
+#
+# Sobre las guardas: son NOMBRES, no expresiones. Un intérprete de expresiones
+# dentro del YAML sería un lenguaje nuevo que nadie verifica; con nombres, la
+# guarda se implementa en Go, el compilador la revisa, y el generador falla si el
+# YAML menciona una que no existe. La validación que importa —que dos
+# transiciones desde el mismo estado y evento no puedan dispararse a la vez— se
+# obtiene declarando a qué "decisión" pertenece cada guarda: las de una misma
+# decisión son excluyentes entre sí por construcción, y el generador exige que la
+# cubran entera.
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Estados. `rank` es la posición en el retículo de confianza: mayor es más
+# confiable. El orden es total, así que `meet` es simplemente el mínimo.
+#
+# El color es una PROYECCIÓN del estado, no el estado. Dos estados distintos
+# pueden verse iguales — es deliberado: la máquina distingue nueve situaciones
+# y la persona lee tres colores. La diferencia entre `claimed_passed` y
+# `verified` no la lleva el color sino la procedencia (check.attested), que es
+# un eje aparte.
+# ---------------------------------------------------------------------------
+states:
+  - id: quarantined
+    color: red
+    rank: 0
+    doc: Excluida del pack por decisión explícita.
+
+  - id: refuted
+    color: red
+    rank: 1
+    doc: El check se ejecutó y falló.
+
+  - id: contradicted
+    color: red
+    rank: 2
+    doc: Hay una contradicción abierta con otra nota.
+
+  - id: stale
+    color: yellow
+    rank: 3
+    doc: Venció su ventana de frescura, o cambió de forma material una evidencia.
+
+  - id: asserted
+    color: yellow
+    rank: 4
+    doc: Capturada, sin criterio de verificación declarado.
+
+  - id: check_declared
+    color: yellow
+    rank: 5
+    doc: Hay un criterio de verificación; todavía no se ejecutó ni se declaró.
+
+  - id: claimed_passed
+    color: green
+    rank: 6
+    doc: >
+      Alguien declaró que el check pasa. Es verde porque el color mide cuánto
+      sostiene la evidencia, y la evidencia sostiene; que nadie lo haya
+      ejecutado lo dice la procedencia, no el color.
+
+  - id: verified
+    color: green
+    rank: 7
+    doc: El runner interno ejecutó el check y registró su código de salida.
+
+  # Transitorio: NO participa del retículo ni de la propagación. Una nota que
+  # está siendo verificada no debe arrastrar a sus dependientes hacia abajo por
+  # el solo hecho de estar corriendo, ni hacer parpadear sus colores.
+  - id: verifying
+    color: yellow
+    transient: true
+    doc: Se tomó el lease y la ejecución está en curso.
+
+# ---------------------------------------------------------------------------
+# Decisiones: conjuntos de guardas mutuamente excluyentes y exhaustivos. Sirven
+# para que el generador pueda probar que dos transiciones desde el mismo par
+# (estado, evento) nunca se disparan juntas ni dejan un caso sin cubrir.
+# ---------------------------------------------------------------------------
+decisions:
+  - id: resultado_de_ejecucion
+    doc: Cómo terminó el check que ejecutó el runner.
+    guards:
+      - id: ejecucion_ok
+        doc: Código de salida 0, emitido por el runner interno, con los anchors íntegros.
+      - id: ejecucion_falla
+        doc: Código de salida distinto de 0.
+
+  - id: origen_de_la_declaracion
+    doc: Quién afirma que el check pasa.
+    guards:
+      - id: declara_un_tercero
+        doc: Lo declara un agente o una persona. Nunca alcanza `verified`.
+      - id: declara_el_runner
+        doc: Lo emite el runner interno; se resuelve por resultado_de_ejecucion.
+
+# ---------------------------------------------------------------------------
+# Eventos. El único que puede llevar a `verified` es CheckExecuted, y su
+# constructor vive en un paquete no exportado para que el compilador haga
+# cumplir esa regla (invariante I1).
+#
+# `degrada: true` marca los eventos que solo pueden BAJAR. Un evento negativo
+# que sube un estado es un bug por construcción, y es un bug que se cometió:
+# abrir una contradicción sobre una nota ya refutada la movía de `refuted` a
+# `contradicted`, o sea que registrar un problema mejoraba la nota. Lo mismo
+# hacía vencer la ventana de frescura de una nota refutada.
+#
+# Declararlo acá y no como excepciones en las transiciones es lo que hace que
+# agregar un evento negativo nuevo no vuelva a introducirlo.
+# ---------------------------------------------------------------------------
+events:
+  - id: CheckDeclared
+    doc: Se declaró un criterio de verificación para la nota.
+  - id: VerificationStarted
+    doc: Se tomó el lease y empieza la ejecución.
+  - id: CheckExecuted
+    doc: El runner interno corrió el check y observó su código de salida.
+    emitter: internal_runner
+  - id: VerifyDeclared
+    doc: Alguien afirma que el check pasa, sin ejecutarlo.
+  - id: TTLExpired
+    doc: Venció la ventana de frescura de la nota.
+    degrada: true
+  - id: AnchorMaterialChange
+    doc: Cambió de forma material una evidencia en la que la nota se apoya.
+    degrada: true
+  - id: ContradictionOpened
+    doc: El análisis encontró una contradicción con otra nota.
+    degrada: true
+  - id: ContradictionResolved
+    doc: La contradicción se cerró o se descartó.
+  - id: Quarantined
+    doc: Se excluyó la nota del pack por decisión explícita.
+    degrada: true
+  - id: Unquarantined
+    doc: Se levantó la cuarentena.
+
+# ---------------------------------------------------------------------------
+# Transiciones. `from: "*"` significa cualquier estado no transitorio.
+# ---------------------------------------------------------------------------
+transitions:
+  # --- construir el respaldo
+  - from: asserted
+    to: check_declared
+    on: CheckDeclared
+
+  - from: check_declared
+    to: verifying
+    on: VerificationStarted
+
+  - from: stale
+    to: verifying
+    on: VerificationStarted
+
+  # Confirmar lo que alguien declaró es el camino que MÁS importa: es cómo una
+  # declaración se convierte en una verificación, y el único modo de saber si
+  # quien declara suele acertar. Sin esta arista, lo declarado quedaría fuera del
+  # alcance del runner para siempre.
+  - from: claimed_passed
+    to: verifying
+    on: VerificationStarted
+
+  # Y una nota ya verificada se puede volver a verificar: el respaldo no es
+  # eterno, y re-ejecutar es más barato que esperar a que venza.
+  - from: verified
+    to: verifying
+    on: VerificationStarted
+
+  # --- el runner decide, y es el único camino a verified
+  - from: verifying
+    to: verified
+    on: CheckExecuted
+    guard: ejecucion_ok
+
+  - from: verifying
+    to: refuted
+    on: CheckExecuted
+    guard: ejecucion_falla
+
+  # --- la declaración de un tercero llega hasta claimed_passed y no más
+  - from: check_declared
+    to: claimed_passed
+    on: VerifyDeclared
+    guard: declara_un_tercero
+
+  - from: stale
+    to: claimed_passed
+    on: VerifyDeclared
+    guard: declara_un_tercero
+
+  # --- degradaciones: pueden ocurrir desde cualquier estado estable
+  - from: "*"
+    to: stale
+    on: TTLExpired
+
+  - from: "*"
+    to: stale
+    on: AnchorMaterialChange
+
+  - from: "*"
+    to: contradicted
+    on: ContradictionOpened
+
+  - from: "*"
+    to: quarantined
+    on: Quarantined
+
+  # --- salidas de los estados terminales
+  #
+  # Desde `refuted` solo se sale declarando un criterio nuevo: es el invariante
+  # I7. Un check que falló no se arregla declarando que ahora pasa.
+  - from: refuted
+    to: check_declared
+    on: CheckDeclared
+
+  - from: contradicted
+    to: check_declared
+    on: ContradictionResolved
+
+  - from: quarantined
+    to: asserted
+    on: Unquarantined
+
+# ---------------------------------------------------------------------------
+# Estado inicial de una nota recién capturada.
+# ---------------------------------------------------------------------------
+initial: asserted

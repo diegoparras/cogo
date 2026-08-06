@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Go modules. COGO has few dependencies on purpose, so this stays quiet.
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  # The actions in the release workflow sign images and publish binaries: keeping them
+  # current matters more than the Go deps.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
