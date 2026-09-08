@@ -32,9 +32,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          # Un solo lugar para la versión de Go: go.mod. Antes el CI testeaba
-          # con 1.25 y la imagen se compilaba con 1.26.
-          go-version-file: go.mod
+          # La serie de go.mod, en su ÚLTIMO parche. go-version-file instala
+          # exactamente "1.26.0", que es la más vieja de la serie y la que
+          # govulncheck rechaza; check-latest hace que cada corrida tome el
+          # parche más nuevo, que es lo mismo que hace la imagen con golang:1.26.
+          go-version: "1.26"
+          check-latest: true
           cache: true
       - name: gofmt
         run: |
