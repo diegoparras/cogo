@@ -21,7 +21,9 @@ services:
     volumes:
       - cogo-vault:/vault
     healthcheck:
-      test: ["CMD", "/cogo", "search", "-vault", "/vault", "."]
+      # Prueba el listener HTTP de verdad (antes corría un `search` que abría
+      # el vault por su cuenta y no decía nada de si el servidor escuchaba).
+      test: ["CMD", "/cogo", "health"]
       interval: 30s
       timeout: 5s
       retries: 3

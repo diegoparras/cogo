@@ -8,6 +8,12 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  # Rebuild semanal aunque no haya commits: la imagen es un binario estático
+  # sobre la stdlib de Go, y las CVE de la stdlib se arreglan con un parche del
+  # toolchain. Sin esto la imagen publicada envejecía hasta el próximo commit —
+  # y govulncheck, abajo, rompe el build si el parche no alcanzó.
+  schedule:
+    - cron: "17 6 * * 1"
 
 permissions:
   contents: write # create GitHub Releases on tags
@@ -20,11 +26,15 @@ jobs:
   # firmada que no pasa su propia suite es una firma sobre algo roto.
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # este job solo lee; los permisos de publicar los tiene build-push
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: "1.25"
+          # Un solo lugar para la versión de Go: go.mod. Antes el CI testeaba
+          # con 1.25 y la imagen se compilaba con 1.26.
+          go-version-file: go.mod
           cache: true
       - name: gofmt
         run: |
@@ -45,6 +55,12 @@ jobs:
       - run: go vet ./...
       - run: go test ./... -count=1
 
+      # Vulnerabilidades ALCANZABLES desde el código, en deps y en la stdlib.
+      # Es lo que convierte "hay un parche de Go" en "el build no pasa hasta que
+      # lo tomes" — y con el rebuild semanal, lo toma solo.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
       # El visor es JavaScript embebido con go:embed: no pasa por ningún
       # compilador, así que un error de sintaxis se despliega tal cual y deja la
       # pantalla EN BLANCO. No lo atrapa ningún test de Go, y el binario compila
@@ -59,16 +75,16 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
@@ -77,7 +93,7 @@ jobs:
             type=semver,pattern={{version}}
 
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           push: true
@@ -86,7 +102,7 @@ jobs:
 
       # SLSA build provenance: a signed attestation of how/where the image was
       # built, attached to the image in GHCR. Verify with `gh attestation verify`.
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -97,7 +113,7 @@ jobs:
       #   cosign verify $cogo --certificate-identity-regexp \
       #     "https://github.com/diegoparras/cogo/.github/workflows/.+" \
       #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - run: cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
 
   # On version tags: cross-compile the single static binary, checksum it, sign the
@@ -107,8 +123,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
 
@@ -123,7 +139,7 @@ jobs:
           done
           cd dist && sha256sum cogo-* > SHA256SUMS
 
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: Sign the checksums (keyless)
         run: |
           cosign sign-blob --yes \
@@ -131,6 +147,6 @@ jobs:
             --output-certificate dist/SHA256SUMS.pem \
             dist/SHA256SUMS
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: dist/*

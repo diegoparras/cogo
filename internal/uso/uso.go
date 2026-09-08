@@ -36,6 +36,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/diegoparras/cogo/internal/atomico"
 )
 
 // Registro es cuántas veces y cuándo se consultó una nota.
@@ -179,7 +181,7 @@ func (s *Store) Guardar() error {
 	if err := os.MkdirAll(filepath.Dir(ruta), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(ruta, append(b, '\n'), 0o644)
+	return atomico.Escribir(ruta, append(b, '\n'), 0o644)
 }
 
 // Olvidar saca del registro las notas que ya no existen, para que el archivo no

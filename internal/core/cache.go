@@ -23,7 +23,9 @@ import (
 type VaultCache struct {
 	dir string
 	mu  sync.Mutex
-	fil map[string]*cachedNote // absolute path -> last parse
+	fil map[string]*cachedNote
+	// problemas es lo que quedó afuera en el último Load (ver Problema).
+	problemas []Problema // absolute path -> last parse
 }
 
 type cachedNote struct {
@@ -37,14 +39,36 @@ func NewVaultCache(dir string) *VaultCache {
 	return &VaultCache{dir: dir, fil: map[string]*cachedNote{}}
 }
 
+// Problema es un archivo del vault que no entró: no se pudo leer, o repite el
+// id de otro. Antes cualquiera de los dos tiraba abajo el vault ENTERO —el
+// visor y los 16 tools— por un frontmatter mal cerrado. Ahora se saltea, se
+// anota, y el aviso viaja a la pantalla principal y al pack.
+type Problema struct {
+	Path   string `json:"path"`
+	Motivo string `json:"motivo"`
+}
+
+func (p Problema) String() string {
+	return filepath.Base(p.Path) + ": " + p.Motivo
+}
+
+// Problemas devuelve lo que quedó afuera en el último Load.
+func (c *VaultCache) Problemas() []Problema {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]Problema(nil), c.problemas...)
+}
+
 // Load walks the vault, re-parsing only changed files, and returns the notes
-// keyed by ID. Same skip rules and duplicate-ID error as LoadVault.
+// keyed by ID. Same skip rules as LoadVault; an unreadable file or a duplicate
+// id is skipped and reported through Problemas, never fatal.
 func (c *VaultCache) Load() (map[string]*Note, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	seen := map[string]bool{}
 	vault := map[string]*Note{}
+	c.problemas = c.problemas[:0]
 	err := filepath.WalkDir(c.dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -69,13 +93,17 @@ func (c *VaultCache) Load() (map[string]*Note, error) {
 		if ce == nil || ce.mod != mod || ce.size != size {
 			n, err := ReadNoteFile(path)
 			if err != nil {
-				return err
+				c.problemas = append(c.problemas, Problema{Path: path, Motivo: err.Error()})
+				delete(c.fil, path)
+				return nil
 			}
 			ce = &cachedNote{mod: mod, size: size, note: n}
 			c.fil[path] = ce
 		}
 		if _, dup := vault[ce.note.ID]; dup {
-			return fmt.Errorf("duplicate note id %q at %s", ce.note.ID, path)
+			c.problemas = append(c.problemas, Problema{Path: path,
+				Motivo: fmt.Sprintf("repite el id %q de otra nota; se ignora esta", ce.note.ID)})
+			return nil
 		}
 		vault[ce.note.ID] = ce.note.clone()
 		return nil

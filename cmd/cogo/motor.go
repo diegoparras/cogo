@@ -1,16 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/diegoparras/cogo/internal/calibracion"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/history"
 	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/motor"
 	"github.com/diegoparras/cogo/internal/parametros"
+	"github.com/diegoparras/cogo/internal/runner"
 	"github.com/diegoparras/cogo/internal/supervivencia"
 	"github.com/diegoparras/cogo/internal/uso"
 )
@@ -237,4 +241,46 @@ func faltan(evs []journal.Event, vault map[string]*core.Note) bool {
 		}
 	}
 	return false
+}
+
+// engancharEscrituras conecta cada escritura de nota con lo que tiene que
+// enterarse de ella: la historia por nota, y el registro de eventos.
+//
+// Lo segundo es lo que faltaba. Sin esto el registro se sembraba al arrancar y
+// nadie le escribía más: una nota verificada después del arranque no avanzaba
+// de estado, porque el pliegue seguía viendo los eventos de la siembra.
+func engancharEscrituras() {
+	core.SetWriteHook(func(path string, antes, despues *core.Note) {
+		dir := filepath.Dir(path)
+		history.Record(dir, despues.ID, despues.Confidence, despues.ColorReason, core.Claim(despues))
+		registrarCambio(dir, antes, despues)
+	})
+}
+
+func registrarCambio(dir string, antes, despues *core.Note) {
+	j, err := journalDe(dir)
+	if err != nil {
+		log.Printf("cogo: no se pudo abrir el registro para anotar %s: %v", despues.ID, err)
+		return
+	}
+	if err := journal.RegistrarCambio(j, antes, despues); err != nil {
+		log.Printf("cogo: no se pudo anotar el cambio de %s: %v", despues.ID, err)
+	}
+}
+
+// ejecutarCheck corre un check declarado en .cogo/runner.yaml para una nota, y
+// deja los eventos de la ejecución en el registro. Es la única función del
+// binario que produce una ejecución: un grep de runner.Verificar la encuentra.
+func ejecutarCheck(ctx context.Context, dir, noteID, checkID string) (runner.Resultado, error) {
+	cfg, err := runner.Cargar(dir)
+	if err != nil {
+		return runner.Resultado{}, fmt.Errorf("runner: %w", err)
+	}
+	j, err := journalDe(dir)
+	if err != nil {
+		return runner.Resultado{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(pars.Entero("runner.timeout_maximo"))*time.Minute)
+	defer cancel()
+	return runner.Verificar(ctx, j, cfg, noteID, checkID)
 }

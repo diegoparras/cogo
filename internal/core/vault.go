@@ -12,7 +12,16 @@ import (
 // and are skipped. A duplicate ID is an error: the ID is the stable identity,
 // so two notes can't share one.
 func LoadVault(dir string) (map[string]*Note, error) {
+	v, _, err := LoadVaultConProblemas(dir)
+	return v, err
+}
+
+// LoadVaultConProblemas es LoadVault diciendo además qué archivos quedaron
+// afuera. Un .md ilegible o un id repetido se saltea: el resto del vault sigue
+// sirviendo.
+func LoadVaultConProblemas(dir string) (map[string]*Note, []Problema, error) {
 	vault := map[string]*Note{}
+	var problemas []Problema
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -29,16 +38,19 @@ func LoadVault(dir string) (map[string]*Note, error) {
 		}
 		n, err := ReadNoteFile(path)
 		if err != nil {
-			return err
+			problemas = append(problemas, Problema{Path: path, Motivo: err.Error()})
+			return nil
 		}
 		if _, dup := vault[n.ID]; dup {
-			return fmt.Errorf("duplicate note id %q at %s", n.ID, path)
+			problemas = append(problemas, Problema{Path: path,
+				Motivo: fmt.Sprintf("repite el id %q de otra nota; se ignora esta", n.ID)})
+			return nil
 		}
 		vault[n.ID] = n
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return vault, nil
+	return vault, problemas, nil
 }

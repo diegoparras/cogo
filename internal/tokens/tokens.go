@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/diegoparras/cogo/internal/atomico"
 )
 
 // Token is one issued access token. Hash is the sha256 of the secret; the secret
@@ -65,7 +67,7 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path(), b, 0o600)
+	return atomico.Escribir(s.path(), b, 0o600)
 }
 
 // List returns every token WITHOUT its hash (safe to send to the UI).

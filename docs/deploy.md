@@ -211,6 +211,7 @@ Ninguna es obligatoria en local. Agrupadas por función.
 | `COGO_VAULT` | `/vault` (Docker) · `./vault` (CLI) | carpeta del vault. En Docker ya viene puesta. |
 | `COGO_ALLOW_INSECURE` | — | `1` = permití servir sin auth en interfaz pública. **Solo si el puerto ya está firewalleado/túnel.** |
 | `COOKIE_SECURE` | — | `1` bajo TLS: cookies `Secure` + header HSTS. Ponelo detrás de HTTPS. |
+| `COGO_TRUSTED_PROXIES` | — | CIDRs (separados por coma) desde los que se acepta `X-Forwarded-For`. Sin esto, detrás de un proxy **todo el mundo es la IP del proxy**: el rate limit frena a todos juntos y la auditoría no identifica a nadie. Para un contenedor detrás del proxy del mismo host: `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`. Nunca se le cree al header si el socket no viene de una red declarada. |
 
 ### Autenticación
 
@@ -271,8 +272,11 @@ notas *y* el estado.
 
 ### Respaldo (tres formas)
 1. **Desde el visor** — menú ⋮ → **Exportar (backup)** → baja un
-   `cogo-vault-<fecha>.zip` con **todas las notas** (excluye `.cogo`, así el zip es
-   portable y **no lleva secretos**).
+   `cogo-vault-<fecha>.zip` con **todas las notas y el estado**: el registro de
+   eventos, la historia por nota, permisos, parámetros, contradicciones, sellos,
+   artefactos y la papelera. Quedan afuera los secretos (`tokens.json`,
+   `llm.json`), la auditoría (lleva IPs y no hace falta para restaurar) y los
+   embeddings (caché derivable). Así el zip es portable y **no lleva secretos**.
 2. **Por API** — `GET /api/export` (mismo zip; requiere auth).
 3. **A mano** — copiá la carpeta del vault, o el volumen Docker:
    ```bash
@@ -373,7 +377,10 @@ y los **tiers opcionales del Guard**.
 
 ## 12. Salud, logs y actualización
 
-- **Health check:** `GET /healthz` → `ok`. Usalo en EasyPanel/Kubernetes/uptime.
+- **Health check:** `GET /healthz` → `ok`, o **503** con el motivo si el vault
+  no se puede leer o el registro de eventos no abre (antes decía `ok` pasara lo
+  que pasara). Usalo en EasyPanel/Kubernetes/uptime. La imagen trae su propio
+  `HEALTHCHECK` (`cogo health`, porque en `scratch` no hay curl).
 - **Logs:** `docker logs -f cogo`. Al arrancar dice el modo de auth y el vault.
 - **Actualizar:**
   - **EasyPanel:** botón **Deploy** / **Rebuild**. Las notas quedan (volumen).

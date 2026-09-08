@@ -39,6 +39,29 @@ Además del `COGO_MCP_TOKEN` raíz (bootstrap/break-glass), desde el visor emit�
 Necesitás estar autenticado (root o OIDC) para administrarlos; un token de solo
 lectura no puede gestionar tokens.
 
+### Qué puede y qué no puede un token emitido
+
+Los tokens que se emiten desde el visor son **credenciales de agente**, y eso
+acota lo que pueden hacer aunque tengan escritura:
+
+- **Nunca administran.** `/api/tokens`, `/api/settings`, `/api/parametros`,
+  `/api/audit`, `/api/export`, `/api/evidence-roots` y `/api/github/map` piden
+  la raíz (`COGO_MCP_TOKEN`) o una sesión de persona (OIDC). Un agente
+  comprometido no puede fabricarse tokens nuevos, leer las claves del LLM ni
+  tocar los parámetros del motor.
+- **Solo lectura es una lista de lo permitido**, no de lo prohibido: `pack`,
+  `recall`, `search`, `open`, `xray`, `guard`, `reflect` y `authorize`. Todo
+  lo demás —incluido cualquier tool nuevo— nace bloqueado hasta que alguien lo
+  clasifique, y hay un test que exige que cada tool registrado esté en una de
+  las dos listas. En `/api`, un read-only hace `GET` y los pocos `POST` que son
+  cálculos puros (`preview`, `guard`, `xray`, `pack`).
+- **Los batches JSON-RPC se rechazan** con 400, para todos. La versión
+  2025-06-18 de MCP los eliminó, y acá eran la forma de pasar un `capture` por
+  debajo del read-only y de la auditoría: el clasificador miraba un objeto y
+  un array con una escritura adentro no era nada.
+- **El id de una nota se valida al escribir**: letras, números, `-`, `_`, `.`;
+  nunca `..` ni separadores. Un `id: "../../x"` escribía fuera del vault.
+
 ## Fail-safe
 
 COGO **se niega a arrancar** en una interfaz pública (`0.0.0.0` / `:puerto`) si

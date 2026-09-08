@@ -87,7 +87,19 @@ func TrashNote(dir string, n *Note) (string, error) {
 	if err := os.Rename(src, dst); err != nil {
 		return "", err
 	}
+	// La historia se va con la nota. Si se queda, `recall` sigue devolviendo
+	// el claim de algo que se borró — y si se borró por un secreto, el secreto
+	// sigue ahí.
+	_ = os.Rename(historiaDe(dir, n.ID), historiaEnPapelera(dir, n.ID))
 	return dst, nil
+}
+
+func historiaDe(dir, id string) string {
+	return filepath.Join(dir, ".cogo", "history", id+".jsonl")
+}
+
+func historiaEnPapelera(dir, id string) string {
+	return filepath.Join(trashDir(dir), id+".history.jsonl")
 }
 
 // TrashItem is a deleted note as shown in the trash view (id + a short claim).
@@ -131,7 +143,12 @@ func RestoreTrash(dir, id string) error {
 	if _, err := os.Stat(dst); err == nil {
 		return fmt.Errorf("ya existe una nota con id %q — no se puede restaurar encima", id)
 	}
-	return os.Rename(src, dst)
+	if err := os.Rename(src, dst); err != nil {
+		return err
+	}
+	_ = os.MkdirAll(filepath.Dir(historiaDe(dir, id)), 0o755)
+	_ = os.Rename(historiaEnPapelera(dir, id), historiaDe(dir, id))
+	return nil
 }
 
 // PurgeTrash deletes a trashed note for good (no going back).
@@ -139,6 +156,7 @@ func PurgeTrash(dir, id string) error {
 	if err := os.Remove(filepath.Join(trashDir(dir), id+".md")); err != nil {
 		return fmt.Errorf("no such trashed note %q", id)
 	}
+	_ = os.Remove(historiaEnPapelera(dir, id))
 	return nil
 }
 

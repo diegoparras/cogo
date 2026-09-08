@@ -21,6 +21,7 @@ import (
 	"github.com/diegoparras/cogo/internal/embed"
 	"github.com/diegoparras/cogo/internal/ghsource"
 	"github.com/diegoparras/cogo/internal/history"
+	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/motor"
@@ -50,9 +51,7 @@ func cmdServe(args []string) error {
 	}
 	// Record a per-note history line on every write (stdio and HTTP both go
 	// through core.WriteNoteFile). The vault dir is derived from the note path.
-	core.SetWriteHook(func(path string, n *core.Note) {
-		history.Record(filepath.Dir(path), n.ID, n.Confidence, n.ColorReason, core.Claim(n))
-	})
+	engancharEscrituras()
 	instalarParametros(*dir)
 	if err := instalarMotor(*dir); err != nil {
 		return err
@@ -86,7 +85,7 @@ func cmdServe(args []string) error {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
+	mux.HandleFunc("/healthz", salud(*dir))
 	visor := web.New(*dir, today, store)
 	visor.UsarParametros(pars) // el panel edita el mismo Set que lee el motor
 	visor.UsarRegistroDeUso(Consultadas)
@@ -98,7 +97,8 @@ func cmdServe(args []string) error {
 
 	tls := os.Getenv("COOKIE_SECURE") == "1"
 	var h http.Handler = enforceReadOnly(mux) // read-only tokens can't write
-	h = auditMiddleware(*dir)(h)              // audit trail (who called which tool)
+	h = enforceAdmin(h)                       // issued tokens can't administer
+	h = auditMiddleware(*dir)(h)              // audit trail (who called which tool); rejects batches
 	h = authn.Gate(h)                         // auth (cookie or Bearer), stamps caller+scope
 	h = newIPLimiter(20, 60).middleware(h)    // per-IP rate limit
 	h = securityHeaders(h, tls)               // conservative headers
@@ -172,7 +172,7 @@ func newMCPServer(dir string) *mcp.Server {
 		// Y le cuelga quién más está trabajando acá. COGO no puede empujar, pero
 		// el agente ya está obligado a pedir contexto antes de actuar: esta
 		// respuesta es el canal, y el aviso llega justo cuando sirve.
-		aviso := avisoDeOtros(ctx, dir, in.Project)
+		aviso := avisoDeOtros(ctx, dir, in.Project) + avisoDeProblemas(cache.Problemas())
 		savings.Add(dir, p.RawTokens-p.Tokens, today().String())
 		return textResult(p.Markdown + aviso), nil, nil
 	})
@@ -411,6 +411,10 @@ func newMCPServer(dir string) *mcp.Server {
 		if id == "" {
 			id = core.DeriveID(in.Project, q)
 		}
+		ruta, err := core.RutaDeNota(dir, id)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		body := strings.TrimSpace(in.Body)
 		if body == "" {
 			body = "## Claim\n" + q
@@ -421,6 +425,9 @@ func newMCPServer(dir string) *mcp.Server {
 			CostToResolve: in.Cost, Attempted: in.Attempted,
 			Author: auth.CallerCtx(ctx),
 		}
+		if resumen, hay := secretscan.Nota(note); hay {
+			return textResult("⛔ Not stored — possible secret(s) detected: " + resumen + "."), nil, nil
+		}
 		if err := scrub.Note(ctx, scrubber, note); err != nil {
 			return errResult(fmt.Errorf("scrub failed: %w", err)), nil, nil
 		}
@@ -429,7 +436,7 @@ func newMCPServer(dir string) *mcp.Server {
 			return errResult(err), nil, nil
 		}
 		vault[id] = note
-		if err := core.WriteNoteFile(filepath.Join(dir, id+".md"), note); err != nil {
+		if err := core.WriteNoteFile(ruta, note); err != nil {
 			return errResult(err), nil, nil
 		}
 		_ = regenIndex(dir, vault)
@@ -486,6 +493,9 @@ func newMCPServer(dir string) *mcp.Server {
 		if id == "" {
 			id = core.DeriveID(in.Project, in.Body)
 		}
+		if err := core.ValidarID(id); err != nil {
+			return errResult(err), nil, nil
+		}
 		note := &core.Note{
 			ID: id, Type: in.Type, Project: in.Project, Body: strings.TrimSpace(in.Body),
 			LastVerified: today(),
@@ -507,6 +517,10 @@ func newMCPServer(dir string) *mcp.Server {
 		}
 		for _, e := range in.Evidence {
 			note.Evidence = append(note.Evidence, core.Evidence{Kind: e.Kind, Ref: e.Ref})
+		}
+		if resumen, hay := secretscan.Nota(note); hay {
+			return textResult("⛔ Not stored — possible secret(s) detected: " + resumen +
+				". A note is memory that other agents will read: clean the content first."), nil, nil
 		}
 		if err := scrub.Note(ctx, scrubber, note); err != nil {
 			return errResult(fmt.Errorf("scrub failed: %w", err)), nil, nil
@@ -549,7 +563,7 @@ func newMCPServer(dir string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "verify",
-		Description: "Record that a note's check passes, as of today, and re-color it. This is a DECLARATION, not an execution: it is stored as such, with your identity, and the note is marked `attested: declared`. Only COGO's own runner can produce `attested: executed`. If the cited evidence CHANGED since the note was last verified, this refuses — re-verifying must not be a way to make a drift warning disappear. Pass reanchor:true only if you actually re-checked the claim against the current content.",
+		Description: "Record that a note's check passes, as of today, and re-color it. Without `check`, this is a DECLARATION, not an execution: it is stored as such, with your identity, and the note is marked `attested: declared`. With `check: <id>`, COGO runs that check — one the vault owner declared in .cogo/runner.yaml — and records the real exit code; that is the only path to `attested: executed` and to `verified`. If the cited evidence CHANGED since the note was last verified, this refuses — re-verifying must not be a way to make a drift warning disappear. Pass reanchor:true only if you actually re-checked the claim against the current content.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in verifyIn) (*mcp.CallToolResult, any, error) {
 		vault, err := loadVault()
 		if err != nil {
@@ -559,11 +573,33 @@ func newMCPServer(dir string) *mcp.Server {
 		if !ok {
 			return errResult(fmt.Errorf("no note with id %q", in.ID)), nil, nil
 		}
-		if err := core.Verificar(n, core.LoadEvidenceRoots(dir), today(), core.Verificacion{
-			Por:      auth.CallerCtx(ctx),
-			Reanclar: in.Reanchor,
-		}); err != nil {
-			return errResult(err), nil, nil
+		ver := core.Verificacion{Por: auth.CallerCtx(ctx), Reanclar: in.Reanchor}
+		var corrida string
+		if strings.TrimSpace(in.Check) != "" {
+			// El agente elige QUÉ check declarado corre; el comando lo puso el
+			// dueño del vault. Los eventos de la ejecución los escribe el runner
+			// por su puerta reservada, y son el único camino a `verified`.
+			res, err := ejecutarCheck(ctx, dir, in.ID, in.Check)
+			if err != nil {
+				return errResult(err), nil, nil
+			}
+			ver.Por, ver.Ejecutado = journal.EmisorEjecucion, true
+			corrida = fmt.Sprintf(" — check %q exit %d in %s", res.CheckID, res.ExitCode, res.Duracion.Round(time.Millisecond))
+			if !res.OK() {
+				// Falló de verdad: se registra como ejecutado y fallido. No pasa
+				// por Verificar, que solo sabe marcar pases.
+				if derivadas := core.DriftedRefs(n); len(derivadas) > 0 && !in.Reanchor {
+					return errResult(&core.ErrDeriva{Refs: derivadas}), nil, nil
+				}
+				n.Check.Status, n.Check.Attested, n.Check.AttestedBy = "failed", core.AttestExecuted, journal.EmisorEjecucion
+				n.LastVerified = today()
+				ver = core.Verificacion{}
+			}
+		}
+		if ver != (core.Verificacion{}) {
+			if err := core.Verificar(n, core.LoadEvidenceRoots(dir), today(), ver); err != nil {
+				return errResult(err), nil, nil
+			}
 		}
 		v := core.Evaluate(n, vault, contradictions(), today())
 		n.Apply(v)
@@ -576,8 +612,8 @@ func newMCPServer(dir string) *mcp.Server {
 			return errResult(err), nil, nil
 		}
 		_ = regenIndex(dir, vault)
-		_ = appendLog(dir, fmt.Sprintf("verify %s %s", in.ID, v.Color))
-		return textResult(fmt.Sprintf("%s %s — %s", v.Color, in.ID, v.Reason)), nil, nil
+		_ = appendLog(dir, fmt.Sprintf("verify %s %s%s", in.ID, v.Color, corrida))
+		return textResult(fmt.Sprintf("%s %s — %s%s", v.Color, in.ID, v.Reason, corrida)), nil, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -801,6 +837,7 @@ type openIn struct {
 type verifyIn struct {
 	ID       string `json:"id" jsonschema:"the note id"`
 	Reanchor bool   `json:"reanchor,omitempty" jsonschema:"set only if you re-checked the claim against the CURRENT content of evidence that has drifted"`
+	Check    string `json:"check,omitempty" jsonschema:"id of a check declared by the vault owner in .cogo/runner.yaml. When given, COGO EXECUTES it and records the real exit code: this is the only way a note reaches attested: executed. You choose which declared check applies; you cannot supply the command"`
 }
 
 type evidenceIn struct {

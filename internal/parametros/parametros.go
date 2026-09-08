@@ -42,6 +42,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/diegoparras/cogo/internal/atomico"
 )
 
 // Tipo es cómo se edita un parámetro; determina el control que dibuja el panel.
@@ -430,7 +432,7 @@ func (s *Set) Guardar() error {
 	if err := os.MkdirAll(filepath.Dir(s.ruta), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(s.ruta, append(b, '\n'), 0o644)
+	return atomico.Escribir(s.ruta, append(b, '\n'), 0o644)
 }
 
 // Listar devuelve el catálogo con los valores vigentes, agrupado y en orden.

@@ -40,6 +40,8 @@ import (
 	"github.com/diegoparras/cogo/internal/secretscan"
 	"github.com/diegoparras/cogo/internal/tokens"
 	"github.com/diegoparras/cogo/internal/xray"
+
+	"github.com/diegoparras/cogo/internal/atomico"
 )
 
 //go:embed assets
@@ -64,8 +66,14 @@ type Server struct {
 	// anotarUso registra qué notas se consultaron (ver internal/uso).
 	anotarUso func(ids ...string)
 
-	mu             sync.RWMutex
-	provider       llm.Provider
+	mu       sync.RWMutex
+	provider llm.Provider
+	// la última verificación de la cadena, para no recorrer el registro en
+	// cada carga de la lista (ver cadenaRota).
+	cadenaSeq      uint64
+	cadenaCabeza   string
+	cadenaVista    bool
+	cadenaMsg      string
 	contradictions map[string]bool
 	scrubber       scrub.Scrubber
 }
@@ -101,7 +109,7 @@ func (s *Server) flushUsage() {
 		return
 	}
 	_ = os.MkdirAll(filepath.Join(s.dir, ".cogo"), 0o755)
-	_ = os.WriteFile(usagePath(s.dir), b, 0o644)
+	_ = atomico.Escribir(usagePath(s.dir), b, 0o644)
 }
 
 // Mount registers the SPA and the JSON API on the given mux.
@@ -303,15 +311,15 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			if d.Name() == ".cogo" {
-				return fs.SkipDir
-			}
-			return nil
-		}
 		rel, err := filepath.Rel(s.dir, path)
 		if err != nil {
 			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !exportable(filepath.ToSlash(rel)) {
+			return nil
 		}
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -1008,6 +1016,7 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{
 		"notes": page, "total": total, "offset": offset, "limit": limit, "facets": facets,
+		"problemas": s.problemas(),
 	})
 }
 
@@ -1492,6 +1501,14 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n := s.noteFromDraft(d)
+	if err := core.ValidarID(n.ID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if resumen, hay := secretscan.Nota(n); hay {
+		http.Error(w, "no se guardó: parece haber un secreto en la nota ("+resumen+")", http.StatusUnprocessableEntity)
+		return
+	}
 	if err := scrub.Note(r.Context(), s.scrubber, n); err != nil {
 		http.Error(w, "scrub (Anonimal) failed; note not saved: "+err.Error(), http.StatusBadGateway)
 		return
@@ -1673,7 +1690,7 @@ func (s *Server) writeSettings(set llmSettings) error {
 		return err
 	}
 	b, _ := json.MarshalIndent(set, "", "  ")
-	return os.WriteFile(s.settingsPath(), b, 0o600)
+	return atomico.Escribir(s.settingsPath(), b, 0o600)
 }
 
 // loadProvider: a saved GUI setting wins; otherwise fall back to env. Off if neither.
@@ -1874,4 +1891,68 @@ func ext(p string) string {
 		return ""
 	}
 	return strings.ToLower(p[i+1:])
+}
+
+// exportable decide qué entra al backup. Antes se excluía `.cogo` entero, y
+// la doc decía que ahí solo había caché: mentira útil hasta que alguien
+// restauró un zip y perdió el registro de eventos, la historia por nota, los
+// permisos, los parámetros y las contradicciones.
+//
+// Queda afuera lo que son secretos (tokens, claves del LLM), lo que es caché
+// derivable (embeddings) y la auditoría, que lleva IPs y no hace falta para
+// restaurar.
+func exportable(rel string) bool {
+	if !strings.HasPrefix(rel, ".cogo/") {
+		return true
+	}
+	resto := strings.TrimPrefix(rel, ".cogo/")
+	switch {
+	case resto == "tokens.json", resto == "llm.json", resto == "audit.jsonl":
+		return false
+	case strings.HasPrefix(resto, "embeddings"):
+		return false
+	}
+	return true
+}
+
+// problemas es lo que la pantalla principal tiene que gritar antes que nada:
+// archivos del vault que no se pudieron leer, y una cadena de eventos rota.
+//
+// Lo segundo vivía en un log.Printf al arrancar y en la sala de guerra — o sea,
+// donde nadie mira. Una cadena rota significa que alguien editó un evento
+// pasado, y a partir de ahí ningún color vale: es el único dato que invalida a
+// todos los demás, y por eso va arriba de la lista de notas.
+func (s *Server) problemas() []string {
+	var out []string
+	for _, p := range s.cache.Problemas() {
+		out = append(out, "no se pudo leer "+p.String())
+	}
+	if msg := s.cadenaRota(); msg != "" {
+		out = append(out, msg)
+	}
+	if out == nil {
+		out = []string{}
+	}
+	return out
+}
+
+// cadenaRota verifica la cadena una vez por cabeza: si el registro no cambió
+// desde la última vez, devuelve lo que ya sabía. Verificar recorre todos los
+// eventos, y esto se llama en cada carga de la lista.
+func (s *Server) cadenaRota() string {
+	j := s.registro
+	if j == nil {
+		return ""
+	}
+	seq, cabeza := j.Cabeza()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cadenaSeq == seq && s.cadenaCabeza == cabeza && s.cadenaVista {
+		return s.cadenaMsg
+	}
+	s.cadenaSeq, s.cadenaCabeza, s.cadenaVista, s.cadenaMsg = seq, cabeza, true, ""
+	if err := j.Verificar(); err != nil {
+		s.cadenaMsg = "CADENA DE EVENTOS ROTA — alguien editó el registro; ningún color es confiable hasta investigarlo: " + err.Error()
+	}
+	return s.cadenaMsg
 }

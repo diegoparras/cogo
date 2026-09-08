@@ -13,6 +13,10 @@ func TestScanCatchesKnownShapes(t *testing.T) {
 		"private key":           "-----BEGIN OPENSSH PRIVATE KEY-----\nb3Blbn...",
 		"credentials in URL":    "DATABASE_URL=postgres://user:s3cr3tPass@db:5432/app",
 		"secret assignment":     `config: api_key = "9f8e7d6c5b4a3f2e1d0c9b8a"`,
+		"env-style secret":      "STRIPE_SECRET_KEY=sk_live_ab12cd34ef56gh78ij90",
+		"COGO token":            "Authorization: cogo_4aoJvujYQjusipFlaxItbEYfEdm_YLCt",
+		"Anthropic key":         "export KEY=sk-ant-api03-abcdefghijklmnopqrstuvwxyz",
+		"GitLab token":          "glpat-AbCdEfGhIjKlMnOpQrSt in the runner log",
 	}
 	for wantRule, content := range cases {
 		f := Scan([]byte(content))

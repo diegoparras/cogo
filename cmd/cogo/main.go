@@ -40,6 +40,8 @@ func main() {
 		err = cmdVerify(args)
 	case "lint":
 		err = cmdLint(args)
+	case "health":
+		err = cmdHealth(args)
 	case "serve":
 		err = cmdServe(args)
 	case "sellar":
@@ -105,6 +107,7 @@ func vaultFlag(fs *flag.FlagSet) *string {
 // del flag no existe hasta después de Parse: declarar y resolver son dos
 // momentos distintos.
 func conVault(dir *string) string {
+	engancharEscrituras()
 	instalarParametros(*dir)
 	return *dir
 }

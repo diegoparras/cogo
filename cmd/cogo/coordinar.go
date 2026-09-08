@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/diegoparras/cogo/internal/accion"
 	"github.com/diegoparras/cogo/internal/auth"
+	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/presencia"
 )
@@ -68,4 +70,20 @@ func aplicarChoque(ctx context.Context, dir string, v accion.Veredicto, texto st
 	v.Bloqueo += "\nThis is not about your evidence: verifying more will not unblock it. " +
 		"Wait for the lease, take it yourself once it is free, or tell the human that two agents are on the same thing."
 	return v
+}
+
+// avisoDeProblemas le dice al agente qué parte del vault NO está viendo: un
+// archivo que no se pudo leer es una nota que falta en el pack, y un pack que
+// calla eso parece completo sin serlo.
+func avisoDeProblemas(ps []core.Problema) string {
+	if len(ps) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n---\n## Part of the vault could not be read\n")
+	for _, p := range ps {
+		b.WriteString("- " + p.String() + "\n")
+	}
+	b.WriteString("\nThese notes are missing from this pack. Tell the human: a note file is broken.\n")
+	return b.String()
 }

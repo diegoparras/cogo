@@ -17,6 +17,27 @@ import (
 	"github.com/diegoparras/cogo/internal/auth"
 )
 
+// Lo que un token de SOLO LECTURA puede hacer se declara como lista de lo
+// permitido, no de lo prohibido. Antes era al revés, y la lista de escritura se
+// quedó corta tres veces: `gap`, `stash` y `lease` escribían y no estaban. Con
+// una allowlist, un tool nuevo nace bloqueado hasta que alguien lo clasifique —
+// y hay un test que exige que cada tool registrado esté en una de las dos
+// listas.
+var toolsDeLectura = map[string]bool{
+	"pack": true, "recall": true, "search": true, "open": true,
+	"xray": true, "guard": true, "reflect": true,
+	// authorize no cambia el vault: pregunta. Deja una línea en el log, que es
+	// auditoría, no escritura.
+	"authorize": true,
+}
+
+// toolsDeEscritura existe para el test de clasificación: todo tool tiene que
+// estar en una lista o en la otra.
+var toolsDeEscritura = map[string]bool{
+	"capture": true, "verify": true, "archive": true, "restore": true, "remove": true,
+	"gap": true, "stash": true, "lease": true,
+}
+
 // enforceReadOnly refuses write operations for requests authorized by a
 // read-only token. It runs AFTER the auth gate (which stamps the scope on the
 // request context). For /api it classifies by path+method; for /mcp it peeks the
@@ -28,7 +49,7 @@ func enforceReadOnly(next http.Handler) http.Handler {
 				body, _ := io.ReadAll(io.LimitReader(r.Body, 2<<20))
 				_ = r.Body.Close()
 				r.Body = io.NopCloser(bytes.NewReader(body)) // restore for the real handler
-				if isWriteMCPCall(body) {
+				if !mcpPermitidoSoloLectura(body) {
 					forbidReadOnly(w)
 					return
 				}
@@ -45,19 +66,82 @@ func forbidReadOnly(w http.ResponseWriter) {
 	http.Error(w, "este token es de solo lectura: la operación requiere un token con permiso de escritura", http.StatusForbidden)
 }
 
-func blockedForReadOnly(path, method string) bool {
-	switch path {
-	case "/api/tokens", "/api/settings", "/api/audit", "/api/export", "/api/evidence-roots":
-		return true // tokens, settings, audit, full-vault export and evidence roots are admin
+// mcpPermitidoSoloLectura decide sobre el cuerpo de una llamada JSON-RPC. Lo
+// que no sea un tools/call (initialize, tools/list, ping, notificaciones) pasa;
+// un tools/call pasa solo si el tool está en la lista de lectura.
+func mcpPermitidoSoloLectura(body []byte) bool {
+	if esBatch(body) {
+		return false // la auditoría ya lo rechazó antes; acá es cinturón
 	}
-	if method == http.MethodGet {
-		return false // reads are always allowed
+	var msg struct {
+		Method string `json:"method"`
+		Params struct {
+			Name string `json:"name"`
+		} `json:"params"`
 	}
-	switch path {
-	case "/api/capture", "/api/verify", "/api/archive", "/api/restore", "/api/delete", "/api/mandate", "/api/lint", "/api/contradictions", "/api/trash", "/api/guard/label", "/api/agent-docs", "/api/artifact", "/api/leases", "/api/agent-blocks":
+	if json.Unmarshal(body, &msg) != nil {
+		return false // lo que no se entiende no se deja pasar
+	}
+	if msg.Method != "tools/call" {
 		return true
 	}
+	return toolsDeLectura[msg.Params.Name]
+}
+
+// esBatch detecta un array JSON-RPC. La versión 2025-06-18 de MCP los eliminó
+// del protocolo, y acá eran un agujero: el clasificador miraba un objeto, así
+// que un array con un `capture` adentro pasaba el read-only y la auditoría sin
+// que nadie lo viera.
+func esBatch(body []byte) bool {
+	b := bytes.TrimLeft(body, " \t\r\n")
+	return len(b) > 0 && b[0] == '['
+}
+
+// rutasDeAdministracion son las superficies del dueño del vault: se entra con
+// la raíz o con una sesión de persona, nunca con un token emitido. Un token
+// con escritura sirve para escribir notas; no para fabricar más tokens, cambiar
+// las claves del LLM o tocar los parámetros del motor.
+var rutasDeAdministracion = []string{
+	"/api/tokens", "/api/settings", "/api/parametros", "/api/audit", "/api/export",
+	"/api/evidence-roots", "/api/github/map",
+}
+
+func esRutaDeAdministracion(path string) bool {
+	for _, p := range rutasDeAdministracion {
+		if path == p || strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
 	return false
+}
+
+// enforceAdmin corta las rutas de administración para todo lo que no sea
+// administrador, con cualquier método: leer los settings también es leer las
+// claves.
+func enforceAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if esRutaDeAdministracion(r.URL.Path) && !auth.EsAdmin(r) {
+			http.Error(w, "esta operación es de administración: requiere la raíz o una sesión de persona, no un token emitido", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// blockedForReadOnly: para /api, un token de solo lectura puede hacer GET y
+// los pocos POST que son cálculos puros. Todo lo demás, no.
+func blockedForReadOnly(path, method string) bool {
+	if esRutaDeAdministracion(path) {
+		return true
+	}
+	if method == http.MethodGet {
+		return false
+	}
+	switch path {
+	case "/api/preview", "/api/guard", "/api/xray", "/api/pack":
+		return false // analizan o previsualizan; no escriben
+	}
+	return true
 }
 
 // mcpToolName pulls params.name from a JSON-RPC tools/call body ("" otherwise).
@@ -103,14 +187,6 @@ func mcpBlanco(body []byte) (nota, proyecto string) {
 		}
 	}
 	return "", strings.TrimSpace(a.Project)
-}
-
-func isWriteMCPCall(body []byte) bool {
-	switch mcpToolName(body) {
-	case "capture", "verify", "archive", "restore", "remove":
-		return true
-	}
-	return false
 }
 
 // --- audit log: who (which token/user) called which MCP tool, and when --------
@@ -184,6 +260,10 @@ func auditMiddleware(dir string) func(http.Handler) http.Handler {
 				body, _ := io.ReadAll(io.LimitReader(r.Body, 2<<20))
 				_ = r.Body.Close()
 				r.Body = io.NopCloser(bytes.NewReader(body)) // restore for downstream
+				if esBatch(body) {
+					http.Error(w, "los batches JSON-RPC no están soportados: una llamada por request", http.StatusBadRequest)
+					return
+				}
 				if tool = mcpToolName(body); tool != "" {
 					record = true
 					nota, proyecto = mcpBlanco(body)
@@ -313,10 +393,72 @@ func (l *ipLimiter) middleware(next http.Handler) http.Handler {
 	})
 }
 
+// proxiesConfiables son las redes desde las que se acepta X-Forwarded-For.
+// Vacío = ninguna: la IP es la del socket, que detrás de un proxy es siempre la
+// del proxy — y entonces el rate limit frena a todos juntos y la auditoría no
+// identifica a nadie. Se declara con COGO_TRUSTED_PROXIES (CIDRs separados por
+// coma); para un contenedor detrás del proxy del mismo host, las redes privadas.
+var proxiesConfiables = leerCIDRs(os.Getenv("COGO_TRUSTED_PROXIES"))
+
+func leerCIDRs(s string) []*net.IPNet {
+	var out []*net.IPNet
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if !strings.Contains(p, "/") {
+			if strings.Contains(p, ":") {
+				p += "/128"
+			} else {
+				p += "/32"
+			}
+		}
+		if _, n, err := net.ParseCIDR(p); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	return ipDelCliente(r.RemoteAddr, r.Header.Get("X-Forwarded-For"), proxiesConfiables)
+}
+
+// ipDelCliente camina X-Forwarded-For de derecha a izquierda saltando los
+// proxies confiables, y se queda con el primer salto que no lo es: ese es el
+// cliente. Nunca se le cree al header si el socket no viene de un proxy
+// declarado — el header lo escribe cualquiera.
+func ipDelCliente(remote, xff string, confiables []*net.IPNet) string {
+	host, _, err := net.SplitHostPort(remote)
 	if err != nil {
-		return r.RemoteAddr
+		host = remote
+	}
+	if !enRedes(host, confiables) {
+		return host
+	}
+	saltos := strings.Split(xff, ",")
+	for i := len(saltos) - 1; i >= 0; i-- {
+		ip := strings.TrimSpace(saltos[i])
+		if ip == "" {
+			continue
+		}
+		if !enRedes(ip, confiables) {
+			return ip
+		}
 	}
 	return host
+}
+
+func enRedes(ip string, redes []*net.IPNet) bool {
+	p := net.ParseIP(ip)
+	if p == nil {
+		return false
+	}
+	for _, n := range redes {
+		if n.Contains(p) {
+			return true
+		}
+	}
+	return false
 }

@@ -13,7 +13,7 @@ type Estado uint8
 const (
 	// Excluida del pack por decisión explícita.
 	Quarantined Estado = 0
-	// El check se ejecutó y falló.
+	// El check falló: lo ejecutó el runner, o alguien declaró que falla. Una falla declarada vale tanto como un pase declarado — si se le cree a la buena noticia, se le cree a la mala.
 	Refuted Estado = 1
 	// Hay una contradicción abierta con otra nota.
 	Contradicted Estado = 2
@@ -134,6 +134,8 @@ const (
 	EvCheckExecuted Evento = "CheckExecuted"
 	// Alguien afirma que el check pasa, sin ejecutarlo.
 	EvVerifyDeclared Evento = "VerifyDeclared"
+	// Alguien afirma que el check falla, sin que lo haya ejecutado el runner. Existe para que una falla declarada no tenga que disfrazarse de ejecución: antes se sembraba como CheckExecuted y contaminaba la calibración, que cuenta las ejecuciones como verdad de máquina.
+	EvFailDeclared Evento = "FailDeclared"
 	// Venció la ventana de frescura de la nota.
 	EvTTLExpired Evento = "TTLExpired"
 	// Cambió de forma material una evidencia en la que la nota se apoya.
@@ -153,7 +155,7 @@ const (
 // convertiría registrar un problema en una mejora.
 func Degrada(e Evento) bool {
 	switch e {
-	case EvTTLExpired, EvAnchorMaterialChange, EvContradictionOpened, EvQuarantined:
+	case EvFailDeclared, EvTTLExpired, EvAnchorMaterialChange, EvContradictionOpened, EvQuarantined:
 		return true
 	}
 	return false
@@ -187,6 +189,8 @@ type Transicion struct {
 // Tabla es la máquina completa, en el orden en que se declaró.
 var Tabla = []Transicion{
 	{Desde: Asserted, Hasta: CheckDeclared, Evento: EvCheckDeclared},
+	{Desde: ClaimedPassed, Hasta: CheckDeclared, Evento: EvCheckDeclared},
+	{Desde: Verified, Hasta: CheckDeclared, Evento: EvCheckDeclared},
 	{Desde: CheckDeclared, Hasta: Verifying, Evento: EvVerificationStarted},
 	{Desde: Stale, Hasta: Verifying, Evento: EvVerificationStarted},
 	{Desde: ClaimedPassed, Hasta: Verifying, Evento: EvVerificationStarted},
@@ -198,6 +202,7 @@ var Tabla = []Transicion{
 	{Any: true, Hasta: Stale, Evento: EvTTLExpired},
 	{Any: true, Hasta: Stale, Evento: EvAnchorMaterialChange},
 	{Any: true, Hasta: Contradicted, Evento: EvContradictionOpened},
+	{Any: true, Hasta: Refuted, Evento: EvFailDeclared},
 	{Any: true, Hasta: Quarantined, Evento: EvQuarantined},
 	{Desde: Refuted, Hasta: CheckDeclared, Evento: EvCheckDeclared},
 	{Desde: Contradicted, Hasta: CheckDeclared, Evento: EvContradictionResolved},

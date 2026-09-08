@@ -17,6 +17,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/diegoparras/cogo/internal/atomico"
 )
 
 // Lease is one held permit.
@@ -54,7 +56,7 @@ func (s *Store) read() map[string]Lease {
 func (s *Store) write(m map[string]Lease) {
 	if b, err := json.MarshalIndent(m, "", "  "); err == nil {
 		_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
-		_ = os.WriteFile(s.path, b, 0o644)
+		_ = atomico.Escribir(s.path, b, 0o644)
 	}
 }
 

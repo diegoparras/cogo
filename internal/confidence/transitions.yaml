@@ -35,7 +35,10 @@ states:
   - id: refuted
     color: red
     rank: 1
-    doc: El check se ejecutó y falló.
+    doc: >
+      El check falló: lo ejecutó el runner, o alguien declaró que falla. Una
+      falla declarada vale tanto como un pase declarado — si se le cree a la
+      buena noticia, se le cree a la mala.
 
   - id: contradicted
     color: red
@@ -124,6 +127,13 @@ events:
     emitter: internal_runner
   - id: VerifyDeclared
     doc: Alguien afirma que el check pasa, sin ejecutarlo.
+  - id: FailDeclared
+    doc: >
+      Alguien afirma que el check falla, sin que lo haya ejecutado el runner.
+      Existe para que una falla declarada no tenga que disfrazarse de
+      ejecución: antes se sembraba como CheckExecuted y contaminaba la
+      calibración, que cuenta las ejecuciones como verdad de máquina.
+    degrada: true
   - id: TTLExpired
     doc: Venció la ventana de frescura de la nota.
     degrada: true
@@ -147,6 +157,17 @@ events:
 transitions:
   # --- construir el respaldo
   - from: asserted
+    to: check_declared
+    on: CheckDeclared
+
+  # Un criterio NUEVO invalida lo que se declaró o verificó sobre el anterior:
+  # la declaración cubría otro check. Sin estas aristas, cambiar el test de una
+  # nota verde la dejaba verde para siempre.
+  - from: claimed_passed
+    to: check_declared
+    on: CheckDeclared
+
+  - from: verified
     to: check_declared
     on: CheckDeclared
 
@@ -206,6 +227,10 @@ transitions:
   - from: "*"
     to: contradicted
     on: ContradictionOpened
+
+  - from: "*"
+    to: refuted
+    on: FailDeclared
 
   - from: "*"
     to: quarantined

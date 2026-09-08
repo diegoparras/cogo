@@ -879,6 +879,11 @@ canvas.graph-canvas:active { cursor: grabbing; }
   padding: 5px 0; border-top: 1px solid var(--hairline); }
 .sg-cmd { font-family: var(--mono); font-size: 11.5px; color: var(--muted-2); }
 
+/* Lo que invalida a todo lo demás va arriba de la lista, no en una pestaña. */
+.aviso-vault { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--err);
+  border-radius: var(--radius); background: color-mix(in srgb, var(--err) 8%, transparent); }
+.aviso-vault-item { font-family: var(--mono); font-size: 12.5px; color: var(--err); padding: 3px 0; }
+
 .sg-eventos { max-height: 340px; overflow-y: auto; border: 1px solid var(--hairline);
   border-radius: var(--radius); }
 .sg-ev { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 11.5px;

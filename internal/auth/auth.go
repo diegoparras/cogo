@@ -78,6 +78,29 @@ func Caller(r *http.Request) string {
 	return v
 }
 
+// ConIdentidad estampa en el contexto quién llama y con qué alcance. Es lo
+// mismo que hace Gate; está exportado para que los middlewares se puedan
+// probar sin levantar la autenticación entera.
+func ConIdentidad(ctx context.Context, caller string, readOnly bool) context.Context {
+	ctx = context.WithValue(ctx, readOnlyKey, readOnly)
+	return context.WithValue(ctx, callerKey, caller)
+}
+
+// EsAdmin dice si quien llama puede tocar las superficies de administración:
+// tokens, settings, parámetros, auditoría, export. Son la raíz (COGO_MCP_TOKEN),
+// una sesión OIDC (la persona en el navegador) o nadie (auth apagada, loopback).
+//
+// Un token EMITIDO nunca es administrador, ni aunque tenga escritura: es la
+// credencial de un agente, y un agente comprometido no puede fabricarse
+// credenciales nuevas ni cambiar las claves del LLM.
+func EsAdmin(r *http.Request) bool {
+	switch c := Caller(r); {
+	case c == "", c == "root", strings.HasPrefix(c, "user:"):
+		return true
+	}
+	return false
+}
+
 // CallerCtx is Caller for code that only has the context (e.g. an MCP tool
 // handler, whose ctx derives from the HTTP request the auth gate stamped). "" if
 // unset (stdio, or auth off).

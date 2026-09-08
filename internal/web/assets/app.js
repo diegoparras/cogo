@@ -32,7 +32,20 @@ async function apiOrError(path, opt) {
 async function listaNotas(qs) {
   const r = await apiOrError("/api/notes" + (qs ? "?" + qs : ""));
   if (r.ok === false) throw new Error(r.error);
+  pintarAvisoVault(r.problemas || []);
   return r.notes || [];
+}
+
+// pintarAvisoVault muestra lo que el servidor no pudo leer o no puede
+// garantizar: un .md roto, la cadena de eventos rota. Va arriba de la lista
+// porque son los únicos datos que invalidan a todos los demás — y antes vivían
+// en la sala de guerra, donde nadie los ve hasta que es tarde.
+function pintarAvisoVault(problemas) {
+  const c = document.getElementById("avisoVault");
+  if (!c) return;
+  c.innerHTML = "";
+  c.hidden = !problemas.length;
+  problemas.forEach(p => c.appendChild(el("div", "aviso-vault-item", p)));
 }
 const cls = c => "c-" + (c || "ungraded");
 function el(tag, className, text) {
@@ -875,6 +888,11 @@ async function renderVault(main) {
   st.offset = 0;
 
   viewHead(main, "Suite Escriba · Memoria", "Vault", "Todo lo que sabés del proyecto, con un color de confianza que COGO computa solo: verde confiá, amarillo ojo, rojo no.");
+
+  const aviso = el("div", "aviso-vault");
+  aviso.id = "avisoVault";
+  aviso.hidden = true;
+  main.appendChild(aviso);
 
   // --- barra 1: acción, búsqueda, archivadas ---
   const bar1 = el("div", "viewbar");

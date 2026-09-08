@@ -610,6 +610,15 @@ historial completo.
 
 > La parte para quien quiere saber si esto es serio.
 
+### Y si un archivo está roto
+
+Un `.md` con el frontmatter mal cerrado, o dos archivos con el mismo `id`, **no
+tiran abajo el vault**: se saltean, el resto sigue sirviendo, y el aviso aparece
+**arriba de la lista de notas** y **al final de cada pack** —porque un pack que
+calla lo que no pudo leer parece completo sin serlo. Lo mismo con una cadena de
+eventos rota: es el único dato que invalida a todos los demás, y por eso va en
+la pantalla principal y no en una pestaña.
+
 ## 20. El color es un *meet*, no una fórmula
 
 COGO no promedia. El color sale de combinar ejes independientes tomando **siempre
@@ -670,8 +679,8 @@ quarantined < refuted < contradicted < stale < asserted
 verifying — transitorio, fuera del retículo
 ```
 
-`internal/confidence/transitions.yaml` es la **fuente única**: 9 estados, 10
-eventos, 16 transiciones. El Go sale de ahí, y el generador **rompe el build** si la
+`internal/confidence/transitions.yaml` es la **fuente única**: 9 estados, 11
+eventos, 19 transiciones. El Go sale de ahí, y el generador **rompe el build** si la
 tabla está mal: un estado sin rango, rangos duplicados o con huecos, una transición
 a un estado inexistente, una guarda huérfana, un estado inalcanzable, un transitorio
 con rango, dos transiciones con la misma guarda, o una decisión sin cubrir.
@@ -682,11 +691,39 @@ Dos cosas la separan de una máquina de estados común:
 miembros de una decisión son mutuamente excluyentes **por construcción** — no porque
 alguien se acordó de escribir el `else`.
 
-**Los eventos negativos son techo, no salto.** Cinco están marcados `degrada: true`
+**Los eventos negativos son techo, no salto.** Seis están marcados `degrada: true`
 y el fold los aplica con `meet` en vez de transicionar. Salió de un defecto real:
 abrir una contradicción sobre una nota ya refutada la **subía** de `refuted` a
 `contradicted`. Registrar un problema mejoraba la nota. Los dos estados son rojos,
 así que ningún test de color lo hubiera visto nunca.
+
+### Cómo se alimenta el registro
+
+Dos caminos, y los dos escriben eventos — nadie escribe estados:
+
+**La siembra.** Al arrancar, cada nota que el registro no conoce se traduce a la
+secuencia mínima de eventos que explica lo que hoy se ve en su archivo: hay un
+criterio → `CheckDeclared`; alguien declaró que pasa → `VerifyDeclared`; el
+runner lo ejecutó → `CheckExecuted`. No es su historia real —esa no se
+registró— y el evento lo dice (`origen: siembra`).
+
+**Cada escritura.** Cuando una nota se escribe —por `capture`, `verify`, el
+editor o la CLI— COGO compara el archivo de antes con el de después y traduce
+la diferencia: apareció o cambió el criterio → `CheckDeclared`; se declaró que
+pasa, o se renovó la fecha → `VerifyDeclared`; se declaró que falla →
+`FailDeclared`. Solo el eje del check se traduce, porque es el único que vive
+en los eventos: la frescura, la evidencia y las contradicciones se calculan en
+cada lectura y no se duplican.
+
+Y nunca se traduce una ejecución. Cuando el archivo dice `attested: executed`
+es porque el runner ya escribió sus propios eventos por la puerta reservada;
+volver a emitirlos sería inventar una segunda ejecución.
+
+Dos consecuencias que salen de la máquina, no de una regla aparte: **cambiar el
+criterio de una nota verde la baja a `check_declared`** —lo declarado cubría otro
+check— y **una falla declarada vale tanto como un pase declarado**: si se le cree
+a la buena noticia, se le cree a la mala. Antes se sembraba como si fuera una
+ejecución, y la calibración la contaba como verdad de máquina.
 
 ### La línea que importa
 
@@ -956,6 +993,17 @@ checks:
 ```
 
 Un agente puede pedir que se corra `go-test`. **No puede inventar qué se ejecuta.**
+Lo pide así:
+
+```
+verify(id: "pool-limite-200", check: "go-test")
+```
+
+COGO ejecuta el check declarado, registra en el journal `VerificationStarted` y
+`CheckExecuted` con el código de salida real —por la puerta reservada del
+runner— y deja la nota como `attested: executed`. Si el comando falla, la nota
+queda `refuted`. Sin `check`, `verify` es una declaración y llega hasta
+`claimed_passed`; con `check`, es el único camino a `verified`.
 
 ## 29. Las invariantes
 

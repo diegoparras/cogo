@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+
+	"github.com/diegoparras/cogo/internal/atomico"
 )
 
 const (
@@ -73,7 +75,7 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path(), b, 0o644)
+	return atomico.Escribir(s.path(), b, 0o644)
 }
 
 // List returns every stored contradiction (open and dismissed).

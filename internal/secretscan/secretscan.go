@@ -38,6 +38,16 @@ var rules = []rule{
 	{"Slack token", regexp.MustCompile(`\bxox[baprs]-[0-9A-Za-z\-]{10,}\b`), 0},
 	{"OpenAI/OpenRouter key", regexp.MustCompile(`\bsk-(?:or-v1-)?[0-9A-Za-z]{20,}\b`), 0},
 	{"Cloudflare API token", regexp.MustCompile(`\bcfut_[0-9A-Za-z]{20,}\b`), 0},
+	{"Anthropic key", regexp.MustCompile(`\bsk-ant-[0-9A-Za-z_\-]{20,}\b`), 0},
+	{"COGO token", regexp.MustCompile(`\bcogo_[0-9A-Za-z_\-]{28,}\b`), 0},
+	{"Hugging Face token", regexp.MustCompile(`\bhf_[0-9A-Za-z]{30,}\b`), 0},
+	{"npm token", regexp.MustCompile(`\bnpm_[0-9A-Za-z]{36}\b`), 0},
+	{"GitLab token", regexp.MustCompile(`\bglpat-[0-9A-Za-z_\-]{20,}\b`), 0},
+	// Asignación estilo .env: DATABASE_PASSWORD=..., STRIPE_SECRET_KEY=... El nombre
+	// en mayúsculas con un sufijo que delata qué es; el valor, lo que sea que no
+	// tenga espacios. Es la forma más común en que una credencial real termina
+	// pegada en una nota, y no la cubría ninguna regla.
+	{"env-style secret", regexp.MustCompile(`\b[A-Z][A-Z0-9_]{1,}(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PWD)\s*=\s*["']?([^\s"'#]{12,})`), 1},
 	{"JWT", regexp.MustCompile(`\beyJ[0-9A-Za-z_\-]{8,}\.eyJ[0-9A-Za-z_\-]{8,}\.[0-9A-Za-z_\-]{8,}\b`), 0},
 	{"bearer token", regexp.MustCompile(`(?i)\bbearer\s+([0-9A-Za-z._\-]{20,})`), 1},
 	{"credentials in URL", regexp.MustCompile(`\b[a-z][a-z0-9+.\-]*://[^\s:/@]+:([^\s@/]{3,})@`), 1},

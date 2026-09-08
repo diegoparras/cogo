@@ -223,7 +223,7 @@ func TestNotesFechasYPaginado(t *testing.T) {
 	// La fecha de creación sale del historial, y el historial lo escribe un hook
 	// global que instala el comando `serve` (cmd/cogo/serve.go). Sin él, el test
 	// probaría un servidor que no existe en producción.
-	core.SetWriteHook(func(path string, n *core.Note) {
+	core.SetWriteHook(func(path string, _, n *core.Note) {
 		history.Record(filepath.Dir(path), n.ID, n.Confidence, n.ColorReason, core.Claim(n))
 	})
 	t.Cleanup(func() { core.SetWriteHook(nil) })

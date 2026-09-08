@@ -244,30 +244,43 @@ func Sembrar(j *Journal, vault map[string]*core.Note, verdicts map[string]core.V
 // eventos que la habría llevado ahí. No es su historia real —esa no se
 // registró— sino la mínima que explica lo que hoy se ve.
 func eventosDeSiembra(n *core.Note, v core.Verdict) []Event {
+	return eventosDe(n, v, "siembra")
+}
+
+// eventosDe es la traducción compartida por la siembra y por la escritura de
+// una nota nueva: el estado observable, a la secuencia mínima que lo explica.
+func eventosDe(n *core.Note, v core.Verdict, origen string) []Event {
 	quien := n.Check.AttestedBy
 	if strings.TrimSpace(quien) == "" {
 		quien = "sembrado"
 	}
 	var out []Event
 	add := func(kind, guard string) {
-		out = append(out, Event{NoteID: n.ID, Kind: kind, Emitter: quien, Guard: guard,
-			Payload: json.RawMessage(`{"origen":"siembra"}`)})
+		out = append(out, Event{NoteID: n.ID, Kind: kind, Emitter: sinReservado(quien), Guard: guard,
+			Payload: json.RawMessage(`{"origen":"` + origen + `"}`)})
 	}
 
 	if strings.TrimSpace(n.Check.Test) != "" {
 		add("CheckDeclared", "")
 	}
+	ejecutado := n.Check.Attestation() == core.AttestExecuted
 	switch n.Check.Status {
 	case "passed":
-		if n.Check.Attestation() == core.AttestExecuted {
+		if ejecutado {
 			add("VerificationStarted", "")
 			add("CheckExecuted", "ejecucion_ok")
 		} else {
 			add("VerifyDeclared", "declara_un_tercero")
 		}
 	case "failed":
-		add("VerificationStarted", "")
-		add("CheckExecuted", "ejecucion_falla")
+		// Una falla declarada ya no se disfraza de ejecución: antes se sembraba
+		// como CheckExecuted y la calibración la contaba como verdad de máquina.
+		if ejecutado {
+			add("VerificationStarted", "")
+			add("CheckExecuted", "ejecucion_falla")
+		} else {
+			add("FailDeclared", "")
+		}
 	}
 	// El motor vigente ya decidió que está vencida o contradicha: se registra,
 	// porque es información que el fold no puede derivar por su cuenta.

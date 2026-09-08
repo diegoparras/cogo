@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/diegoparras/cogo/internal/atomico"
 	"gopkg.in/yaml.v3"
 )
 
@@ -158,11 +159,15 @@ func ReadNoteFile(path string) (*Note, error) {
 // writeHook, if set, is called after every successful note write — the single
 // choke point a face uses to record per-note history without core doing that
 // I/O itself (it stays pure by default). See SetWriteHook.
-var writeHook func(path string, n *Note)
+//
+// Recibe la nota ANTES y DESPUÉS de la escritura. El antes es lo que permite
+// traducir un cambio a eventos del registro —qué apareció, qué pasó de estado—
+// sin que core sepa que existe un registro. Es nil cuando la nota es nueva.
+var writeHook func(path string, antes, despues *Note)
 
 // SetWriteHook installs a callback run after each WriteNoteFile. Pass nil to
 // disable. Set once by the server; nil in tests keeps core deterministic.
-func SetWriteHook(f func(path string, n *Note)) { writeHook = f }
+func SetWriteHook(f func(path string, antes, despues *Note)) { writeHook = f }
 
 // WriteNoteFile renders a note and writes it to disk.
 func WriteNoteFile(path string, n *Note) error {
@@ -170,11 +175,17 @@ func WriteNoteFile(path string, n *Note) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	// El estado anterior se lee antes de pisarlo, y solo si alguien lo va a
+	// mirar: sin hook no hay lectura extra.
+	var antes *Note
+	if writeHook != nil {
+		antes, _ = ReadNoteFile(path) // nil si es nueva o ilegible
+	}
+	if err := atomico.Escribir(path, data, 0o644); err != nil {
 		return err
 	}
 	if writeHook != nil {
-		writeHook(path, n)
+		writeHook(path, antes, n)
 	}
 	return nil
 }
