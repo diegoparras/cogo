@@ -115,7 +115,11 @@
     let mode = opts.mode === "3d" ? "3d" : "2d";
     let alpha = 1;                         // simulation cooling
     let zoom = 1, panX = 0, panY = 0;      // 2D
-    let yaw = 0.5, pitch = -0.35, spinY = 0, spinX = 0, autoSpin = 0.0016; // 3D
+    // Sin giro automático si la persona pidió menos movimiento: un grafo que
+    // gira solo, indefinidamente, es exactamente lo que prefers-reduced-motion
+    // pide que no pase.
+    const menosMovimiento = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let yaw = 0.5, pitch = -0.35, spinY = 0, spinX = 0, autoSpin = menosMovimiento ? 0 : 0.0016; // 3D
     let hovered = null, dragging = false, dragMoved = false, lastX = 0, lastY = 0;
     let selected = null; // fijado con un clic: el enfoque no se pierde al mover el mouse
     let W = 0, H = 0, dpr = 1;

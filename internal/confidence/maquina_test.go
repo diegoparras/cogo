@@ -1,6 +1,7 @@
 package confidence
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -158,6 +159,10 @@ func TestElGeneradorRechazaTablasRotas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Un checkout con autocrlf deja el YAML con \r\n, y los reemplazos de abajo
+	// buscan "\n": el test decía "no modificó la tabla" en Windows sin que
+	// nadie hubiera roto nada.
+	base = bytes.ReplaceAll(base, []byte("\r\n"), []byte("\n"))
 
 	casos := []struct {
 		nombre string
@@ -271,7 +276,10 @@ func TestElGeneradoEstaSincronizadoConElYAML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(quiero) != string(tengo) {
+	// Comparar sin el fin de línea: en un checkout con autocrlf states_gen.go
+	// viene con \r\n y el generador escribe \n, y eso no es una diferencia.
+	normal := func(b []byte) string { return string(bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))) }
+	if normal(quiero) != normal(tengo) {
 		t.Error("states_gen.go no coincide con transitions.yaml — corré `go generate ./internal/confidence`")
 	}
 }

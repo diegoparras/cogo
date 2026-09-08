@@ -38,7 +38,7 @@ func LoadVaultConProblemas(dir string) (map[string]*Note, []Problema, error) {
 		}
 		n, err := ReadNoteFile(path)
 		if err != nil {
-			problemas = append(problemas, Problema{Path: path, Motivo: err.Error()})
+			problemas = append(problemas, Problema{Path: path, Motivo: motivoSinRuta(err, path)})
 			return nil
 		}
 		if _, dup := vault[n.ID]; dup {

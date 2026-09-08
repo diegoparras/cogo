@@ -48,6 +48,46 @@ function pintarAvisoVault(problemas) {
   problemas.forEach(p => c.appendChild(el("div", "aviso-vault-item", p)));
 }
 const cls = c => "c-" + (c || "ungraded");
+
+// hacerActivable convierte un div clickeable en algo que también se opera con
+// el teclado: entra en el orden de tabulación, se activa con Enter o espacio,
+// y se anuncia como botón. La navegación principal del Vault eran divs con
+// onclick: con un lector de pantalla o sin mouse no se podía abrir una nota.
+function hacerActivable(nodo, accion, etiqueta) {
+  nodo.tabIndex = 0;
+  nodo.setAttribute("role", "button");
+  if (etiqueta) nodo.setAttribute("aria-label", etiqueta);
+  nodo.addEventListener("click", accion);
+  nodo.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); accion(e); }
+  });
+}
+
+// mostrarModal / ocultarModal: los modales estáticos del index.html se abrían
+// sacando la clase hidden y nada más. Un diálogo tiene que recibir el foco al
+// abrir, cerrarse con Escape, y devolver el foco a donde estaba.
+let __focoAntesDelModal = null;
+function mostrarModal(m) {
+  __focoAntesDelModal = document.activeElement;
+  m.classList.remove("hidden");
+  m.setAttribute("role", "dialog");
+  m.setAttribute("aria-modal", "true");
+  const primero = m.querySelector("input, select, textarea, button:not(.modal-x), [tabindex]:not([tabindex='-1'])") || m.querySelector(".modal-x");
+  if (primero) primero.focus();
+}
+function ocultarModal(m) {
+  m.classList.add("hidden");
+  if (__focoAntesDelModal && typeof __focoAntesDelModal.focus === "function") __focoAntesDelModal.focus();
+  __focoAntesDelModal = null;
+}
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  // El último modal estático visible es el que está arriba. Los dinámicos
+  // (confirm-back) ya manejan su propio Escape.
+  const abiertos = [...document.querySelectorAll(".modal-back:not(.hidden):not(.confirm-back)")];
+  const m = abiertos[abiertos.length - 1];
+  if (m && !m.dataset.sinEscape) ocultarModal(m);
+});
 function el(tag, className, text) {
   const e = document.createElement(tag);
   if (className) e.className = className;
@@ -694,9 +734,9 @@ function initMenu() {
   $("#evrootsBtn").addEventListener("click", openEvidenceRoots);
   $("#exportBtn").addEventListener("click", () => { $("#menu").classList.add("hidden"); window.location.href = "/api/export"; });
   $("#agentsBtn").addEventListener("click", openAgents);
-  $("#aboutBtn").addEventListener("click", () => { $("#aboutModal").classList.remove("hidden"); menu.classList.add("hidden"); });
-  $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
-  $("#aboutModal").addEventListener("click", e => { if (e.target.id === "aboutModal") $("#aboutModal").classList.add("hidden"); });
+  $("#aboutBtn").addEventListener("click", () => { mostrarModal($("#aboutModal")); menu.classList.add("hidden"); });
+  $("#aboutClose").addEventListener("click", () => ocultarModal($("#aboutModal")));
+  $("#aboutModal").addEventListener("click", e => { if (e.target.id === "aboutModal") ocultarModal($("#aboutModal")); });
 }
 
 function initTabs() {
@@ -979,6 +1019,7 @@ async function renderVault(main) {
     setWorking(cuenta, "buscando…");
     const r = await apiOrError(url());
     if (r.ok === false) { cuenta.textContent = "⚠ " + r.error; return; }
+    pintarAvisoVault(r.problemas || []);
     if (reset || !bar2.children.length) pintarFiltros(r.facets || {});
     list.textContent = "";
     (r.notes || []).forEach(n => list.appendChild(notaCard(n)));
@@ -1238,7 +1279,7 @@ function COLORWORD_CORTO(c) {
 // verificó — el dato que faltaba para poder triar sin abrir cada una.
 function notaCard(n) {
   const card = el("div", "note-card " + cls(n.color) + (n.state ? " archived" : ""));
-  card.addEventListener("click", () => openEditor(n.id));
+  hacerActivable(card, () => openEditor(n.id), "Abrir " + n.id);
   card.appendChild(el("span", "dot"));
   const body = el("div", "nc-body");
   const head = el("div", "nc-head");
@@ -3471,7 +3512,7 @@ async function openSettings() {
       ? "Motor · todo en sus valores por defecto"
       : `Motor · ${d.editados} de ${d.total} parámetros cambiados`;
   }).catch(() => {});
-  $("#settingsModal").classList.remove("hidden");
+  mostrarModal($("#settingsModal"));
 }
 
 async function saveSettings() {
@@ -3513,7 +3554,7 @@ function initSettings() {
   montarDeidad();
   const m = $("#settingsModal");
   $("#settingsClose").addEventListener("click", () => m.classList.add("hidden"));
-  m.addEventListener("click", e => { if (e.target.id === "settingsModal") m.classList.add("hidden"); });
+  m.addEventListener("click", e => { if (e.target.id === "settingsModal") ocultarModal(m); });
   const key = $("#setKey");
   $("#setKeyToggle").addEventListener("click", () => { key.type = key.type === "password" ? "text" : "password"; });
   $("#setLoadModels").addEventListener("click", loadModels);
@@ -3622,7 +3663,7 @@ function deidadAceptada() { try { return sessionStorage.getItem("cogo.deidad") =
 function aceptarDeidad() { try { sessionStorage.setItem("cogo.deidad", "1"); } catch {} }
 
 async function abrirDeidad() {
-  $("#settingsModal").classList.add("hidden");
+  ocultarModal($("#settingsModal"));
   if (!deidadAceptada()) { abrirPorton(); return; }
   await entrarADeidad();
 }
@@ -3636,7 +3677,7 @@ function abrirPorton() {
 
 async function entrarADeidad() {
   $("#deidadPorton").classList.add("hidden");
-  $("#deidadModal").classList.remove("hidden");
+  mostrarModal($("#deidadModal"));
   mostrarTab("estado");
   await pintarDeidad();
   pintarSalud();

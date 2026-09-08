@@ -52,6 +52,13 @@ func (p Problema) String() string {
 	return filepath.Base(p.Path) + ": " + p.Motivo
 }
 
+// motivoSinRuta saca la ruta absoluta del mensaje: el aviso viaja al visor y al
+// pack de un agente remoto, y el árbol de directorios del servidor no es asunto
+// de nadie. El nombre del archivo ya va en Problema.Path.
+func motivoSinRuta(err error, path string) string {
+	return strings.TrimPrefix(err.Error(), path+": ")
+}
+
 // Problemas devuelve lo que quedó afuera en el último Load.
 func (c *VaultCache) Problemas() []Problema {
 	c.mu.Lock()
@@ -93,7 +100,7 @@ func (c *VaultCache) Load() (map[string]*Note, error) {
 		if ce == nil || ce.mod != mod || ce.size != size {
 			n, err := ReadNoteFile(path)
 			if err != nil {
-				c.problemas = append(c.problemas, Problema{Path: path, Motivo: err.Error()})
+				c.problemas = append(c.problemas, Problema{Path: path, Motivo: motivoSinRuta(err, path)})
 				delete(c.fil, path)
 				return nil
 			}
