@@ -72,7 +72,13 @@ Estás debuggeando:
 
 Eso es COGO: **una memoria con semáforo de confianza, para vos y para tus herramientas de IA.**
 
-## Guard: la radiografía anti-manipulación
+## Las dos radiografías: Guard y Xray
+
+Viven en el mismo binario, pero **no son memoria**: ninguna lee ni escribe el vault. Miran la
+*conversación*. Guard pregunta *¿este turno me está empujando?*; Xray pregunta *¿lo que afirma
+lo puede sostener?*. En el visor están bajo su propio separador **Radiografías**, con acento
+propio, y `cogo serve -sin-radiografias` las deja afuera del todo (tu agente ve 14 tools en vez
+de 16). El detalle está en [docs/radiografias.md](docs/radiografias.md).
 
 La otra mitad de COGO. Cuando chateás con un LLM no tenés forma de saber si esa respuesta tan
 segura es lógica de verdad o **humo**, ni de darte cuenta cuando la conversación te va llevando
@@ -471,6 +477,7 @@ exactamente lo que querés escuchar.
 | [Manual](docs/manual.md) | **el manual completo** — de "qué es esto" hasta el retículo y el punto fijo |
 | [Parámetros](docs/parametros.md) | las 32 perillas del modo deidad, una por una |
 | [Para agentes de IA](docs/COGO-para-agentes.md) | ponele esto adelante a tu agente |
+| [Las dos radiografías](docs/radiografias.md) | Guard y Xray: la mitad que no toca el vault |
 | [Motor de autonomía](docs/motor-autonomia.md) | Guard, en profundidad |
 | [Motor de veracidad](docs/motor-veracidad.md) | xray, en profundidad |
 | [Seguridad](docs/seguridad.md) | modelo de amenaza y endurecimiento |

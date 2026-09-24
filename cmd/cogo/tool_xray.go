@@ -13,7 +13,8 @@ import (
 func registrarXray(s *mcp.Server, d *deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "xray",
-		Description: "Radiography an answer for VERACITY (the twin of guard's manipulation check): per " +
+		Description: "This does not read or write the vault: it only looks at the text you pass it. " +
+			"Radiography an answer for VERACITY (the twin of guard's manipulation check): per " +
 			"claim, expose the gap between how strongly it is asserted and how much grounding it declares. " +
 			"Deterministic — no model. Flags claims asserted hard with no basis, opinions dressed as facts, " +
 			"and un-sourced factual claims. It never says 'true'; green needs an executed test (Phase 2).",

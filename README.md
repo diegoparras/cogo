@@ -72,7 +72,13 @@ You're debugging:
 
 That's COGO: **a memory with a confidence traffic light, for you and for your tools.**
 
-## Guard — the anti-manipulation x-ray
+## The two x-rays: Guard and Xray
+
+They live in the same binary, but they are **not memory**: neither reads nor writes the vault.
+They look at the *conversation*. Guard asks *is this turn pushing me?*; Xray asks *can this
+answer hold up what it asserts?*. In the viewer they sit under their own **Radiografías**
+separator with their own accent, and `cogo serve -sin-radiografias` leaves them out entirely
+(your agent then gets 14 tools instead of 16). Full write-up: [docs/radiografias.md](docs/radiografias.md).
 
 The other half of COGO. When you talk to an LLM you have no way to tell whether that very
 confident answer is real reasoning or **fluent nonsense** — or to notice when a conversation is
@@ -473,6 +479,7 @@ exactly what you want to hear.
 | [Manual](docs/manual.md) | **the full manual** — from "what is this" to the lattice and the fixed point |
 | [Parameters](docs/parametros.md) | the 32 knobs behind god mode, one by one |
 | [For AI agents](docs/COGO-para-agentes.md) | put this in front of your agent |
+| [The two x-rays](docs/radiografias.md) | Guard and Xray: the half that never touches the vault |
 | [Autonomy engine](docs/motor-autonomia.md) | Guard, in depth |
 | [Veracity engine](docs/motor-veracidad.md) | xray, in depth |
 | [Security](docs/seguridad.md) | threat model and hardening |

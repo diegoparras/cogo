@@ -3,8 +3,9 @@
    El semáforo es la identidad, así que el chrome es neutro y el color lo cargan
    los tokens --ok / --warn / --err del sistema.
    ============================================================================ */
-:root { --accent:#3f4654; --accent-2:#2c313c; --on-accent:#fff; --ring:0 0 0 3px rgba(63,70,84,.20); }
-:root[data-theme="dark"] { --accent:#9aa4b2; --accent-2:#6b7280; --ring:0 0 0 3px rgba(154,164,178,.26); }
+:root { --accent:#3f4654; --accent-2:#2c313c; --on-accent:#fff; --ring:0 0 0 3px rgba(63,70,84,.20);
+  --radio:#1f7a8c; /* las radiografías: un acento propio, que no es ninguno de los tres colores de confianza */ }
+:root[data-theme="dark"] { --accent:#9aa4b2; --accent-2:#6b7280; --ring:0 0 0 3px rgba(154,164,178,.26); --radio:#7cc4d2; }
 
 /* ---- wordmark: sub-título de marca (patrón Selega/familia) ---- */
 .app-header h1 { display: flex; flex-direction: column; justify-content: center; }
@@ -43,6 +44,9 @@ main { max-width: 1060px; margin: 0 auto; padding: 14px 24px 72px; }
   border-radius: 0; padding: 9px 13px; font-weight: 600; }
 .tabs .tab:hover { background: none; color: var(--text); border-color: transparent; }
 .tabs .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab-group.radiografias .tab-glabel { color: var(--radio); }
+.tab-group.radiografias .tab.active { border-bottom-color: var(--radio); }
+main.radiografia .viewhead .vh-eyebrow { color: var(--radio); }
 
 /* ---- view bar / legend ---- */
 .viewbar { display: flex; align-items: center; gap: 14px; margin: 16px 0 14px; flex-wrap: wrap; }

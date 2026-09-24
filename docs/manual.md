@@ -12,7 +12,7 @@ Está escrito para tres personas distintas y **no hace falta leerlo entero**.
 | Si sos… | Empezá en | Y si te enganchás |
 |---|---|---|
 | **alguien que nunca usó esto** | Partes I y II — el problema y los cinco minutos | la Parte V, el visor |
-| **alguien que ya usa agentes de código** | Partes III y IV — las notas y las 16 herramientas | la Parte VII, Guard |
+| **alguien que ya usa agentes de código** | Partes III y IV — las notas y las 16 herramientas | las radiografías ([`radiografias.md`](radiografias.md)) |
 | **alguien que quiere saber si esto es serio** | Parte VI — el retículo, el punto fijo, las invariantes | la Parte IX, lo que no hace |
 
 Un pedido: si sos del tercer grupo, no te saltees la **Parte IX**. Es la que dice
@@ -585,7 +585,7 @@ nadie va a frenar a nadie.
 ## 16. Las dos radiografías
 
 **`guard(transcript)`** y **`xray(answer)`** son la otra mitad de COGO y tienen su
-propia parte (§30).
+propio documento: [`radiografias.md`](radiografias.md).
 
 ---
 ---
@@ -646,7 +646,7 @@ mi-vault/
   .cogo/
     journal/YYYY-MM.jsonl  el registro de eventos (§20)
     uso.json               qué notas se consultan (§25)
-    parametros.json        solo lo que difiere del default (§31)
+    parametros.json        solo lo que difiere del default (§32)
     tokens.json            los tokens MCP, hasheados
     audit.jsonl            quién llamó a qué
     history/<id>.jsonl     cómo fue cambiando el color de cada nota
@@ -1238,93 +1238,16 @@ pregunta, sobre el mismo turno de conversación: **"¿esto que me está diciendo
 modelo, me está empujando?"** y **"¿lo que afirma lo puede sostener?"**.
 
 Son la parte de COGO que mira **hacia el otro lado**: no a la memoria, sino al
-diálogo.
+diálogo. Por eso viven en su propio documento, [`radiografias.md`](radiografias.md):
+qué mide cada una, cómo se lee el veredicto, y por qué inoculan en vez de
+censurar. Lo que importa saber desde acá:
 
-## 30. Xray — la radiografía de veracidad
-
-Determinista. **No usa ningún modelo y no ejecuta nada.**
-
-Toma una respuesta de IA y, claim por claim, expone la distancia entre **cuánto
-compromete el lenguaje** y **cuánto respaldo declara**:
-
-```
-"Sin duda el pool aguanta 200 conexiones."     ← afirma fuerte, no declara base
-"Probablemente convenga migrar."               ← opinión con forma de opinión: OK
-"El test pasó."                                ← factual, sin fuente
-```
-
-Lo que marca:
-
-- claims afirmados con fuerza y sin ninguna base declarada,
-- opiniones vestidas de hechos,
-- afirmaciones fácticas sin fuente.
-
-**Nunca dice "esto es verdad".** No puede: verificar exige ejecutar algo, y eso es
-el runner. Acá el techo de un claim es amarillo, y **el valor está en cazar los
-rojos** — el humo, no el fuego.
-
-## 31. Guard — la radiografía de manipulación
-
-Guard mide **presión de influencia** sobre un turno del modelo, con cuatro ejes:
-
-| Eje | Qué mide |
-|---|---|
-| **veracidad** | el humo — lo cubre Xray |
-| **presión** | intensidad de influencia y coerción |
-| **autonomía** | deriva respecto a tu mandato |
-| **asimetría** | quién dirige a quién: iniciativa, control del turno |
-
-### La ontología
-
-4.588 líneas de YAML, **108 tácticas** catalogadas en seis disciplinas:
-
-```
-persuasión · interrogatorio · negociación · coerción · dark psychology · retórica
-```
-
-Cada táctica trae su definición, sus marcadores y la **pregunta crítica** que la
-desarma. El motor no te dice "te están manipulando": te nombra la técnica, te
-muestra la cita textual que la disparó, y te da la pregunta.
-
-### La regla de hierro
-
-> **Ningún modelo decide "esto es manipulación".**
->
-> Los dientes son **deterministas**: léxico, actos de habla, estructura y —sobre
-> todo— los **recibos**. Un LLM solo *propone* qué técnica de la ontología encaja y
-> formula la pregunta crítica; **nunca dicta** el veredicto.
->
-> Un LLM juzgando si otro LLM te manipula es teatro, y está prohibido como oráculo
-> final.
-
-### Los recibos
-
-Es la superpotencia de estar en el medio de la conversación. COGO tiene la
-**transcripción inmutable**, así que puede contrastar lo que el modelo dice *ahora*
-contra lo que dijo *antes*.
-
-Si el modelo niega haber dicho algo que está en la transcripción, eso no es una
-opinión sobre su tono: es un hecho verificable. **Gaslighting y deriva de marco,
-detectados mecánicamente.**
-
-### El mandato
-
-"Manipulación" y "persuasión legítima" son **indistinguibles** sin una referencia
-de qué NO estás dispuesto a hacer. En lenguaje de negociación, tu mandato es tu
-BATNA.
-
-Guard mide **deriva respecto al mandato**, no "malas palabras". Sin mandato
-declarado degrada a **modo informativo**: nombra tácticas, pero no dicta veredicto
-de autonomía.
-
-Se declara una vez, en el visor, y vive fuera de las notas — es estado privado, no
-memoria compartida.
-
-### Y no censura: inocula
-
-El veredicto es para vos, no para bloquear al modelo. La apuesta es que **saber que
-te están aplicando una técnica la desactiva**, y que un sistema que decide por vos
-te deja peor parado que uno que te muestra lo que está pasando.
+- **No leen ni escriben el vault.** Miran el texto que les pasás y nada más.
+  Ninguna nota cambia de color por lo que digan.
+- Son dos tools más (`guard`, `xray`) y dos pestañas del visor, bajo el
+  separador **Radiografías**.
+- `cogo serve -sin-radiografias` no las registra: el agente ve 14 tools en vez
+  de 16, y el resto de COGO no se entera.
 
 ---
 ---
@@ -1509,5 +1432,6 @@ Si algo de acá resulta falso, es un bug — y hay dónde reportarlo.
 - [`deploy.md`](deploy.md) — desplegarlo en serio
 - [`instalacion.md`](instalacion.md) — instalación paso a paso
 - [`seguridad.md`](seguridad.md) — el modelo de seguridad
+- [`radiografias.md`](radiografias.md) — Guard y Xray: la otra mitad, que no toca el vault
 - [`motor-autonomia.md`](motor-autonomia.md) · [`motor-veracidad.md`](motor-veracidad.md) — Guard y Xray en profundidad
 - [`fundamento-teorico.md`](fundamento-teorico.md) — por qué el "no sé" es estructuralmente externo

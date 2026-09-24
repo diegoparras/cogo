@@ -860,6 +860,8 @@ function edgeLegend(edges) {
 }
 
 function render() {
+  // Las radiografías llevan su propio acento (ver app.css): no son memoria.
+  $("#main").classList.toggle("radiografia", state.view === "guard" || state.view === "xray");
   const host = $("#main");
   // Fresh container per render: clearing #main DETACHES the previous view, so a
   // slow async view (one still awaiting an api() call) that resolves after you've

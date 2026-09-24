@@ -27,30 +27,47 @@ type deps struct {
 
 // registradores es la lista de tools, uno por archivo. El orden es el de
 // tools/list.
-var registradores = []func(*mcp.Server, *deps){
-	registrarPack,
-	registrarStash,
-	registrarRecall,
-	registrarReflect,
-	registrarLease,
-	registrarSearch,
-	registrarOpen,
-	registrarGap,
-	registrarAuthorize,
-	registrarCapture,
-	registrarVerify,
-	registrarArchive,
-	registrarRestore,
-	registrarRemove,
-	registrarGuard,
-	registrarXray,
+var registradores = []registrador{
+	{"pack", registrarPack, false},
+	{"stash", registrarStash, false},
+	{"recall", registrarRecall, false},
+	{"reflect", registrarReflect, false},
+	{"lease", registrarLease, false},
+	{"search", registrarSearch, false},
+	{"open", registrarOpen, false},
+	{"gap", registrarGap, false},
+	{"authorize", registrarAuthorize, false},
+	{"capture", registrarCapture, false},
+	{"verify", registrarVerify, false},
+	{"archive", registrarArchive, false},
+	{"restore", registrarRestore, false},
+	{"remove", registrarRemove, false},
+	// Las radiografías miran el diálogo, no el vault. Se pueden dejar afuera.
+	{"guard", registrarGuard, true},
+	{"xray", registrarXray, true},
 }
 
-func newMCPServer(dir string) *mcp.Server {
+type registrador struct {
+	nombre      string
+	f           func(*mcp.Server, *deps)
+	radiografia bool // no lee ni escribe el vault; opcional en `serve`
+}
+
+// opcionesMCP es lo que `serve` decide sobre qué se expone.
+type opcionesMCP struct {
+	SinRadiografias bool // no registrar guard ni xray
+}
+
+func newMCPServer(dir string) *mcp.Server { return newMCPServerCon(dir, opcionesMCP{}) }
+
+func newMCPServerCon(dir string, o opcionesMCP) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "cogo", Version: version}, nil)
 	d := nuevasDeps(dir)
-	for _, registrar := range registradores {
-		registrar(s, d)
+	for _, r := range registradores {
+		if o.SinRadiografias && r.radiografia {
+			continue
+		}
+		r.f(s, d)
 	}
 	return s
 }

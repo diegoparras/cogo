@@ -15,7 +15,8 @@ func registrarGuard(s *mcp.Server, d *deps) {
 	dir := d.dir
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "guard",
-		Description: "Radiography a model turn for manipulation pressure: names influence/coercion " +
+		Description: "This does not read or write the vault: it only looks at the text you pass it. " +
+			"Radiography a model turn for manipulation pressure: names influence/coercion " +
 			"tactics with quoted evidence, checks denials against the transcript (receipts), and " +
 			"measures drift against the user's declared red lines. Deterministic. It informs the " +
 			"human and never censors the model.",

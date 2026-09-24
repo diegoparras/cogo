@@ -100,7 +100,8 @@ commands:
                        -balance: what COGO avoided, per the human's verdicts)
   veredicto <id> bien|mal   say whether COGO was right on that receipt (-nota why)
   lint                 deterministic checks + (optional) LLM contradiction scan
-  serve                run as an MCP server over stdio (any LLM connects)
+  serve                run as an MCP server over stdio (any LLM connects); -http for HTTP,
+                       -sin-radiografias to leave guard and xray out (14 tools instead of 16)
   sellar               publish the journal head so history can be proven later
   sellos               check every published seal against today's journal
   agents               print an AGENTS.md/CLAUDE.md that teaches an agent the COGO protocol

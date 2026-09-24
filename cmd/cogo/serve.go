@@ -31,6 +31,7 @@ func cmdServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	dir := vaultFlag(fs)
 	httpAddr := fs.String("http", "", "serve MCP over HTTP on this address (e.g. :8080); empty = stdio")
+	sinRadiografias := fs.Bool("sin-radiografias", false, "do not expose guard and xray (the two x-rays never touch the vault); the agent gets 14 tools")
 	_ = fs.Parse(args)
 
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
@@ -43,7 +44,7 @@ func cmdServe(args []string) error {
 	if err := instalarMotor(*dir); err != nil {
 		return err
 	}
-	srv := newMCPServer(*dir)
+	srv := newMCPServerCon(*dir, opcionesMCP{SinRadiografias: *sinRadiografias})
 
 	// stdio: the local default, launched per session by the LLM client.
 	if *httpAddr == "" {
