@@ -37,12 +37,32 @@ func TestMergeDismissResolveAndPersist(t *testing.T) {
 		t.Error("open contradictions must persist across a reload")
 	}
 
-	// Resolve forgets the c/d pair entirely.
-	if !s.Resolve(pairID("c", "d")) {
+	// Resolve keeps the c/d pair on record as resolved: nothing is red, but the
+	// count of what COGO caught does not shrink.
+	if !s.ResolveOn(pairID("c", "d"), "2026-07-05") {
 		t.Fatal("resolve should find the c/d pair")
 	}
 	if len(s.OpenNoteSet()) != 0 {
 		t.Error("nothing should be open after resolving c/d")
+	}
+	if r := s.Resumen(); r.Abiertas != 0 || r.Resueltas != 1 || r.Descartadas != 1 {
+		t.Errorf("resumen: %+v", r)
+	}
+	for _, c := range s.List() {
+		if c.ID == pairID("c", "d") && (c.Status != StatusResolved || c.Resolved != "2026-07-05") {
+			t.Errorf("resolved pair must carry its date: %+v", c)
+		}
+	}
+	// If lint finds the same pair again, it re-opens (a dismissed one would not).
+	s.Merge([]Found{{A: "c", B: "d", Reason: "still clashes"}}, "2026-07-06", all)
+	if !s.OpenNoteSet()["c"] {
+		t.Error("a resolved pair that comes back must re-open")
+	}
+	if r := s.Resumen(); r.Abiertas != 1 || r.Resueltas != 0 {
+		t.Errorf("resumen after re-open: %+v", r)
+	}
+	if !s.ResolveOn(pairID("c", "d"), "2026-07-06") {
+		t.Fatal("resolve again")
 	}
 
 	// A pair whose note is gone gets pruned on the next merge.

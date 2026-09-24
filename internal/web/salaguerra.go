@@ -19,6 +19,7 @@ import (
 	"github.com/diegoparras/cogo/internal/presencia"
 	"github.com/diegoparras/cogo/internal/recibo"
 	"github.com/diegoparras/cogo/internal/runner"
+	"github.com/diegoparras/cogo/internal/veredicto"
 )
 
 // La sala de guerra: el estado del motor, no sus perillas.
@@ -109,6 +110,7 @@ func (s *Server) handleSalaGuerra(w http.ResponseWriter, r *http.Request) {
 	out["grafo"] = saludDelGrafo(vault)
 	out["autorizaciones"] = s.vistaAutorizaciones()
 	out["recibos"] = s.vistaRecibos()
+	out["evitado"] = s.vistaEvitado()
 	writeJSON(w, out)
 }
 
@@ -490,11 +492,17 @@ func (s *Server) vistaRecibos() map[string]any {
 		Seq      uint64 `json:"seq"`
 		Fiel     bool   `json:"fiel"`
 		Motivo   string `json:"motivo"`
+		Juzgado  bool   `json:"juzgado"`
+		Acertado bool   `json:"acertado"`
 	}
+	vs, _ := veredicto.Abrir(s.dir).Todos()
 	var filas []fila
 	for i, r := range todos {
 		f := fila{ID: r.ID, Cuando: r.Cuando.UTC().Format(time.RFC3339), Quien: r.Quien, Accion: r.Accion,
 			Clase: r.Clase, Autoriza: r.Autoriza, Notas: len(r.Notas), Seq: r.Seq}
+		if v, ok := vs[r.ID]; ok {
+			f.Juzgado, f.Acertado = true, v.Acertado
+		}
 		if jerr == nil && i < 20 {
 			rec := recibo.Reconstruir(j, r)
 			f.Fiel, f.Motivo = rec.Fiel, rec.Motivo
@@ -510,4 +518,65 @@ func (s *Server) vistaRecibos() map[string]any {
 		}
 	}
 	return map[string]any{"total": len(todos), "no_fieles": noFieles, "ultimos": filas}
+}
+
+// vistaEvitado es el número que se le muestra a alguien para que adopte COGO:
+// de lo que `authorize` decidió, cuánto confirmó el humano. Un bloqueo sin
+// veredicto no cuenta a favor ni en contra —solo un humano puede decir si
+// COGO tenía razón—, y la peor casilla es la que se nombra primero: dejó
+// pasar algo que no debía. Al lado, lo que no depende de nadie: cuántas
+// notas están verificadas por ejecución contra cuántas solo declaradas, y
+// cuántas contradicciones se cerraron.
+func (s *Server) vistaEvitado() map[string]any {
+	out := map[string]any{}
+	todos, err := recibo.Abrir(s.dir).Todos()
+	if err != nil {
+		out["error"] = err.Error()
+		return out
+	}
+	autorizo := map[string]bool{}
+	bloqueos, porClase := 0, map[string]int{}
+	for _, r := range todos {
+		autorizo[r.ID] = r.Autoriza
+		if !r.Autoriza {
+			bloqueos++
+			porClase[r.Clase]++
+		}
+	}
+	vs, _ := veredicto.Abrir(s.dir).Todos()
+	out["balance"] = veredicto.Balancear(autorizo, vs)
+	out["bloqueos"] = bloqueos
+	out["bloqueos_por_clase"] = porClase
+
+	// Verificado por ejecución contra declarado: el runner ejecutó el check
+	// (verified) o alguien dijo que pasó (claimed_passed).
+	vault, verr := s.cache.Load()
+	if j, jerr := s.journal(); verr == nil && jerr == nil {
+		if evs, err := j.All(); err == nil {
+			core.ResolveEvidence(vault, s.evRoots())
+			final, _ := motor.Estados(vault, s.contras(), s.today(), evs)
+			ejecutadas, declaradas := 0, 0
+			for _, e := range final {
+				switch e {
+				case confidence.Verified:
+					ejecutadas++
+				case confidence.ClaimedPassed:
+					declaradas++
+				}
+			}
+			corridas := 0
+			for _, e := range evs {
+				if e.Kind == "CheckExecuted" && e.Emitter == journal.EmisorEjecucion {
+					corridas++
+				}
+			}
+			out["verificacion"] = map[string]int{
+				"por_ejecucion": ejecutadas, "declaradas": declaradas, "corridas_del_runner": corridas,
+			}
+		}
+	}
+	if s.contra != nil {
+		out["contradicciones"] = s.contra.Resumen()
+	}
+	return out
 }

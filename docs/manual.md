@@ -1102,6 +1102,47 @@ reconstruir el de eventos.
 En la sala de guerra, el bloque **Recibos** muestra los últimos veinte con su
 reconstrucción, y grita si alguno no es fiel.
 
+### El veredicto: lo que COGO evitó
+
+> "¿Y sirvió? ¿Cuántas veces frenó algo que había que frenar?"
+
+COGO ya cuenta los tokens que ahorra. Ese no es el número que convence a
+nadie. El que convence es: de las veces que `authorize` dijo **no**, cuántas
+tenía razón. Y ese número no lo puede fabricar COGO —un bloqueo, solo, es una
+molestia o un acierto, y la diferencia la sabe únicamente el humano que
+estaba ahí. Por eso cada recibo admite un **veredicto**: COGO tenía razón, o
+no.
+
+```bash
+cogo veredicto r-20260923-153201-a1b2c3 bien            # frenó lo que había que frenar
+cogo veredicto r-20260923-153201-a1b2c3 mal -nota "era la base de pruebas"
+cogo recibos -balance                                    # lo que COGO evitó
+```
+
+En la sala de guerra la tabla de recibos tiene una columna *¿tenía razón?*
+con dos botones, y el bloque **Lo que COGO evitó** cruza las decisiones con
+los veredictos:
+
+| casilla | qué es |
+|---|---|
+| bloqueos acertados | COGO frenó y el humano confirmó: **esto es lo que COGO evitó** |
+| bloqueos de más | COGO frenó y no debía: el costo de tenerlo |
+| permisos acertados | dejó pasar, y estaba bien |
+| permisos de más | dejó pasar algo que no debía: **el peor caso**, y por eso va primero en rojo |
+| sin juzgar | decisiones sobre las que nadie opinó: no cuentan a favor ni en contra |
+
+Al lado van dos cuentas que no dependen de la opinión de nadie: cuántas
+notas están en `verified` (el runner corrió el check) contra cuántas en
+`claimed_passed` (alguien dijo que pasó), y cuántas contradicciones se
+**resolvieron** —las que COGO encontró y un humano arregló— contra las
+abiertas y las descartadas. Resolver una contradicción ya no la olvida: queda
+en el registro con su fecha, y si el próximo lint la vuelve a encontrar, se
+reabre. Descartarla sigue siendo definitivo.
+
+Cambiar de opinión sobre un veredicto vale: gana el último. Lo que no vale
+es inventarlo: el veredicto lleva quién lo dio, y un token de solo lectura no
+puede darlo.
+
 ## 28. El runner, y su modelo de amenaza
 
 Ejecutar comandos que salen de notas escritas por un LLM es la superficie de ataque

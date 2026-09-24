@@ -232,7 +232,7 @@ tokens y exportación del vault en un clic.
 Todo motor de reglas tiene constantes. Repartidas por el código son invisibles: nadie sabe que
 están, nadie sabe qué pasa si se mueven, y quien las quiere cambiar tiene que recompilar.
 
-En COGO son **21 en un registro**, cada una con su etiqueta, qué hace, en qué unidad, entre qué
+En COGO son **32 en un registro**, cada una con su etiqueta, qué hace, en qué unidad, entre qué
 valores es válida y **qué se afloja si se mueve**. El panel se *genera* de ese registro: no hay
 una lista de controles escrita a mano que pueda desincronizarse de lo que el motor lee.
 
@@ -250,6 +250,10 @@ perillas, estado:
 - el **registro de eventos**, el **runner**, cada **autorización** que pidió un agente, y la
   **salud del grafo** — ciclos y dependencias colgadas, separados, porque en el Vault se ven
   como el mismo rojo y se arreglan distinto
+- **lo que COGO evitó** — cada `authorize` deja un recibo; un humano dice si COGO tenía razón
+  (`cogo veredicto <recibo> bien|mal`, o dos botones en la tabla). El bloque cuenta los
+  bloqueos que el humano confirmó, los que estaban de más, y —primero, en rojo— lo que dejó
+  pasar y no debía. Una decisión que nadie juzgó no cuenta para ningún lado
 
 ## Evidencia que se puede volver a chequear
 

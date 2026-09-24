@@ -231,7 +231,7 @@ a downloadable and prunable audit log, multi-token management, and one-click vau
 Every rules engine has constants. Scattered through the code they're invisible: nobody knows
 they exist, nobody knows what happens if they move, and changing one means a recompile.
 
-COGO's **21 parameters live in one registry**, each with its label, what it does, its unit,
+COGO's **32 parameters live in one registry**, each with its label, what it does, its unit,
 its valid range and **what it loosens if you move it**. The panel is *generated* from that
 registry — there's no hand-written list of controls that can drift from what the engine reads.
 
@@ -248,6 +248,10 @@ Behind the gate, a second tab shows **what the engine is doing right now** — n
 - the **event log**, the **runner**, every **authorization** an agent asked for, and **graph
   health** — cycles and dangling dependencies, listed separately because they look like the
   same red in the Vault and are fixed differently
+- **what COGO avoided** — every `authorize` leaves a receipt; a human says whether COGO was
+  right (`cogo veredicto <receipt> bien|mal`, or two buttons in the table). The block counts
+  blocks the human confirmed, blocks it shouldn't have made, and — first, in red — anything it
+  let through that it shouldn't have. A decision nobody judged counts for neither side
 
 ## Evidence that can actually be re-checked
 

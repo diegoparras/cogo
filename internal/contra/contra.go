@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/diegoparras/cogo/internal/atomico"
 )
@@ -20,6 +21,7 @@ import (
 const (
 	StatusOpen      = "open"      // paints both notes red
 	StatusDismissed = "dismissed" // a human said "not a real contradiction" — never re-flag
+	StatusResolved  = "resolved"  // a human fixed the notes; stays on record, re-opens if lint finds it again
 )
 
 // Item is one persisted contradiction between two notes.
@@ -30,6 +32,7 @@ type Item struct {
 	Reason   string `json:"reason"`
 	Detected string `json:"detected"`
 	Status   string `json:"status"`
+	Resolved string `json:"resolved,omitempty"` // date the human resolved it (StatusResolved only)
 }
 
 // Found is a fresh detection handed in by the lint pass.
@@ -102,8 +105,15 @@ func (s *Store) Merge(found []Found, today string, exists func(string) bool) {
 	for _, f := range found {
 		id := pairID(f.A, f.B)
 		if idx, ok := known[id]; ok {
-			if s.items[idx].Status == StatusOpen && f.Reason != "" {
-				s.items[idx].Reason = f.Reason
+			switch s.items[idx].Status {
+			case StatusOpen:
+				if f.Reason != "" {
+					s.items[idx].Reason = f.Reason
+				}
+			case StatusResolved:
+				// The human fixed it once and it is back: it re-opens. The old
+				// resolution stays only as a count — the pair is red again.
+				s.items[idx] = Item{ID: id, A: f.A, B: f.B, Reason: f.Reason, Detected: today, Status: StatusOpen}
 			}
 			continue
 		}
@@ -120,16 +130,13 @@ func (s *Store) Merge(found []Found, today string, exists func(string) bool) {
 	_ = s.saveLocked()
 }
 
-func (s *Store) mutate(id string, del bool, status string) bool {
+func (s *Store) mutate(id, status, resolved string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.items {
 		if s.items[i].ID == id {
-			if del {
-				s.items = append(s.items[:i], s.items[i+1:]...)
-			} else {
-				s.items[i].Status = status
-			}
+			s.items[i].Status = status
+			s.items[i].Resolved = resolved
 			_ = s.saveLocked()
 			return true
 		}
@@ -137,13 +144,44 @@ func (s *Store) mutate(id string, del bool, status string) bool {
 	return false
 }
 
-// Resolve forgets a contradiction (the human fixed the underlying notes). If it
-// still holds, the next lint pass will surface it again.
-func (s *Store) Resolve(id string) bool { return s.mutate(id, true, "") }
+// Resolve marks a contradiction as fixed by the human. It stays on record —
+// that count is part of "what COGO caught" — and if the next lint pass finds
+// the same pair again, it re-opens.
+func (s *Store) Resolve(id string) bool {
+	return s.ResolveOn(id, time.Now().UTC().Format("2006-01-02"))
+}
+
+// ResolveOn is Resolve with an explicit date (the vault's "today").
+func (s *Store) ResolveOn(id, today string) bool { return s.mutate(id, StatusResolved, today) }
 
 // Dismiss marks a contradiction as a false positive: it stays on record but
 // never paints red and is never re-flagged by lint.
-func (s *Store) Dismiss(id string) bool { return s.mutate(id, false, StatusDismissed) }
+func (s *Store) Dismiss(id string) bool { return s.mutate(id, StatusDismissed, "") }
+
+// Resumen counts the record by status: open is what is red now; resolved is
+// what a human fixed; dismissed is what a human said was not real.
+type Resumen struct {
+	Abiertas    int `json:"abiertas"`
+	Resueltas   int `json:"resueltas"`
+	Descartadas int `json:"descartadas"`
+}
+
+func (s *Store) Resumen() Resumen {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var r Resumen
+	for _, c := range s.items {
+		switch c.Status {
+		case StatusOpen:
+			r.Abiertas++
+		case StatusResolved:
+			r.Resueltas++
+		case StatusDismissed:
+			r.Descartadas++
+		}
+	}
+	return r
+}
 
 // Conflict is one open contradiction seen from a single note's side: which OTHER
 // note it clashes with, and why. It turns the bare red color into a trace — the

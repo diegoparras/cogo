@@ -12,6 +12,7 @@ import (
 	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/recibo"
+	"github.com/diegoparras/cogo/internal/veredicto"
 )
 
 // El recibo epistémico: por cada `authorize`, qué sabía el agente cuando pidió.
@@ -63,8 +64,12 @@ func cmdRecibos(args []string) error {
 	id := fs.String("id", "", "un recibo por id, con su reconstrucción")
 	accionTxt := fs.String("accion", "", "filtrar por texto de la acción")
 	desde := fs.String("desde", "", "desde esta fecha (YYYY-MM-DD)")
+	balance := fs.Bool("balance", false, "lo que COGO evitó: bloqueos y permisos según el veredicto del humano")
 	_ = fs.Parse(args)
 	conVault(dir)
+	if *balance {
+		return balanceDeVeredictos(*dir)
+	}
 
 	st := recibo.Abrir(*dir)
 	todos, err := st.Todos()
@@ -103,13 +108,21 @@ func cmdRecibos(args []string) error {
 	if err != nil {
 		return err
 	}
+	vs, _ := veredicto.Abrir(*dir).Todos()
 	for _, r := range lista {
-		veredicto := "AUTHORIZED"
+		decision := "AUTHORIZED"
 		if !r.Autoriza {
-			veredicto = "NOT AUTHORIZED"
+			decision = "NOT AUTHORIZED"
+		}
+		if v, ok := vs[r.ID]; ok {
+			if v.Acertado {
+				decision += "  (el humano dice: bien)"
+			} else {
+				decision += "  (el humano dice: MAL)"
+			}
 		}
 		fmt.Printf("%s  %s  %s\n  %s\n  %s (%s) · pedía %s · quién: %s · registro hasta el evento %d\n",
-			r.ID, r.Cuando.Local().Format("2006-01-02 15:04:05"), veredicto, r.Accion, r.Clase, r.Porque, r.Necesita, r.Quien, r.Seq)
+			r.ID, r.Cuando.Local().Format("2006-01-02 15:04:05"), decision, r.Accion, r.Clase, r.Porque, r.Necesita, r.Quien, r.Seq)
 		for _, n := range r.Notas {
 			extra := ""
 			if p, ok := r.Juicios[n.ID]; ok {

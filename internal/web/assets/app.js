@@ -3992,6 +3992,47 @@ async function pintarSalaGuerra() {
   }
   c.appendChild(bloqueSG("Autorizaciones", "Toda consulta queda, autorice o no: lo que se quiere poder reconstruir es en qué se apoyó cada acción — sobre todo las que pasaron.", cajaA));
 
+  // 6a · lo que COGO evitó: el número que se le muestra a alguien para que lo adopte
+  const ev = d.evitado || {};
+  const bal = ev.balance || {};
+  const cajaEv = el("div");
+  if (!bal.total_decidido) {
+    cajaEv.appendChild(el("div", "sg-vacio", "Todavía no hay decisiones. Cada authorize deja un recibo; cuando alguien lo juzga, cuenta acá."));
+  } else {
+    const cab = el("div", "sg-cadena" + (bal.permisos_mal ? " mal" : " ok"));
+    cab.appendChild(el("span", "sg-punto"));
+    cab.appendChild(el("strong", null, bal.permisos_mal
+      ? bal.permisos_mal + " permiso(s) que NO debían pasar"
+      : bal.bloqueos_bien + " bloqueo(s) que el humano confirmó"));
+    cab.appendChild(el("span", "sg-sub", bal.sin_juzgar
+      ? bal.sin_juzgar + " decisión(es) sin veredicto: se juzgan en la tabla de recibos"
+      : "todas las decisiones tienen veredicto"));
+    cajaEv.appendChild(cab);
+    cajaEv.appendChild(cifras([
+      ["bloqueos acertados", bal.bloqueos_bien], ["bloqueos de más", bal.bloqueos_mal],
+      ["permisos acertados", bal.permisos_bien], ["permisos de más", bal.permisos_mal],
+      ["sin juzgar", bal.sin_juzgar],
+    ]));
+  }
+  const ver = ev.verificacion;
+  if (ver) {
+    cajaEv.appendChild(el("div", "sg-sub", "Verificado por ejecución contra declarado: solo lo primero lo probó una máquina."));
+    cajaEv.appendChild(barras([
+      { nombre: "verified (el runner corrió el check)", n: ver.por_ejecucion, color: "green" },
+      { nombre: "claimed_passed (alguien dijo que pasó)", n: ver.declaradas, color: "yellow" },
+    ]));
+  }
+  const ctr = ev.contradicciones;
+  if (ctr && (ctr.abiertas || ctr.resueltas || ctr.descartadas)) {
+    cajaEv.appendChild(el("div", "sg-sub", "Contradicciones: las resueltas son las que COGO encontró y un humano arregló."));
+    cajaEv.appendChild(barras([
+      { nombre: "abiertas", n: ctr.abiertas, color: "red" },
+      { nombre: "resueltas", n: ctr.resueltas, color: "green" },
+      { nombre: "descartadas (no eran)", n: ctr.descartadas },
+    ]));
+  }
+  c.appendChild(bloqueSG("Lo que COGO evitó", "De lo que authorize decidió, cuánto confirmó el humano. Un bloqueo sin veredicto no cuenta a favor ni en contra; la peor casilla es un permiso de más.", cajaEv));
+
   // 6b · los recibos: qué sabía el agente cuando pidió
   const rc = d.recibos || {};
   const cajaRc = el("div");
@@ -4003,12 +4044,26 @@ async function pintarSalaGuerra() {
     }
     cajaRc.appendChild(el("div", "sg-sub", rc.total + " recibos · los últimos 20 reconstruidos contra el registro de hoy"));
     const t = el("table", "dtab");
-    t.innerHTML = "<tr><th></th><th>acción</th><th>clase</th><th>notas</th><th>hasta el evento</th><th>fiel</th><th>cuándo</th></tr>";
+    t.innerHTML = "<tr><th></th><th>acción</th><th>clase</th><th>notas</th><th>hasta el evento</th><th>fiel</th><th>cuándo</th><th>¿tenía razón?</th></tr>";
     (rc.ultimos || []).forEach(x => {
       const tr = el("tr");
       tr.innerHTML = `<td>${x.autoriza ? "✓" : "✗"}</td><td class="motivo">${esc(x.accion)}</td><td>${esc(x.clase)}</td>` +
         `<td class="num">${x.notas}</td><td class="num">${x.seq}</td><td>${x.fiel ? "sí" : "<b>NO</b>"}</td><td>${haceRato(x.cuando)}</td>`;
       tr.title = esc(x.id + " · " + (x.motivo || ""));
+      const td = el("td");
+      if (x.juzgado) {
+        td.textContent = x.acertado ? "sí" : "no";
+      } else {
+        const juzgar = acertado => async () => {
+          const r = await api("/api/recibos/veredicto", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ recibo: x.id, acertado }) }).catch(() => null);
+          if (r && r.ok) pintarSalaGuerra();
+        };
+        const si = el("button", "mini ghost", "sí"); si.type = "button"; si.title = "COGO tenía razón"; si.addEventListener("click", juzgar(true));
+        const no = el("button", "mini ghost", "no"); no.type = "button"; no.title = "COGO se equivocó"; no.addEventListener("click", juzgar(false));
+        td.appendChild(si); td.appendChild(no);
+      }
+      tr.appendChild(td);
       t.appendChild(tr);
     });
     cajaRc.appendChild(t);

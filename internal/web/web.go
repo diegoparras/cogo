@@ -42,6 +42,7 @@ import (
 	"github.com/diegoparras/cogo/internal/secretscan"
 	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/tokens"
+	"github.com/diegoparras/cogo/internal/veredicto"
 	"github.com/diegoparras/cogo/internal/xray"
 
 	"github.com/diegoparras/cogo/internal/atomico"
@@ -161,6 +162,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/journal/importar", s.handleImportarJournal)
 	mux.HandleFunc("/api/recibos", s.handleRecibos)
+	mux.HandleFunc("/api/recibos/veredicto", s.handleVeredicto)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
 	mux.HandleFunc("/api/agent-blocks", s.handleAgentBlocks)
@@ -1654,7 +1656,7 @@ func (s *Server) handleContradictions(w http.ResponseWriter, r *http.Request) {
 		var ok bool
 		switch action {
 		case "resolve":
-			ok = s.contra.Resolve(id)
+			ok = s.contra.ResolveOn(id, s.today().String())
 		case "dismiss":
 			ok = s.contra.Dismiss(id)
 		default:
@@ -2086,4 +2088,34 @@ func (s *Server) handleRecibos(w http.ResponseWriter, r *http.Request) {
 		out = append(out, f)
 	}
 	writeJSON(w, map[string]any{"recibos": out, "total": len(out)})
+}
+
+// handleVeredicto asienta lo que el humano dice de un recibo: COGO tenía razón
+// o no. Es la única fuente de "lo que COGO evitó": sin veredicto, un bloqueo
+// es solo un bloqueo. POST {recibo, acertado, nota}. Cambiar de opinión vale:
+// gana el último.
+func (s *Server) handleVeredicto(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		Recibo   string `json:"recibo"`
+		Acertado bool   `json:"acertado"`
+		Nota     string `json:"nota"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&in); err != nil {
+		http.Error(w, "bad json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, ok := recibo.Abrir(s.dir).Buscar(in.Recibo); !ok {
+		http.Error(w, "no such receipt", http.StatusNotFound)
+		return
+	}
+	v := veredicto.Veredicto{Recibo: in.Recibo, Acertado: in.Acertado, Nota: strings.TrimSpace(in.Nota), Quien: auth.Caller(r)}
+	if err := veredicto.Abrir(s.dir).Poner(v); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "veredicto": v, "evitado": s.vistaEvitado()})
 }

@@ -45,6 +45,8 @@ func main() {
 		err = cmdImportar(args)
 	case "recibos":
 		err = cmdRecibos(args)
+	case "veredicto":
+		err = cmdVeredicto(args)
 	case "sync":
 		err = cmdSync(args)
 	case "lint":
@@ -94,7 +96,9 @@ commands:
   run <id> <check>     EXECUTE a check from .cogo/runner.yaml here, where the code lives:
                        the only path to 'verified'. Then 'sync' pushes it to the hosted COGO
   sync                 push the runner's executions to a hosted COGO (-url, admin -token)
-  recibos              the receipts: what the agent knew at each authorize (-ultimo, -id, -accion, -desde)
+  recibos              the receipts: what the agent knew at each authorize (-ultimo, -id, -accion, -desde,
+                       -balance: what COGO avoided, per the human's verdicts)
+  veredicto <id> bien|mal   say whether COGO was right on that receipt (-nota why)
   lint                 deterministic checks + (optional) LLM contradiction scan
   serve                run as an MCP server over stdio (any LLM connects)
   sellar               publish the journal head so history can be proven later
