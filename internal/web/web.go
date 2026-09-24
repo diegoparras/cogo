@@ -36,6 +36,7 @@ import (
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/parametros"
+	"github.com/diegoparras/cogo/internal/recibo"
 	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/secretscan"
@@ -159,6 +160,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/github/map", s.handleGitHubMap)
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/journal/importar", s.handleImportarJournal)
+	mux.HandleFunc("/api/recibos", s.handleRecibos)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
 	mux.HandleFunc("/api/agent-blocks", s.handleAgentBlocks)
@@ -2045,4 +2047,43 @@ func (s *Server) handleImportarJournal(w http.ResponseWriter, r *http.Request) {
 		tocadas = append(tocadas, nota.ID)
 	}
 	writeJSON(w, map[string]any{"importados": n, "notas": tocadas})
+}
+
+// handleRecibos lista los recibos de authorize, los últimos primero, cada uno
+// con su reconstrucción contra el registro de hoy. ?id= trae uno solo.
+func (s *Server) handleRecibos(w http.ResponseWriter, r *http.Request) {
+	st := recibo.Abrir(s.dir)
+	todos, err := st.Todos()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if id := r.URL.Query().Get("id"); id != "" {
+		var solo []recibo.Recibo
+		for _, x := range todos {
+			if x.ID == id {
+				solo = append(solo, x)
+			}
+		}
+		todos = solo
+	}
+	if len(todos) > 40 {
+		todos = todos[:40]
+	}
+	type fila struct {
+		recibo.Recibo
+		Reconstruccion recibo.Reconstruccion `json:"reconstruccion"`
+	}
+	out := make([]fila, 0, len(todos))
+	j, jerr := s.journal()
+	for _, x := range todos {
+		f := fila{Recibo: x}
+		if jerr == nil {
+			f.Reconstruccion = recibo.Reconstruir(j, x)
+		} else {
+			f.Reconstruccion = recibo.Reconstruccion{Motivo: "sin registro: " + jerr.Error()}
+		}
+		out = append(out, f)
+	}
+	writeJSON(w, map[string]any{"recibos": out, "total": len(out)})
 }

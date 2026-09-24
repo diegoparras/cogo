@@ -3992,6 +3992,29 @@ async function pintarSalaGuerra() {
   }
   c.appendChild(bloqueSG("Autorizaciones", "Toda consulta queda, autorice o no: lo que se quiere poder reconstruir es en qué se apoyó cada acción — sobre todo las que pasaron.", cajaA));
 
+  // 6b · los recibos: qué sabía el agente cuando pidió
+  const rc = d.recibos || {};
+  const cajaRc = el("div");
+  if (!rc.total) {
+    cajaRc.appendChild(el("div", "sg-vacio", "Todavía no hay recibos: cada authorize deja uno."));
+  } else {
+    if (rc.no_fieles > 0) {
+      cajaRc.appendChild(el("div", "sg-roto", rc.no_fieles + " recibo(s) NO FIELES: el registro se reescribió después de esas decisiones."));
+    }
+    cajaRc.appendChild(el("div", "sg-sub", rc.total + " recibos · los últimos 20 reconstruidos contra el registro de hoy"));
+    const t = el("table", "dtab");
+    t.innerHTML = "<tr><th></th><th>acción</th><th>clase</th><th>notas</th><th>hasta el evento</th><th>fiel</th><th>cuándo</th></tr>";
+    (rc.ultimos || []).forEach(x => {
+      const tr = el("tr");
+      tr.innerHTML = `<td>${x.autoriza ? "✓" : "✗"}</td><td class="motivo">${esc(x.accion)}</td><td>${esc(x.clase)}</td>` +
+        `<td class="num">${x.notas}</td><td class="num">${x.seq}</td><td>${x.fiel ? "sí" : "<b>NO</b>"}</td><td>${haceRato(x.cuando)}</td>`;
+      tr.title = esc(x.id + " · " + (x.motivo || ""));
+      t.appendChild(tr);
+    });
+    cajaRc.appendChild(t);
+  }
+  c.appendChild(bloqueSG("Recibos", "Qué sabía el agente cuando pidió: las notas, su estado en ese instante, y hasta qué evento llegaba el registro. Reconstruible; y si no reconstruye, es porque alguien reescribió la historia después.", cajaRc, true));
+
   // 7 · el sello del registro
   const sel = d.sellos || {};
   const cajaS = el("div");

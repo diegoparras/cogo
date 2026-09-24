@@ -72,7 +72,8 @@ func decidirAutorizacion(ctx context.Context, d *deps, in authorizeIn) (accion.V
 	// nota verde sobre Redis no respalda borrar la tabla de usuarios. Es el
 	// único filtro semántico del autorizador, y solo saca.
 	var noPertinentes []string
-	in.Notes, noPertinentes = filtrarPertinentes(ctx, vault, in.Notes, in.Action)
+	var juicios map[string]float64
+	in.Notes, noPertinentes, juicios = filtrarPertinentes(ctx, vault, in.Notes, in.Action)
 
 	v := accion.Autorizar(
 		accion.Peticion{Accion: in.Action, Clase: in.Class, Notas: in.Notes},
@@ -90,8 +91,15 @@ func decidirAutorizacion(ctx context.Context, d *deps, in authorizeIn) (accion.V
 	// reconstruir es en qué se apoyó cada acción, sobre todo las que pasaron.
 	_ = appendLog(d.dir, fmt.Sprintf("authorize %s [%s] %v -> %v",
 		v.Clase, v.Necesita, in.Notes, v.Autoriza))
+	// Y el recibo: qué sabía el agente cuando pidió, atado a la cabeza del
+	// registro. Es lo que después permite preguntar "¿qué sabía a las 15:32?"
+	// y obtener una respuesta exacta, no una reconstrucción de memoria.
+	idRecibo := registrarRecibo(ctx, d, in, v, estados, noPertinentes, juicios)
 
 	texto := textoAutorizacion(v)
+	if idRecibo != "" {
+		texto += "\n\nreceipt: " + idRecibo + " — cite it when you report this to the human"
+	}
 	if len(noPertinentes) > 0 {
 		texto += "\n\nnot counted as support (Jev: they do not bear on this action): " + strings.Join(noPertinentes, ", ")
 	}

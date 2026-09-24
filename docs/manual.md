@@ -1069,6 +1069,39 @@ preguntar. Y lo que la evaluación necesita en cada pasada —el nivel de cada
 cita, la pertinencia de cada check— se pregunta **por lotes antes**, y la
 evaluación lee de un caché: ninguna evaluación hace una llamada HTTP.
 
+## 27c. El recibo: qué sabía el agente cuando lo hizo
+
+> "El agente borró la tabla a las 15:32. ¿Qué sabía en ese momento?"
+
+Cada `authorize` deja un **recibo**: qué se pidió, quién, qué clase se le
+asignó y qué respaldo pedía, qué notas se citaron y en qué estado estaban —el
+final, el que decidió, y el del eje de eventos— y hasta qué evento llegaba el
+registro en ese instante, con su digest. El agente recibe el id
+(`receipt: r-20260923-153201-a1b2c3`) y se le pide que lo cite cuando reporta.
+
+```bash
+cogo recibos -ultimo                 # el último, con su reconstrucción
+cogo recibos -accion "drop table"    # todos los que hablan de eso
+cogo recibos -id r-20260923-153201-a1b2c3
+```
+
+**Reconstruir** rehace la cadena del registro desde el principio hasta el
+evento del recibo y compara el digest. Si coincide, la historia hasta ahí es
+la misma que entonces y los estados se vuelven a derivar exactos. Si no
+coincide —o el registro ya no llega a ese evento— alguien **reescribió la
+historia después de la decisión**. Es la única prueba de eso que COGO puede
+dar: la cadena sola solo dice que hoy es consistente; el sello (§22b) dice
+que es el mismo registro que se publicó; el recibo dice que es el mismo
+registro sobre el que se **decidió**.
+
+Lo que el recibo no prueba: que el archivo de la nota fuera el mismo. El
+estado final depende de la evidencia y la frescura, que se leen del archivo
+en cada evaluación. Por eso guarda los dos estados por nota, y solo promete
+reconstruir el de eventos.
+
+En la sala de guerra, el bloque **Recibos** muestra los últimos veinte con su
+reconstrucción, y grita si alguno no es fiel.
+
 ## 28. El runner, y su modelo de amenaza
 
 Ejecutar comandos que salen de notas escritas por un LLM es la superficie de ataque

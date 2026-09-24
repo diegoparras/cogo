@@ -398,5 +398,30 @@ func (j *Journal) DigestDe(seq uint64) (string, bool) {
 	return "", false
 }
 
+// CadenaHasta recorre la cadena desde el principio hasta el evento `seq` y
+// devuelve el digest RECALCULADO de ese evento. A diferencia de DigestDe, que
+// usa el prev guardado en el archivo, esto rehace el encadenado: si algún
+// evento anterior fue editado, el digest que sale no es el que se publicó, y
+// si un prev no coincide, dice en qué evento se rompió.
+func (j *Journal) CadenaHasta(seq uint64) (string, error) {
+	evs, err := j.All()
+	if err != nil {
+		return "", err
+	}
+	prev := ""
+	for _, e := range evs {
+		if e.PrevDigest != prev {
+			return "", fmt.Errorf("la cadena se rompe en el evento %d (nota %q)", e.Seq, e.NoteID)
+		}
+		// El digest se recalcula con el prev REAL, no con el guardado.
+		e.PrevDigest = prev
+		prev = e.digest()
+		if e.Seq == seq {
+			return prev, nil
+		}
+	}
+	return "", fmt.Errorf("el registro no llega al evento %d", seq)
+}
+
 // Seq es el último número de secuencia escrito.
 func (j *Journal) Seq() uint64 { j.mu.Lock(); defer j.mu.Unlock(); return j.seq }

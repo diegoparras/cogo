@@ -147,11 +147,12 @@ func precalentarJuez(vault map[string]*core.Note) {
 // filtrarPertinentes saca del respaldo las notas que, según Jev, no hablan de
 // la acción. Devuelve las que quedan y las que se fueron. Solo saca: una nota
 // que Jev no puede juzgar se queda.
-func filtrarPertinentes(ctx context.Context, vault map[string]*core.Note, ids []string, accionTexto string) (quedan, fuera []string) {
+func filtrarPertinentes(ctx context.Context, vault map[string]*core.Note, ids []string, accionTexto string) (quedan, fuera []string, juicios map[string]float64) {
 	if !juezActivo() {
-		return ids, nil
+		return ids, nil, nil
 	}
 	min := umbral("jev.umbral_pertinencia")
+	juicios = map[string]float64{}
 	for _, id := range ids {
 		n, ok := vault[id]
 		if !ok {
@@ -159,13 +160,16 @@ func filtrarPertinentes(ctx context.Context, vault map[string]*core.Note, ids []
 			continue
 		}
 		p, ok := juezDelProceso.Pertinencia(ctx, core.Claim(n), accionTexto)
+		if ok {
+			juicios[id] = p
+		}
 		if ok && p < min {
 			fuera = append(fuera, id)
 			continue
 		}
 		quedan = append(quedan, id)
 	}
-	return quedan, fuera
+	return quedan, fuera, juicios
 }
 
 // ── III.8 · Guard y Xray ───────────────────────────────────────────────────

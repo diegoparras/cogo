@@ -17,6 +17,7 @@ import (
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/motor"
 	"github.com/diegoparras/cogo/internal/presencia"
+	"github.com/diegoparras/cogo/internal/recibo"
 	"github.com/diegoparras/cogo/internal/runner"
 )
 
@@ -107,6 +108,7 @@ func (s *Server) handleSalaGuerra(w http.ResponseWriter, r *http.Request) {
 	out["sellos"] = s.vistaSellos()
 	out["grafo"] = saludDelGrafo(vault)
 	out["autorizaciones"] = s.vistaAutorizaciones()
+	out["recibos"] = s.vistaRecibos()
 	writeJSON(w, out)
 }
 
@@ -464,4 +466,48 @@ func errTexto(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// vistaRecibos: los últimos recibos con su reconstrucción. Un recibo que no es
+// fiel es la única prueba que COGO puede dar de que la historia se reescribió
+// DESPUÉS de una decisión — más fuerte que la cadena, que solo dice que hoy es
+// consistente.
+func (s *Server) vistaRecibos() map[string]any {
+	todos, err := recibo.Abrir(s.dir).Todos()
+	if err != nil || len(todos) == 0 {
+		return map[string]any{"total": 0}
+	}
+	j, jerr := s.journal()
+	noFieles := 0
+	type fila struct {
+		ID       string `json:"id"`
+		Cuando   string `json:"cuando"`
+		Quien    string `json:"quien"`
+		Accion   string `json:"accion"`
+		Clase    string `json:"clase"`
+		Autoriza bool   `json:"autoriza"`
+		Notas    int    `json:"notas"`
+		Seq      uint64 `json:"seq"`
+		Fiel     bool   `json:"fiel"`
+		Motivo   string `json:"motivo"`
+	}
+	var filas []fila
+	for i, r := range todos {
+		f := fila{ID: r.ID, Cuando: r.Cuando.UTC().Format(time.RFC3339), Quien: r.Quien, Accion: r.Accion,
+			Clase: r.Clase, Autoriza: r.Autoriza, Notas: len(r.Notas), Seq: r.Seq}
+		if jerr == nil && i < 20 {
+			rec := recibo.Reconstruir(j, r)
+			f.Fiel, f.Motivo = rec.Fiel, rec.Motivo
+			if !rec.Fiel {
+				noFieles++
+			}
+		} else {
+			f.Fiel, f.Motivo = true, "sin reconstruir"
+		}
+		filas = append(filas, f)
+		if len(filas) == 20 {
+			break
+		}
+	}
+	return map[string]any{"total": len(todos), "no_fieles": noFieles, "ultimos": filas}
 }
