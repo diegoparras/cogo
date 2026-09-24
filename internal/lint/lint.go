@@ -25,8 +25,9 @@ type Issue struct {
 type Report struct {
 	Issues         []Issue
 	LLMUsed        bool
-	CandidatePairs int // pairs worth asking the model about
-	PairsChecked   int // pairs actually asked (bounded)
+	JuezUsado      bool // un juez acotado contestó al menos un par
+	CandidatePairs int  // pairs worth asking the model about
+	PairsChecked   int  // pairs actually asked (bounded)
 }
 
 // Contradictions returns the set of note ids touched by a contradiction, ready
@@ -41,6 +42,20 @@ func (r Report) Contradictions() map[string]bool {
 		}
 	}
 	return set
+}
+
+// juez, si está, contesta P(contradicen) sin generar texto; reemplaza al
+// proveedor LLM en cada par. Propone: la contradicción la abre una persona,
+// como siempre. umbralJuez se consulta por llamada para que el parámetro
+// valga sin reiniciar.
+var (
+	juez       func(ctx context.Context, a, b *core.Note) (float64, bool)
+	umbralJuez func() float64
+)
+
+// SetJuezDeContradicciones instala el juez. nil lo quita.
+func SetJuezDeContradicciones(f func(ctx context.Context, a, b *core.Note) (float64, bool), umbral func() float64) {
+	juez, umbralJuez = f, umbral
 }
 
 // maxPairs bounds the model cost of a single lint pass. If more candidate pairs
@@ -71,8 +86,8 @@ func Run(ctx context.Context, vault map[string]*core.Note, today core.Date, p ll
 		}
 	}
 
-	if p.Available() {
-		r.LLMUsed = true
+	if p.Available() || juez != nil {
+		r.LLMUsed = p.Available()
 		r.detectContradictions(ctx, vault, ids, p)
 	}
 
@@ -117,6 +132,19 @@ func (r *Report) detectContradictions(ctx context.Context, vault map[string]*cor
 
 	for _, pr := range pairs {
 		r.PairsChecked++
+		if juez != nil {
+			if prob, ok := juez(ctx, vault[pr.a], vault[pr.b]); ok {
+				r.JuezUsado = true
+				if prob >= umbral() {
+					r.Issues = append(r.Issues, Issue{"contradiction", []string{pr.a, pr.b},
+						fmt.Sprintf("%s ⇄ %s: Jev estima P=%.2f de que no puedan ser ciertas a la vez", pr.a, pr.b, prob)})
+				}
+				continue
+			}
+		}
+		if !p.Available() {
+			continue
+		}
 		if yes, why := ask(ctx, p, vault[pr.a], vault[pr.b]); yes {
 			r.Issues = append(r.Issues, Issue{"contradiction", []string{pr.a, pr.b}, why})
 		}
@@ -140,6 +168,13 @@ func ask(ctx context.Context, p llm.Provider, a, b *core.Note) (bool, string) {
 	why := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(out, "YES"), "yes"))
 	why = strings.TrimSpace(strings.TrimPrefix(why, ":"))
 	return true, fmt.Sprintf("%s ⇄ %s: %s", a.ID, b.ID, why)
+}
+
+func umbral() float64 {
+	if umbralJuez == nil {
+		return 0.8
+	}
+	return umbralJuez()
 }
 
 func terms(s string) map[string]bool {

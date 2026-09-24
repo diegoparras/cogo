@@ -3,7 +3,7 @@ package core
 import "testing"
 
 func TestOverviewOrdersRedFirst(t *testing.T) {
-	ov := Overview(packVault(), nil, packToday)
+	ov := Overview(packVault(), nil, packToday, false)
 	if len(ov) != 5 {
 		t.Fatalf("want 5 views, got %d", len(ov))
 	}
@@ -20,7 +20,7 @@ func TestBuildGraphTypedEdges(t *testing.T) {
 	v["yellow-worker"].DependsOn = []string{"green-redis"}
 	v["yellow-worker"].Body += "\n\nrelated to [[red-guess]]."
 
-	g := BuildGraph(v, nil, packToday)
+	g := BuildGraph(v, nil, packToday, false)
 	if len(g.Nodes) != 5 {
 		t.Fatalf("want 5 nodes, got %d", len(g.Nodes))
 	}
