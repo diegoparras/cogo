@@ -41,6 +41,8 @@ func main() {
 		err = cmdVerify(args)
 	case "run":
 		err = cmdRun(args)
+	case "importar":
+		err = cmdImportar(args)
 	case "sync":
 		err = cmdSync(args)
 	case "lint":
@@ -81,6 +83,8 @@ usage: cogo <command> [flags] [args]
 commands:
   init                 create a vault (index.md, log.md)
   add [file.md]        validate, color and store a note (stdin if no file)
+  importar <raiz>      cold start: turn CLAUDE.md, AGENTS.md, README and docs/ into
+                       yellow notes anchored to file:line (-project required; -dry to preview)
   pack <query...>      print a budgeted, color-aware context digest
   search <query...>    list matching notes: color · id · summary
   stale                list notes that are stale or expiring soon

@@ -338,6 +338,76 @@ func desarmarRadiografia(r Respuesta) (string, string, bool) {
 	return compromiso, evidencia, true
 }
 
+// ── III.6 · Arranque en frío ───────────────────────────────────────────────
+
+// Seccion juzga una sección de un documento que se está importando: qué tipo
+// de nota es, y si afirma algo comprobable o es prosa de relleno (un índice,
+// una lista de enlaces, una intro). Dos preguntas sobre el mismo estado, en
+// una solicitud.
+func (j *Juez) Seccion(ctx context.Context, titulo, cuerpo string) (tipo string, afirma bool, ok bool) {
+	if !j.Disponible() {
+		return "", false, false
+	}
+	k := clave("seccion", titulo, cuerpo)
+	if r, hay := j.reg.Get(k); hay {
+		return desarmarSeccion(r)
+	}
+	t0 := time.Now()
+	res, modelo, err := j.c.Preguntar(ctx, map[string]any{"title": titulo, "body": cuerpo}, map[string]Pregunta{
+		"kind": {
+			Type: "choice",
+			Instructions: map[string]any{
+				"question": "What kind of project note is the section `title` + `body`?",
+				"focus":    "Classify by what the text DOES: records a choice, states a rule, gives steps, describes structure, reports a defect, or gives a command.",
+			},
+			Criteria: map[string]any{
+				"decision":     map[string]any{"what": "Records a choice that was made and why.", "examples": []string{"We chose Postgres over MySQL because…"}},
+				"constraint":   map[string]any{"what": "A rule that must always or never hold.", "examples": []string{"Never drop the users table without a backup"}},
+				"runbook":      map[string]any{"what": "Steps to do something.", "examples": []string{"To deploy: build, push, force rebuild"}},
+				"architecture": map[string]any{"what": "Describes how things are put together.", "examples": []string{"Three services behind one queue"}},
+				"bug":          map[string]any{"what": "A known defect, gotcha or workaround.", "examples": []string{"The cron sends the mail twice; the lock in Redis works around it"}},
+				"command":      map[string]any{"what": "Essentially one command to run.", "examples": []string{"go build ./..."}},
+				"other":        map[string]any{"what": "None of the above, or cannot tell."},
+			},
+		},
+		"asserts": {
+			Type: "noul",
+			Instructions: map[string]any{
+				"question": "Does the section `title` + `body` assert something about the project that could later be checked?",
+				"focus":    "An index, a list of links, a greeting, a table of contents or a one-line placeholder asserts nothing.",
+			},
+			Criteria: map[string]any{
+				"true":  map[string]any{"meaning": "It states something concrete about how the project is or works"},
+				"false": map[string]any{"meaning": "Navigation, filler, or too vague to check"},
+			},
+		},
+	})
+	if err != nil {
+		return "", false, false
+	}
+	r := Respuesta{Type: "seccion", Noul: -1}
+	if c, hay := res["kind"]; hay && c.Type == "choice" {
+		r.Choice = c.Choice
+	}
+	if a, hay := res["asserts"]; hay && a.Type == "noul" {
+		r.Noul = a.Noul
+	}
+	j.reg.Put(k, "seccion", r, modelo, time.Since(t0))
+	j.reg.Guardar()
+	return desarmarSeccion(r)
+}
+
+func desarmarSeccion(r Respuesta) (string, bool, bool) {
+	if r.Type != "seccion" || r.Noul < 0 {
+		return "", false, false
+	}
+	tipo := r.Choice
+	if tipo == "other" {
+		tipo = ""
+	}
+	return tipo, r.Noul >= 0.5, true
+}
+
 // ── Precalentar: llenar el caché por lotes ─────────────────────────────────
 
 // NotaParaJuzgar es lo que la evaluación necesita tener juzgado de antemano.

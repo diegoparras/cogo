@@ -203,6 +203,37 @@ regla: no se discute con el semáforo, se le da con qué.
 
 # PARTE III · LA MEMORIA
 
+## 6b. Arranque en frío
+
+Un vault vacío no sirve para nada, y llenarlo a mano lleva meses. Pero ningún
+proyecto arranca de cero: tiene un `README` que dice cómo se despliega, un
+`CLAUDE.md` que dice qué no tocar, ADRs que dicen qué se decidió. Eso ya es
+memoria; lo que no tiene es color.
+
+```bash
+cogo importar ~/repos/tienda -project tienda -dry    # qué crearía
+cogo importar ~/repos/tienda -project tienda         # crearlo
+```
+
+Lee `CLAUDE.md`, `AGENTS.md`, `README.md`, `docs/**/*.md` y las carpetas de
+ADRs, parte cada archivo por sus `##` y `###`, y cada sección que afirme algo
+se vuelve una nota. **Con la honestidad que corresponde:** todo nace
+amarillo —`asserted`, sin criterio de verificación— con `origin: instrument`
+(nadie lo decidió acá: se leyó) y con la única evidencia que de verdad tiene:
+el archivo y la línea de donde salió.
+
+Eso último es lo que lo vuelve útil desde el primer día. La cita queda
+**anclada** por la materialidad (§24): si alguien edita justo esa sección del
+documento, la nota se entera y avisa; si edita otra sección del mismo archivo,
+no. Un documento que nadie verificó, pero que ya no puede envejecer en
+silencio.
+
+El tipo de cada nota sale de una heurística por palabras ("decidimos" →
+`decision`, "nunca" → `constraint`, "pasos" → `runbook`, un bloque de un solo
+comando → `command`); lo que no reconoce es `architecture`, que describe y no
+exige. Con Jev activo (§27b), el tipo y el "¿esto afirma algo?" los juzga él.
+Importar dos veces no duplica: una nota que ya existe no se pisa nunca.
+
 ## 7. Anatomía de una nota
 
 Un archivo Markdown con frontmatter YAML. Nada propietario: se lee con `cat`, se

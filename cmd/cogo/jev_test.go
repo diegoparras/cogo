@@ -31,6 +31,9 @@ func (juezDePrueba) Tacticas(context.Context, string, []jev.Tecnica) (map[string
 	return nil, nil
 }
 func (juezDePrueba) Radiografia(context.Context, string) (string, string, bool) { return "", "", false }
+func (juezDePrueba) Seccion(context.Context, string, string) (string, bool, bool) {
+	return "", false, false
+}
 func (juezDePrueba) Precalentar(context.Context, []jev.NotaParaJuzgar) (int, error) {
 	return 0, nil
 }

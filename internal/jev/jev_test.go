@@ -206,6 +206,30 @@ func TestReintentaUnaVezYNoInsisteCon401(t *testing.T) {
 	}
 }
 
+func TestSeccionParaImportar(t *testing.T) {
+	s := &servidor{t: t, responder: func(state map[string]any, q map[string]map[string]any) map[string]any {
+		if _, hay := q["kind"]["criteria"].(map[string]any)["other"]; !hay {
+			t.Error("la Choice de tipo lleva abstención")
+		}
+		out := map[string]any{"kind": choice("decision"), "asserts": noul(0.9)}
+		if state["title"] == "Enlaces" {
+			out = map[string]any{"kind": choice("other"), "asserts": noul(0.1)}
+		}
+		return out
+	}}
+	ts, c := s.arrancar()
+	defer ts.Close()
+	j := Nuevo(t.TempDir(), c)
+	tipo, afirma, ok := j.Seccion(context.Background(), "Decisión", "Adoptamos Fastify.")
+	if !ok || tipo != "decision" || !afirma {
+		t.Fatalf("sección: %q %v %v", tipo, afirma, ok)
+	}
+	tipo, afirma, ok = j.Seccion(context.Background(), "Enlaces", "- [a](x)")
+	if !ok || tipo != "" || afirma {
+		t.Fatalf("relleno: %q %v %v", tipo, afirma, ok)
+	}
+}
+
 func TestRadiografiaYTacticas(t *testing.T) {
 	s := &servidor{t: t, responder: func(state map[string]any, q map[string]map[string]any) map[string]any {
 		out := map[string]any{}

@@ -9,6 +9,7 @@ import (
 	"github.com/diegoparras/cogo/internal/accion"
 	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/importar"
 	"github.com/diegoparras/cogo/internal/jev"
 	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/lint"
@@ -32,6 +33,7 @@ type juezDeCOGO interface {
 	Contradicen(ctx context.Context, a, b string) (float64, bool)
 	Tacticas(ctx context.Context, turno string, tecnicas []jev.Tecnica) (map[string]float64, error)
 	Radiografia(ctx context.Context, claim string) (compromiso, evidencia string, ok bool)
+	Seccion(ctx context.Context, titulo, cuerpo string) (tipo string, afirma bool, ok bool)
 	Precalentar(ctx context.Context, notas []jev.NotaParaJuzgar) (int, error)
 }
 
@@ -94,6 +96,15 @@ func engancharJuez() {
 		}
 		return juezDelProceso.Contradicen(ctx, core.Claim(a), core.Claim(b))
 	}, func() float64 { return umbral("jev.umbral_contradiccion") })
+	// III.6 · el importador: qué tipo de nota es una sección, y si afirma algo.
+	importar.SetClasificador(func(titulo, cuerpo string) (string, bool, bool) {
+		if !juezActivo() {
+			return "", false, false
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		return juezDelProceso.Seccion(ctx, titulo, cuerpo)
+	})
 }
 
 func tierDe(nivel string) core.Tier {
