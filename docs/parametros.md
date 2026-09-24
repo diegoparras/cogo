@@ -14,7 +14,7 @@ necesitan antes de creerle a una estadística.
 Repartidas por el código son invisibles: nadie sabe que están, nadie sabe qué
 pasa si se mueven, y quien las quiere cambiar tiene que recompilar.
 
-En COGO están todas en un registro: **veinte parámetros**, cada uno con su
+En COGO están todas en un registro: **treinta y dos parámetros**, cada uno con su
 etiqueta, qué hace, en qué unidad, entre qué valores es válido y qué se afloja
 si se mueve. El panel del visor **se genera de ahí** — no hay una lista de
 controles escrita a mano que pueda desincronizarse de lo que el motor lee.
@@ -26,7 +26,7 @@ flujo normal pide tocar un número. **Un vault que nadie configuró no tiene
 siquiera archivo de parámetros.**
 
 Y cuando hace falta, está todo. No un subconjunto seguro, no "opciones
-avanzadas" a medias: los veinte, con su efecto escrito y con los que aflojan el
+avanzadas" a medias: los treinta y dos, con su efecto escrito y con los que aflojan el
 sistema marcados como tales.
 
 > Esconder controles porque el usuario podría lastimarse es condescendiente. No
@@ -202,6 +202,19 @@ Apagar `bloquear_por_permiso` deja que dos agentes hagan la misma migración al
 mismo tiempo, cada uno creyendo que es el único.
 
 ---
+
+## Jev · un juez acotado como instrumento
+
+| parámetro | default | qué hace |
+|---|---|---|
+| `jev.activo` | apagado | consultar a Jev (hace falta `COGO_JEV_API_KEY` en el entorno) |
+| `jev.umbral_pertinencia` | 60 % | una nota citada cuenta como respaldo solo si Jev estima al menos esto de que hable de la acción |
+| `jev.umbral_check` | 50 % | por debajo, el criterio de verificación no cuenta: techo en `asserted` |
+| `jev.umbral_contradiccion` | 80 % | los pares por encima aparecen como candidatos en `lint` |
+| `jev.umbral_tactica` | 80 % | Guard reporta las tácticas que Jev estima al menos con esto, siempre en amarillo |
+
+Todos los juicios entran como techos, votos que solo endurecen, o candidatos
+que una persona confirma. Ninguno sube un color. Ver manual §27b.
 
 ## Sello · probar que es el mismo registro
 

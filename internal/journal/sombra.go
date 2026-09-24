@@ -68,7 +68,7 @@ func TechoPorEvidencia(n *core.Note) confidence.Estado {
 	if core.HayDerivaMaterial(n) {
 		return confidence.CheckDeclared
 	}
-	switch core.TierDeEvidencia(n.Evidence) {
+	switch core.TierEfectivo(n) {
 	case core.TierObserved:
 		return confidence.Verified // sin techo: puede llegar arriba de todo
 	case core.TierReported, core.TierReasoned:
@@ -85,6 +85,17 @@ func EstadoEfectivo(est confidence.Estado, n *core.Note) confidence.Estado {
 	return confidence.Meet(est, TechoPorEvidencia(n))
 }
 
+// techoDeCheck, si está, mira si el criterio de verificación de una nota
+// realmente prueba su claim. `check.test` es texto libre: "go vet ./..." en una
+// nota sobre latencia compra un `check_declared` que no significa nada. Un
+// juez externo puede decir que no, y entonces el criterio no cuenta: techo en
+// `asserted`. Es la misma forma que el techo por evidencia — un eje más del
+// meet, y solo baja.
+var techoDeCheck func(n *core.Note) confidence.Estado
+
+// SetTechoDeCheck instala el techo. nil lo quita.
+func SetTechoDeCheck(f func(n *core.Note) confidence.Estado) { techoDeCheck = f }
+
 // EstadoLocal es lo que vale una nota POR SÍ MISMA, con todos los ejes que no
 // dependen de otras notas ya combinados: el check (de los eventos), la fuerza de
 // la evidencia, la frescura y las contradicciones abiertas.
@@ -95,6 +106,9 @@ func EstadoEfectivo(est confidence.Estado, n *core.Note) confidence.Estado {
 // punto fijo viene a evitar.
 func EstadoLocal(est confidence.Estado, n *core.Note, hoy core.Date, contradicha bool) confidence.Estado {
 	out := EstadoEfectivo(est, n)
+	if techoDeCheck != nil {
+		out = confidence.Meet(out, techoDeCheck(n))
+	}
 	if contradicha {
 		out = confidence.Meet(out, confidence.Contradicted)
 	}

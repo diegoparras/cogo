@@ -202,6 +202,25 @@ var Registro = []Def{
 		"Con 0, solo se sella cuando alguien lo pide. Con un número, COGO propone sellar cuando el registro creció eso desde el último sello.",
 		"Un número muy chico llena de sellos; uno muy grande deja ventanas largas sin cubrir.", false),
 
+	// ── Jev: un juez acotado como instrumento ───────────────────────────────
+	// Entra por la regla de todo lo demás: solo baja, solo endurece, o propone
+	// para que una persona confirme. La clave va por entorno (COGO_JEV_API_KEY).
+	booleano("jev.activo", "consultar a Jev", false,
+		"Con clave configurada y esto encendido, Jev juzga la pertinencia del respaldo, la clase de una acción por su sentido, el nivel real de cada cita, si el check prueba el claim, contradicciones y tácticas.",
+		"Encenderlo manda texto de notas y acciones a un servicio externo, y agrega latencia a authorize. Nunca sube un color.", false),
+	entero("jev.umbral_pertinencia", "pertinencia mínima del respaldo", 60, 0, 100, "%",
+		"Una nota citada como respaldo cuenta solo si Jev estima al menos esto de que hable de la acción.",
+		"Bajarlo deja pasar respaldos que no hablan de la acción; subirlo puede dejar sin respaldo a acciones bien citadas.", false),
+	entero("jev.umbral_check", "pertinencia mínima del check", 50, 0, 100, "%",
+		"Si Jev estima menos que esto de que el check pruebe el claim, el criterio no cuenta: techo en asserted.",
+		"Subirlo baja a amarillo notas con checks flojos; bajarlo deja pasar checks que no prueban nada.", true),
+	entero("jev.umbral_contradiccion", "P mínima para proponer una contradicción", 80, 0, 100, "%",
+		"Los pares por encima aparecen como candidatos en lint; abrirlos sigue siendo decisión de una persona.",
+		"Bajarlo propone más pares, muchos falsos; subirlo esconde contradicciones reales.", false),
+	entero("jev.umbral_tactica", "P mínima para reportar una táctica", 80, 0, 100, "%",
+		"Guard reporta las tácticas que Jev estima al menos con esto. Siempre en amarillo: es una señal sin cita.",
+		"Bajarlo llena Guard de sospechas; subirlo lo deja ciego a paráfrasis.", false),
+
 	// ── Ejecución ───────────────────────────────────────────────────────────
 	entero("runner.timeout_maximo", "techo del timeout de un check", 15, 1, 240, "minutos",
 		"Ningún check declarado en runner.yaml puede pedir más que esto.",
@@ -266,7 +285,7 @@ func grupoDe(clave string) string {
 
 // GruposOrdenados es el orden en que el panel muestra las secciones: de lo que
 // más se toca a lo que casi nunca.
-var GruposOrdenados = []string{"frescura", "olvido", "accion", "ancla", "calibracion", "supervivencia", "coordinacion", "sello", "runner"}
+var GruposOrdenados = []string{"frescura", "olvido", "accion", "ancla", "calibracion", "supervivencia", "coordinacion", "jev", "sello", "runner"}
 
 // TituloGrupo es cómo se llama cada sección para un humano.
 var TituloGrupo = map[string]string{
@@ -275,6 +294,7 @@ var TituloGrupo = map[string]string{
 	"accion":        "Cuánto respaldo pide cada tipo de acción",
 	"ancla":         "Cuándo un archivo que cambió invalida una nota",
 	"coordinacion":  "Cuándo un agente se entera de otro",
+	"jev":           "Jev: un juez acotado como instrumento",
 	"sello":         "Sellar el registro afuera",
 	"calibracion":   "Cuánto vale la palabra de cada emisor",
 	"supervivencia": "Ventanas derivadas de los datos, no de la tabla",

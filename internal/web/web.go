@@ -38,6 +38,7 @@ import (
 	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
 	"github.com/diegoparras/cogo/internal/secretscan"
+	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/tokens"
 	"github.com/diegoparras/cogo/internal/xray"
 
@@ -63,6 +64,10 @@ type Server struct {
 	pars *parametros.Set
 	// registro es el journal compartido del proceso (ver parametros.go).
 	registro *journal.Journal
+	// el juez, si el proceso lo tiene (ver UsarJuez).
+	juezGuard     suasion.JuezDeTacticas
+	juezXray      xray.JuezDeClaims
+	umbralTactica func() float64
 	// anotarUso registra qué notas se consultaron (ver internal/uso).
 	anotarUso func(ids ...string)
 
@@ -1184,7 +1189,7 @@ func (s *Server) handleXray(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, xray.Analyze(in.Answer))
+	writeJSON(w, xray.AnalyzeCon(r.Context(), in.Answer, s.juezXray))
 }
 
 // handleTrash lists the deleted notes (GET) and restores or purges one (POST).

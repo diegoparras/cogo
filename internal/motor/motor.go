@@ -108,7 +108,15 @@ func EstadosCon(vault map[string]*core.Note, contradicciones map[string]bool, ho
 		if NoGraduable(n) {
 			continue // fuera del retículo: no entra al punto fijo
 		}
-		local[id] = journal.EstadoLocal(crudos[id], n, hoy, contradicciones[id])
+		// Una nota que el registro todavía no conoce arranca donde arranca toda
+		// nota: en el estado inicial. Antes tomaba el cero del tipo, que es
+		// `quarantined` — y una nota recién capturada aparecía como "excluida a
+		// propósito", que es lo contrario de lo que pasó.
+		est, conocida := crudos[id]
+		if !conocida {
+			est = confidence.Inicial
+		}
+		local[id] = journal.EstadoLocal(est, n, hoy, contradicciones[id])
 		local[id] = confidence.Meet(local[id], techoPorEmisor(n, op.Penalizados))
 		// Una dependencia no graduable tampoco arrastra: se la saca del grafo
 		// en vez de tratarla como ausente, que hundiría a quien se apoye en ella.

@@ -21,7 +21,7 @@ func registrarXray(s *mcp.Server, d *deps) {
 		if strings.TrimSpace(in.Answer) == "" {
 			return errResult(fmt.Errorf("xray needs the answer text to analyze")), nil, nil
 		}
-		rep := xray.Analyze(in.Answer)
+		rep := xray.AnalyzeCon(ctx, in.Answer, juezParaXray())
 		var b strings.Builder
 		icon := map[string]string{"red": "🔴", "yellow": "🟡", "ungraded": "⚪"}
 		fmt.Fprintf(&b, "Radiografía de veracidad — %s\n%s\n\n", icon[rep.Overall]+" "+rep.Overall, rep.Summary)

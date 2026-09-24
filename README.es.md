@@ -465,7 +465,7 @@ exactamente lo que querés escuchar.
 | [Instalación](docs/instalacion.md) | ponerlo a andar, paso a paso |
 | [Deploy](docs/deploy.md) | tu compu, un servidor, o todo un equipo |
 | [Manual](docs/manual.md) | **el manual completo** — de "qué es esto" hasta el retículo y el punto fijo |
-| [Parámetros](docs/parametros.md) | las 22 perillas del modo deidad, una por una |
+| [Parámetros](docs/parametros.md) | las 32 perillas del modo deidad, una por una |
 | [Para agentes de IA](docs/COGO-para-agentes.md) | ponele esto adelante a tu agente |
 | [Motor de autonomía](docs/motor-autonomia.md) | Guard, en profundidad |
 | [Motor de veracidad](docs/motor-veracidad.md) | xray, en profundidad |

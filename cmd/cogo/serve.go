@@ -76,6 +76,7 @@ func cmdServe(args []string) error {
 	visor := web.New(*dir, today, store)
 	visor.UsarParametros(pars) // el panel edita el mismo Set que lee el motor
 	visor.UsarRegistroDeUso(Consultadas)
+	visor.UsarJuez(juezParaGuard(), juezParaXray(), func() float64 { return umbral("jev.umbral_tactica") })
 	if j, err := journalDe(*dir); err == nil {
 		visor.UsarJournal(j) // y lee el mismo registro, con su caché ya caliente
 	}

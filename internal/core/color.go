@@ -221,7 +221,7 @@ func (e *evaluator) compute(n *Note) Verdict {
 	w := windowDays(n.Type)
 	staleAt := n.LastVerified.AddDays(w)
 	expiry := n.LastVerified.AddDays(2 * w)
-	tier := evidenceTier(n.Evidence)
+	tier := TierEfectivo(n)
 
 	var depRed, depYellow string
 	for _, d := range n.DependsOn {
@@ -275,3 +275,36 @@ func (e *evaluator) compute(n *Note) Verdict {
 // la evidencia le impone al color: sin evidencia observada no hay verificación
 // que alcance para llegar a verde.
 func TierDeEvidencia(ev []Evidence) Tier { return evidenceTier(ev) }
+
+// ajusteDeTier, si está, mira el TEXTO de una cita y puede bajar el nivel que
+// el agente declaró: `kind: command_output` con un ref que dice "creo que
+// aguanta 200" no es una observación. Es la costura por la que entra un juez
+// externo (internal/jev). Solo baja: si devuelve algo más alto que lo
+// declarado, se ignora — un instrumento no puede inflar evidencia.
+var ajusteDeTier func(ref string, declarado Tier) Tier
+
+// SetAjusteDeTier instala el ajuste. nil lo quita.
+func SetAjusteDeTier(f func(ref string, declarado Tier) Tier) { ajusteDeTier = f }
+
+// TierEfectivo es TierDeEvidencia con el ajuste aplicado cita por cita.
+func TierEfectivo(n *Note) Tier {
+	best := TierNone
+	for _, e := range n.Evidence {
+		if strings.TrimSpace(e.Ref) == "" || e.Status == EvBroken {
+			continue
+		}
+		t, ok := kindTier[e.Kind]
+		if !ok {
+			continue
+		}
+		if ajusteDeTier != nil {
+			if t2 := ajusteDeTier(e.Ref, t); t2 < t {
+				t = t2
+			}
+		}
+		if t > best {
+			best = t
+		}
+	}
+	return best
+}

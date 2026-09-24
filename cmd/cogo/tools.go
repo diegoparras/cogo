@@ -48,6 +48,17 @@ var registradores = []func(*mcp.Server, *deps){
 
 func newMCPServer(dir string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "cogo", Version: version}, nil)
+	d := nuevasDeps(dir)
+	for _, registrar := range registradores {
+		registrar(s, d)
+	}
+	return s
+}
+
+// nuevasDeps arma lo que comparten los tools. Está separado de newMCPServer
+// porque el hook de la CLI usa la misma política de `authorize` sin levantar
+// un servidor.
+func nuevasDeps(dir string) *deps {
 	scrubber := scrub.FromEnv()
 	store := artifact.FromEnv(dir) // R2 if COGO_R2_* is set, else disk under .cogo/artifacts
 	// Resolve "artifact://<sha>" evidence against the store: present → the citation
@@ -90,10 +101,6 @@ func newMCPServer(dir string) *mcp.Server {
 	// visor shows — instead of a color blind to the store the human curates.
 	contradictions := func() map[string]bool { return contra.Open(dir).OpenNoteSet() }
 
-	d := &deps{dir: dir, scrubber: scrubber, store: store, cache: cache,
+	return &deps{dir: dir, scrubber: scrubber, store: store, cache: cache,
 		loadVault: loadVault, contradictions: contradictions}
-	for _, registrar := range registradores {
-		registrar(s, d)
-	}
-	return s
 }

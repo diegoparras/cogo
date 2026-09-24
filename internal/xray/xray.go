@@ -11,6 +11,7 @@
 package xray
 
 import (
+	"context"
 	"regexp"
 	"strings"
 )
@@ -23,6 +24,7 @@ type Claim struct {
 	Falsifiable bool   `json:"falsifiable"` // is it a checkable factual claim (vs opinion)?
 	Color       string `json:"color"`       // red | yellow (no green without an executed test)
 	Reason      string `json:"reason"`
+	Detector    string `json:"detector,omitempty"` // "" (léxico) | "juez"
 }
 
 // Report is the whole answer's radiography.
@@ -44,10 +46,21 @@ var (
 
 var sentenceSplit = regexp.MustCompile(`(?:[.!?]+\s+|\n+|\s*[•\-\*]\s+|;\s+)`)
 
+// JuezDeClaims lee una afirmación y dice cuánto compromiso lleva
+// (hedged|neutral|boosted) y qué fundamento declara (observed|reported|none).
+// Reemplaza al léxico donde el sentido importa; la lattice de colores es la
+// misma. Se abstiene con ok=false.
+type JuezDeClaims interface {
+	Radiografia(ctx context.Context, claim string) (compromiso, evidencia string, ok bool)
+}
+
 // Analyze radiographs an answer: segment into claims, then per claim read the
 // commitment, the evidentiality, and whether it is falsifiable, and compute a
 // deterministic color.
-func Analyze(answer string) Report {
+func Analyze(answer string) Report { return AnalyzeCon(context.Background(), answer, nil) }
+
+// AnalyzeCon es Analyze con un juez opcional por afirmación.
+func AnalyzeCon(ctx context.Context, answer string, j JuezDeClaims) Report {
 	r := Report{Claims: []Claim{}}
 	for _, raw := range sentenceSplit.Split(answer, -1) {
 		s := strings.TrimSpace(raw)
@@ -55,6 +68,18 @@ func Analyze(answer string) Report {
 			continue // too short to be a claim, or a heading
 		}
 		c := radiograph(s)
+		if j != nil {
+			if comp, ev, ok := j.Radiografia(ctx, s); ok {
+				c.Detector = "juez"
+				if comp != "" {
+					c.Commitment = comp
+				}
+				if ev != "" {
+					c.Evidence = ev
+				}
+				c.Color, c.Reason = colorear(c)
+			}
+		}
 		r.Claims = append(r.Claims, c)
 		switch c.Color {
 		case "red":
@@ -96,20 +121,26 @@ func radiograph(s string) Claim {
 		c.Falsifiable = false
 	}
 
-	// Deterministic lattice (Phase 1 — no execution, so no green).
+	c.Color, c.Reason = colorear(c)
+	return c
+}
+
+// colorear es la lattice determinista (Fase 1: sin ejecución, no hay verde).
+// Está separada para que el juez pueda cambiar compromiso y evidencia y el
+// color salga de la misma regla.
+func colorear(c Claim) (string, string) {
 	switch {
 	case !c.Falsifiable:
-		c.Color, c.Reason = "red", "no falsable: es una opinión o valoración, no un hecho que un test pueda refutar"
+		return "red", "no falsable: es una opinión o valoración, no un hecho que un test pueda refutar"
 	case c.Evidence == "none" && c.Commitment == "boosted":
-		c.Color, c.Reason = "red", "afirmado con fuerza pero sin fundamento declarado (el gap más grande)"
+		return "red", "afirmado con fuerza pero sin fundamento declarado (el gap más grande)"
 	case c.Evidence == "none":
-		c.Color, c.Reason = "yellow", "falsable, pero no declara fuente — no testeada"
+		return "yellow", "falsable, pero no declara fuente — no testeada"
 	case c.Evidence == "reported":
-		c.Color, c.Reason = "yellow", "fundamento reportado/citado — no ejecutado acá"
+		return "yellow", "fundamento reportado/citado — no ejecutado acá"
 	default: // observed
-		c.Color, c.Reason = "yellow", "dice haberlo observado — verde exigiría correr el test (Fase 2)"
+		return "yellow", "dice haberlo observado — verde exigiría correr el test (Fase 2)"
 	}
-	return c
 }
 
 func containsAny(low string, words []string) bool {

@@ -46,6 +46,8 @@ func instalarParametros(dir string) {
 		return pars.Entero(clave), true
 	})
 	core.SetCaracteresDistintivos(func() int { return pars.Entero("ancla.caracteres_minimos") })
+	// Jev, si hay clave: entra por costuras que solo bajan (ver jev.go).
+	instalarJuez(dir)
 
 	// El olvido necesita saber qué se consulta. Sin este registro, core.Latente
 	// no tiene con qué decidir y deja todo en circulación, que es el
@@ -164,6 +166,9 @@ func instalarMotor(dir string) error {
 			n.StaleAt = previos[id].StaleAt
 		}
 		refrescarEstimaciones(vault, evs)
+		// Lo que el juez tenga que decir de cada cita y de cada check se
+		// pregunta ACÁ, por lotes; la evaluación después lee del caché.
+		precalentarJuez(vault)
 		// El registro de consultas se limpia de las notas que ya no están. Va
 		// acá porque es el único punto que ve el vault entero en cada pasada, y
 		// sin esto uso.json acumularía para siempre el id de cada nota borrada.

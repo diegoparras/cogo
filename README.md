@@ -467,7 +467,7 @@ exactly what you want to hear.
 | [Installation](docs/instalacion.md) | get it running, step by step |
 | [Deploy](docs/deploy.md) | your machine, a server, or a whole team |
 | [Manual](docs/manual.md) | **the full manual** — from "what is this" to the lattice and the fixed point |
-| [Parameters](docs/parametros.md) | the 22 knobs behind god mode, one by one |
+| [Parameters](docs/parametros.md) | the 32 knobs behind god mode, one by one |
 | [For AI agents](docs/COGO-para-agentes.md) | put this in front of your agent |
 | [Autonomy engine](docs/motor-autonomia.md) | Guard, in depth |
 | [Veracity engine](docs/motor-veracidad.md) | xray, in depth |

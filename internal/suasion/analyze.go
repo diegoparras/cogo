@@ -34,6 +34,7 @@ type Finding struct {
 	Detector    string     `json:"detector"` // "lexicon" | "receipt" | "trajectory" | "model_proposal"
 	Evidence    string     `json:"evidence"` // quoted span from the turn
 	Receipts    []Receipt  `json:"receipts,omitempty"`
+	Prob        float64    `json:"prob,omitempty"`     // detector "juez": P estimada
 	RedLine     string     `json:"red_line,omitempty"` // set when escalated by the mandate
 	Color       core.Color `json:"-"`
 	Reason      string     `json:"reason"`
@@ -57,6 +58,18 @@ type Opts struct {
 	Tier1    llm.Provider // structural proposals; nil or unavailable = off
 	Tier2    llm.Provider // adversarial steelman; ideally a DIFFERENT provider than Tier1
 	Steelman bool         // request the second opinion (one extra model call)
+	// Juez es un juez acotado (un Noul por táctica sobre el turno). Ve
+	// paráfrasis que el léxico no ve, y no genera texto: no puede fabricar una
+	// cita, así que su hallazgo es una estimación sin cita — amarillo, como
+	// toda propuesta. nil = apagado.
+	Juez       JuezDeTacticas
+	UmbralJuez float64 // P mínima para reportar; 0 = 0.8
+}
+
+// JuezDeTacticas contesta, para cada táctica candidata, la probabilidad de que
+// el turno la ejerza.
+type JuezDeTacticas interface {
+	Tacticas(ctx context.Context, turn string, candidatas []*Technique) (map[string]float64, error)
 }
 
 // Analyze reads one model turn. transcript is the conversation so far
@@ -102,6 +115,12 @@ func (e *Engine) AnalyzeWith(ctx context.Context, turn string, transcript []Turn
 	for _, f := range e.propose(ctx, opts.Tier1, turn) {
 		if !already[f.TechniqueID] {
 			r.Findings = append(r.Findings, f)
+			already[f.TechniqueID] = true
+		}
+	}
+	for _, f := range e.juzgar(ctx, opts.Juez, turn, opts.UmbralJuez) {
+		if !already[f.TechniqueID] {
+			r.Findings = append(r.Findings, f)
 		}
 	}
 
@@ -137,6 +156,9 @@ func (e *Engine) AnalyzeWith(ctx context.Context, turn string, transcript []Turn
 		case f.Detector == "trajectory":
 			f.Color = core.Yellow
 			f.Reason = "presión sostenida a lo largo de la conversación — mirá la tendencia"
+		case f.Detector == "juez":
+			f.Color = core.Yellow
+			f.Reason = fmt.Sprintf("Jev estima P=%.2f de esta táctica — es una señal sin cita literal, no una prueba: juzgá vos el pasaje", f.Prob)
 		case f.Detector == "model_proposal":
 			f.Color = core.Yellow
 			f.Reason = "propuesta del modelo local (Tier 1), cita verificada — juzgá vos la estructura"

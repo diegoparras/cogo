@@ -16,6 +16,7 @@ import (
 	"github.com/diegoparras/cogo/internal/agentsmd"
 	"github.com/diegoparras/cogo/internal/contra"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/gancho"
 )
 
 func main() {
@@ -42,6 +43,8 @@ func main() {
 		err = cmdLint(args)
 	case "health":
 		err = cmdHealth(args)
+	case "hook":
+		os.Exit(cmdHook(args))
 	case "serve":
 		err = cmdServe(args)
 	case "sellar":
@@ -83,7 +86,10 @@ commands:
   sellar               publish the journal head so history can be proven later
   sellos               check every published seal against today's journal
   agents               print an AGENTS.md/CLAUDE.md that teaches an agent the COGO protocol
-  install              wire COGO into an agent's .mcp.json (stdio by default, or --http)
+  install              wire COGO into an agent's .mcp.json (stdio by default, or --http);
+                       --hooks also writes .claude/settings.local.json so Claude Code
+                       calls COGO by itself (pack on start, authorize before acting)
+  hook                 what those hooks run: session-start | pre-tool (reads stdin)
 
 common flags:
   -vault <dir>         vault directory (default $COGO_VAULT or ./vault)
@@ -382,6 +388,9 @@ func cmdInstall(args []string) error {
 	name := fs.String("name", "cogo", "server key under mcpServers")
 	out := fs.String("o", ".mcp.json", "path to the .mcp.json to write/merge")
 	claude := fs.Bool("claude", false, "also drop a CLAUDE.md with the COGO protocol next to it")
+	hooks := fs.Bool("hooks", false, "also write .claude/settings.local.json with the hooks that make Claude Code call COGO by itself")
+	project := fs.String("project", "", "project for the hooks (pack on start, support lookup)")
+	minima := fs.String("minima", "costly", "hooks: lowest action class that asks COGO before running (reversible|costly|irreversible)")
 	_ = fs.Parse(args)
 	conVault(dir)
 
@@ -429,6 +438,25 @@ func cmdInstall(args []string) error {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "cogo: wrote %s\n", p)
+	}
+	if *hooks {
+		// La ruta del binario es de esta máquina, y el token es secreto: va al
+		// .local, que Claude Code carga igual y no se commitea.
+		p := filepath.Join(filepath.Dir(*out), ".claude", "settings.local.json")
+		previo, _ := os.ReadFile(p)
+		b, err := gancho.Settings(previo, gancho.Comando{
+			Binario: bin, Vault: vabs, URL: *httpURL, Token: *token, Proyecto: *project, Minima: *minima,
+		})
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(p, b, 0o600); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "cogo: wrote %s — Claude Code now runs `cogo hook` by itself (pack on start; authorize before %s-or-worse actions)\n", p, *minima)
 	}
 	fmt.Fprintln(os.Stderr, "  reiniciá tu agente para que tome la config.")
 	return nil

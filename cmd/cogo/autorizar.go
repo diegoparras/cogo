@@ -15,6 +15,9 @@ type authorizeIn struct {
 	Action string   `json:"action" jsonschema:"what you are about to do, in words. It gets classified, so describe the actual operation ('delete the staging database', not 'clean up')"`
 	Class  string   `json:"class,omitempty" jsonschema:"informative|reversible|costly|irreversible. Optional: COGO also infers it from the text and takes the STRICTER of the two, so declaring a lower class does not lower the bar"`
 	Notes  []string `json:"notes,omitempty" jsonschema:"ids of the notes you are relying on. Get them from pack or search. One weak note is enough to sink the request: you are only as backed as the weakest thing you lean on"`
+	// Project acota la búsqueda de respaldo; FindSupport la enciende.
+	Project     string `json:"project,omitempty" jsonschema:"optional project filter for find_support"`
+	FindSupport bool   `json:"find_support,omitempty" jsonschema:"when you cite no notes, let COGO look for the notes that bear on the action and use them as support. Red notes and open questions never count"`
 }
 
 // fuenteVault adapta el vault a lo que necesita el autorizador. Es un mapa de

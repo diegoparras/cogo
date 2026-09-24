@@ -40,9 +40,11 @@ func registrarGuard(s *mcp.Server, d *deps) {
 			mandate = suasion.LoadMandate(suasion.MandatePath(dir))
 		}
 		report := eng.AnalyzeWith(ctx, in.Turn, transcript, mandate, suasion.Opts{
-			Tier1:    guardProvider(dir),
-			Tier2:    llm.StrongFromEnv(guardProvider(dir)),
-			Steelman: in.Steelman,
+			Tier1:      guardProvider(dir),
+			Tier2:      llm.StrongFromEnv(guardProvider(dir)),
+			Steelman:   in.Steelman,
+			Juez:       juezParaGuard(),
+			UmbralJuez: umbral("jev.umbral_tactica"),
 		})
 		return textResult(eng.Render(report)), nil, nil
 	})

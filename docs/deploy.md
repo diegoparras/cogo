@@ -211,6 +211,9 @@ Ninguna es obligatoria en local. Agrupadas por función.
 | `COGO_VAULT` | `/vault` (Docker) · `./vault` (CLI) | carpeta del vault. En Docker ya viene puesta. |
 | `COGO_ALLOW_INSECURE` | — | `1` = permití servir sin auth en interfaz pública. **Solo si el puerto ya está firewalleado/túnel.** |
 | `COOKIE_SECURE` | — | `1` bajo TLS: cookies `Secure` + header HSTS. Ponelo detrás de HTTPS. |
+| `COGO_JEV_API_KEY` | — | clave de [TypeSafe AI](https://typesafe.ai). Con esto y `jev.activo` encendido en el modo deidad, Jev juzga pertinencia del respaldo, clase de acción, nivel de cada cita, checks, contradicciones y tácticas. Solo baja, nunca sube (manual §27b). |
+| `COGO_JEV_MODEL` | `jev-latest` | versión del modelo; para reproducir evaluaciones, fijar una. |
+| `COGO_JEV_URL` | `https://api.typesafe.ai/v1/systemone` | endpoint; solo para gateways. |
 | `COGO_TRUSTED_PROXIES` | — | CIDRs (separados por coma) desde los que se acepta `X-Forwarded-For`. Sin esto, detrás de un proxy **todo el mundo es la IP del proxy**: el rate limit frena a todos juntos y la auditoría no identifica a nadie. Para un contenedor detrás del proxy del mismo host: `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`. Nunca se le cree al header si el socket no viene de una red declarada. |
 
 ### Autenticación
@@ -331,6 +334,10 @@ otros servers):
 ```bash
 cogo install                                   # stdio local (este binario + ./vault)
 cogo install --http https://tu-dominio/mcp --token TU-TOKEN --claude   # remoto + CLAUDE.md
+cogo install --http https://tu-dominio/mcp --token TU-TOKEN --hooks --project tienda
+#   ↑ además escribe .claude/settings.local.json: Claude Code corre `cogo hook`
+#     solo (pack al empezar; authorize antes de lo costoso o irreversible).
+#     Va al .local porque lleva la ruta del binario y el token.
 ```
 
 **Local (stdio), a mano** — sin red, cada sesión levanta su COGO:

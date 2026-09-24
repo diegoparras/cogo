@@ -9,7 +9,9 @@ import (
 	"github.com/diegoparras/cogo/internal/calibracion"
 	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/parametros"
+	"github.com/diegoparras/cogo/internal/suasion"
 	"github.com/diegoparras/cogo/internal/supervivencia"
+	"github.com/diegoparras/cogo/internal/xray"
 )
 
 // El modo deidad: la superficie de control completa del motor.
@@ -32,6 +34,12 @@ func (s *Server) UsarParametros(p *parametros.Set) { s.pars = p }
 // UsarJournal conecta el visor al registro compartido del proceso. Sin esto
 // abriría uno propio en cada consulta, y abrir un journal es leerlo entero.
 func (s *Server) UsarJournal(j *journal.Journal) { s.registro = j }
+
+// UsarJuez conecta el visor a Jev, si el proceso lo tiene: Guard y Xray del
+// visor juzgan con lo mismo que los tools. nil apaga la vía.
+func (s *Server) UsarJuez(g suasion.JuezDeTacticas, x xray.JuezDeClaims, umbralTactica func() float64) {
+	s.juezGuard, s.juezXray, s.umbralTactica = g, x, umbralTactica
+}
 
 // UsarRegistroDeUso conecta el visor al registro de consultas. El humano que
 // mira una nota en el visor también la está consultando, y eso también despierta

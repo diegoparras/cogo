@@ -89,10 +89,16 @@ func (s *Server) handleGuard(w http.ResponseWriter, r *http.Request) {
 		mandate = suasion.LoadMandate(s.mandatePath())
 	}
 	p := s.prov()
+	umbral := 0.0
+	if s.umbralTactica != nil {
+		umbral = s.umbralTactica()
+	}
 	rep := eng.AnalyzeWith(r.Context(), in.Turn, transcript, mandate, suasion.Opts{
-		Tier1:    p,
-		Tier2:    llm.StrongFromEnv(p),
-		Steelman: in.Steelman,
+		Tier1:      p,
+		Tier2:      llm.StrongFromEnv(p),
+		Steelman:   in.Steelman,
+		Juez:       s.juezGuard,
+		UmbralJuez: umbral,
 	})
 
 	findings := make([]guardFinding, 0, len(rep.Findings))

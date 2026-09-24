@@ -195,12 +195,40 @@ func Clasificar(texto string) Inferida {
 	return Inferida{Clase: peor, Porques: porques}
 }
 
+// clasificadorExterno, si está, es un tercer voto sobre la clase: un juez que
+// lee el sentido del texto y no solo sus palabras. "Vaciar el bucket de
+// producción" no dispara ningún patrón; un juez lo ve. Su voto entra con la
+// misma regla que los otros dos —manda la más estricta— así que puede
+// endurecer una clase y nunca aflojarla. Si se abstiene, no pasa nada.
+var clasificadorExterno func(texto string) (Clase, bool)
+
+// SetClasificadorExterno instala el voto. nil lo quita.
+func SetClasificadorExterno(f func(texto string) (Clase, bool)) { clasificadorExterno = f }
+
 // Decidir combina lo declarado con lo inferido. Es una función aparte y con su
 // propio test porque es la regla que hace que declarar la clase no sea una forma
 // de esquivar el control.
 func Decidir(declarada string, texto string) (final Clase, explicacion string) {
 	inf := Clasificar(texto)
 	dec, valida := Valida(declarada)
+
+	// El voto externo se pliega en lo inferido, solo hacia arriba. Con el texto
+	// mudo y nada declarado, NO resuelve la duda hacia abajo: lo desconocido
+	// sigue pidiendo el máximo, porque un juez que se equivoca ahí es un
+	// borrado autorizado. Donde sí importa es cuando el agente declaró una
+	// clase baja y el regex no vio nada: ahí el juez es lo único que puede
+	// subirla.
+	if clasificadorExterno != nil {
+		if ext, ok := clasificadorExterno(texto); ok {
+			switch {
+			case inf.Ninguna && strings.TrimSpace(declarada) != "":
+				inf = Inferida{Clase: ext, Porques: []string{"juez externo: " + Rotulo[ext]}}
+			case !inf.Ninguna && severidad(ext) > severidad(inf.Clase):
+				inf.Clase = ext
+				inf.Porques = append([]string{"juez externo: " + Rotulo[ext]}, inf.Porques...)
+			}
+		}
+	}
 
 	switch {
 	case strings.TrimSpace(declarada) == "" && inf.Ninguna:

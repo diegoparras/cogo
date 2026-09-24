@@ -152,6 +152,30 @@ Y `cogo agents` genera el `AGENTS.md` / `CLAUDE.md` que le enseña a tu agente e
 protocolo: cuándo pedir contexto, cuándo capturar, y por qué no debe escribir
 colores.
 
+### Que lo llame solo
+
+Un protocolo escrito en un `.md` es un pedido a un modelo. Un agente que se lo
+saltea no falla ruidosamente: COGO simplemente no participa. Con Claude Code
+se puede hacer que sea el **entorno** el que llama:
+
+```bash
+cogo install --http https://tu-cogo/mcp --token cogo_... --hooks --project tienda
+```
+
+Eso escribe `.claude/settings.local.json` con dos hooks: al empezar la sesión,
+`cogo hook session-start` mete el pack del proyecto en el contexto; y antes de
+cada `Bash`, `Edit` o `Write`, `cogo hook pre-tool` mira qué está por correr.
+Si el texto delata una acción **costosa o irreversible** (`rm -rf`, `drop
+table`, `terraform apply`, `git push --force`…), le pide a COGO que la
+autorice con `find_support: true` — COGO busca solo las notas que hablan de
+eso — y si no alcanza, sale con código 2 y el veredicto es lo que el modelo
+lee. Un `ls` no consulta a nadie: el hook es una puerta sobre lo peligroso
+conocido, no un juez de lo desconocido. `--minima reversible` baja la vara
+hasta las ediciones.
+
+Si COGO no responde, el hook **falla abierto** y lo dice: un hook que bloquea
+todo cuando el servidor está caído se apaga a mano en cinco minutos.
+
 ## 6. Tu primera nota
 
 Desde el visor: **+ Nueva nota**. Desde un agente: `capture`. Lo mínimo:
@@ -970,6 +994,50 @@ working around it is not.
 Y **una sola nota floja hunde el pedido**: te apoyás en el conjunto, y el conjunto
 vale lo que su parte más débil.
 
+## 27b. Jev: un juez acotado como instrumento
+
+COGO juzga el **estado** de las cosas —qué evidencia hay, si venció, si el
+check se ejecutó— pero no su **sentido**. Un agente puede citar una nota verde
+sobre Redis para justificar borrar la tabla de usuarios, y el autorizador,
+que mira el color y no el tema, dice que sí. Es el único agujero serio que le
+quedaba al motor, y no se cierra con patrones: "parecido" no es "respalda".
+
+[Jev](https://typesafe.ai) es un modelo que **no genera texto**: contesta
+preguntas acotadas —elegir entre opciones, ubicar en una escala, o dar la
+probabilidad de una condición. Y entra en COGO por la regla de todo lo demás:
+
+> **Un juicio de Jev solo puede bajar, endurecer, o proponer.** Nunca escribe un
+> color, nunca salta un permiso, nunca sube nada. Si se equivoca, el error va
+> para el lado cauto. Si se abstiene, o no hay clave, o el servicio no
+> responde, COGO hace exactamente lo que hacía sin él.
+
+Dónde entra:
+
+| Lugar | Pregunta | Qué hace COGO con la respuesta |
+|---|---|---|
+| `authorize` | ¿el claim de esta nota da fundamento para la acción? | por debajo del umbral, la nota **no cuenta** como respaldo |
+| clase de la acción | ¿informativa, reversible, costosa, irreversible o no se sabe? | un tercer voto; **manda la más estricta**, como siempre |
+| cada cita | ¿este `ref` es una observación, un reporte o un razonamiento? | el nivel efectivo es el **menor** entre lo declarado y lo que Jev ve |
+| cada check | si este test pasa, ¿queda establecido el claim? | si no, el criterio no cuenta: techo en `asserted` |
+| `lint` | ¿estas dos notas no pueden ser ciertas a la vez? | Jev **propone**; la contradicción la abre una persona |
+| Guard | un Noul por táctica de la ontología sobre el turno | señal en **amarillo**, sin cita: ve paráfrasis que el léxico no ve |
+| Xray | cuánto compromiso lleva la afirmación y qué fundamento declara | la misma lattice de colores, con mejor lectura |
+
+Lo que no hace: no toca los secretos (son patrones exactos), no decide sobre
+presencia ni permisos, y **no escribe el color**.
+
+**Cómo se enciende.** `COGO_JEV_API_KEY` en el entorno (la clave no va en el
+registro de parámetros: los secretos no se editan desde un panel), y
+`jev.activo` en el modo deidad. Los umbrales están ahí también, y hay que
+elegirlos con notas propias: la evidencia pública sobre español es un solo
+dominio.
+
+**Lo que queda escrito.** Cada juicio va a `.cogo/jev.jsonl` tal cual vino,
+con el modelo y la latencia — para mover un umbral mañana sin volver a
+preguntar. Y lo que la evaluación necesita en cada pasada —el nivel de cada
+cita, la pertinencia de cada check— se pregunta **por lotes antes**, y la
+evaluación lee de un caché: ninguna evaluación hace una llamada HTTP.
+
 ## 28. El runner, y su modelo de amenaza
 
 Ejecutar comandos que salen de notas escritas por un LLM es la superficie de ataque
@@ -1165,7 +1233,7 @@ Se pregunta una vez por sesión del navegador. No es un susto decorativo: es lo
 
 ### La sala de guerra
 
-Dos pestañas. **Controles** son las 22 perillas. **Estado** es lo que el motor está
+Dos pestañas. **Controles** son las 32 perillas. **Estado** es lo que el motor está
 haciendo ahora mismo:
 
 - **La cadena, primero.** Íntegra o rota. Va arriba de todo porque es el único dato
@@ -1189,7 +1257,7 @@ archivo de parámetros**, y actualizar COGO mueve los defaults hacia adelante si
 pisar lo que alguien decidió a mano. Es la misma razón por la que un `.gitconfig`
 no lista las 400 opciones de git.
 
-El detalle de los 22 está en [`parametros.md`](parametros.md).
+El detalle de los 32 está en [`parametros.md`](parametros.md).
 
 ## 33. Desplegarlo
 
@@ -1313,7 +1381,7 @@ Si algo de acá resulta falso, es un bug — y hay dónde reportarlo.
 **Documentos hermanos**
 
 - [`COGO-para-agentes.md`](COGO-para-agentes.md) — la guía que lee tu agente
-- [`parametros.md`](parametros.md) — los 22 parámetros, uno por uno
+- [`parametros.md`](parametros.md) — los 32 parámetros, uno por uno
 - [`deploy.md`](deploy.md) — desplegarlo en serio
 - [`instalacion.md`](instalacion.md) — instalación paso a paso
 - [`seguridad.md`](seguridad.md) — el modelo de seguridad
