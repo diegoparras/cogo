@@ -9,7 +9,6 @@ import (
 
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/core"
-	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -38,18 +37,12 @@ func registrarVerify(s *mcp.Server, d *deps) {
 			if err != nil {
 				return errResult(err), nil, nil
 			}
-			ver.Por, ver.Ejecutado = journal.EmisorEjecucion, true
 			corrida = fmt.Sprintf(" — check %q exit %d in %s", res.CheckID, res.ExitCode, res.Duracion.Round(time.Millisecond))
-			if !res.OK() {
-				// Falló de verdad: se registra como ejecutado y fallido. No pasa
-				// por Verificar, que solo sabe marcar pases.
-				if derivadas := core.DriftedRefs(n); len(derivadas) > 0 && !in.Reanchor {
-					return errResult(&core.ErrDeriva{Refs: derivadas}), nil, nil
-				}
-				n.Check.Status, n.Check.Attested, n.Check.AttestedBy = "failed", core.AttestExecuted, journal.EmisorEjecucion
-				n.LastVerified = today()
-				ver = core.Verificacion{}
+			// Lo que dijo el runner se asienta igual que desde la CLI (cogo run).
+			if err := aplicarEjecucion(n, res, core.LoadEvidenceRoots(dir), in.Reanchor); err != nil {
+				return errResult(err), nil, nil
 			}
+			ver = core.Verificacion{}
 		}
 		if ver != (core.Verificacion{}) {
 			if err := core.Verificar(n, core.LoadEvidenceRoots(dir), today(), ver); err != nil {

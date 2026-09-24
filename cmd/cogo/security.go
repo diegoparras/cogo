@@ -104,6 +104,8 @@ func esBatch(body []byte) bool {
 var rutasDeAdministracion = []string{
 	"/api/tokens", "/api/settings", "/api/parametros", "/api/audit", "/api/export",
 	"/api/evidence-roots", "/api/github/map",
+	// Importar ejecuciones es fabricar `verified` desde afuera: solo el dueño.
+	"/api/journal",
 }
 
 func esRutaDeAdministracion(path string) bool {

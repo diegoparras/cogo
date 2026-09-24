@@ -1073,6 +1073,25 @@ runner— y deja la nota como `attested: executed`. Si el comando falla, la nota
 queda `refuted`. Sin `check`, `verify` es una declaración y llega hasta
 `claimed_passed`; con `check`, es el único camino a `verified`.
 
+### El runner donde vive el código
+
+En un despliegue real el COGO hosteado corre en una imagen `scratch`: sin `go`,
+sin `node`, sin shell. **No puede ejecutar nada**, y eso es a propósito. El
+check corre donde está el repo, con un COGO local:
+
+```bash
+cogo run pool-limite-200 go-test        # ejecuta el check acá y lo asienta en el vault local
+cogo sync -url https://tu-cogo -token $COGO_MCP_TOKEN   # empuja las ejecuciones al hosteado
+```
+
+El hosteado recibe **solo** eventos del runner, **solo** de un administrador (la
+raíz o una sesión de persona: un token emitido no puede importar, porque
+importar ejecuciones es fabricar `verified` desde afuera), y los encadena con
+su propio número y su propio hash. Cada evento importado dice de dónde vino
+(`importado_de`, el digest original), así el mismo lote dos veces no duplica
+nada. La nota en el hosteado queda como la dejó el runner: check ejecutado,
+pasado o fallido, con la fecha en que corrió.
+
 ## 29. Las invariantes
 
 Cinco propiedades del motor, verificadas sobre **cientos de vaults generados al

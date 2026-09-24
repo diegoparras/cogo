@@ -273,6 +273,19 @@ Ninguna es obligatoria en local. Agrupadas por función.
 Por eso el **volumen va montado en `/vault`** (no en una subcarpeta): incluye las
 notas *y* el estado.
 
+### Verificar de verdad (el runner)
+
+La imagen no tiene shell: el hosteado **no ejecuta checks**. Se ejecutan donde
+vive el código y se empujan:
+
+```bash
+cogo run <nota> <check>                       # en la máquina del repo, contra el vault local
+cogo sync -url https://tu-dominio -token $COGO_MCP_TOKEN
+```
+
+`sync` exige el token **raíz** (o una sesión OIDC): un token emitido no puede
+importar ejecuciones. Manual §28.
+
 ### Respaldo (tres formas)
 1. **Desde el visor** — menú ⋮ → **Exportar (backup)** → baja un
    `cogo-vault-<fecha>.zip` con **todas las notas y el estado**: el registro de

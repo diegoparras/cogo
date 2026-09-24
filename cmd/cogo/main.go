@@ -39,6 +39,10 @@ func main() {
 		err = cmdStale(args)
 	case "verify":
 		err = cmdVerify(args)
+	case "run":
+		err = cmdRun(args)
+	case "sync":
+		err = cmdSync(args)
 	case "lint":
 		err = cmdLint(args)
 	case "health":
@@ -80,7 +84,10 @@ commands:
   pack <query...>      print a budgeted, color-aware context digest
   search <query...>    list matching notes: color · id · summary
   stale                list notes that are stale or expiring soon
-  verify <id>          mark a note's check passed, re-date and re-color
+  verify <id>          mark a note's check passed, re-date and re-color (a declaration)
+  run <id> <check>     EXECUTE a check from .cogo/runner.yaml here, where the code lives:
+                       the only path to 'verified'. Then 'sync' pushes it to the hosted COGO
+  sync                 push the runner's executions to a hosted COGO (-url, admin -token)
   lint                 deterministic checks + (optional) LLM contradiction scan
   serve                run as an MCP server over stdio (any LLM connects)
   sellar               publish the journal head so history can be proven later

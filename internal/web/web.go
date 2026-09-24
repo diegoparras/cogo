@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -157,6 +158,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/github", s.handleGitHub)
 	mux.HandleFunc("/api/github/map", s.handleGitHubMap)
 	mux.HandleFunc("/api/export", s.handleExport)
+	mux.HandleFunc("/api/journal/importar", s.handleImportarJournal)
 	mux.HandleFunc("/api/evidence-roots", s.handleEvidenceRoots)
 	mux.HandleFunc("/api/agents-md", s.handleAgentsMD)
 	mux.HandleFunc("/api/agent-blocks", s.handleAgentBlocks)
@@ -1960,4 +1962,87 @@ func (s *Server) cadenaRota() string {
 		s.cadenaMsg = "CADENA DE EVENTOS ROTA — alguien editó el registro; ningún color es confiable hasta investigarlo: " + err.Error()
 	}
 	return s.cadenaMsg
+}
+
+// handleImportarJournal recibe las ejecuciones que un COGO local hizo con el
+// runner y las encadena acá. Es el único camino a `verified` en un despliegue
+// sin shell, y por eso es de administración (ver cmd/cogo/security.go): un
+// token emitido que pudiera importar ejecuciones podría fabricar verdes.
+//
+// Además de encadenar los eventos, deja la nota como la dejaría el runner
+// local: check ejecutado, pasado o fallido, con la fecha en que corrió.
+func (s *Server) handleImportarJournal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var in struct {
+		Eventos []journal.Event `json:"eventos"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 8<<20)).Decode(&in); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(in.Eventos) == 0 {
+		writeJSON(w, map[string]any{"importados": 0})
+		return
+	}
+	j, err := s.journal()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	vault, ok := s.load(w)
+	if !ok {
+		return
+	}
+	for _, e := range in.Eventos {
+		if _, existe := vault[e.NoteID]; !existe {
+			http.Error(w, "la nota "+e.NoteID+" no existe en este vault: nada se importó", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	// Las notas que el registro todavía no conoce se siembran antes: sin su
+	// CheckDeclared, una ejecución importada no tiene desde dónde transicionar
+	// y la nota quedaría en asserted con un verified en el registro.
+	if _, err := journal.Sembrar(j, vault, core.EvaluateVaultCore(vault, s.contras(), s.today())); err != nil {
+		http.Error(w, "no se pudo sembrar el registro: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	n, err := journal.Importar(j, in.Eventos)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	// La nota refleja la última ejecución de cada una.
+	var tocadas []string
+	for _, e := range in.Eventos {
+		if e.Kind != "CheckExecuted" {
+			continue
+		}
+		nota := vault[e.NoteID]
+		nota.Check.Attested, nota.Check.AttestedBy = core.AttestExecuted, journal.EmisorEjecucion
+		if e.Guard == "ejecucion_falla" {
+			nota.Check.Status = "failed"
+		} else {
+			nota.Check.Status = "passed"
+		}
+		cuando := e.ValidTime
+		if cuando.IsZero() {
+			cuando = time.Now()
+		}
+		nota.LastVerified = core.NewDate(cuando.Year(), cuando.Month(), cuando.Day())
+		v := core.Evaluate(nota, vault, s.contras(), s.today())
+		nota.Apply(v)
+		path := nota.Path
+		if path == "" {
+			path = filepath.Join(s.dir, nota.ID+".md")
+		}
+		if err := core.WriteNoteFile(path, nota); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tocadas = append(tocadas, nota.ID)
+	}
+	writeJSON(w, map[string]any{"importados": n, "notas": tocadas})
 }
