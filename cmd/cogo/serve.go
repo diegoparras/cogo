@@ -88,6 +88,7 @@ func cmdServe(args []string) error {
 	var h http.Handler = enforceReadOnly(mux) // read-only tokens can't write
 	h = enforceAdmin(h)                       // issued tokens can't administer
 	h = auditMiddleware(*dir)(h)              // audit trail (who called which tool); rejects batches
+	h = newTokenLimiter(10, 40).middleware(h) // per-caller rate limit (inside the gate: needs the caller)
 	h = authn.Gate(h)                         // auth (cookie or Bearer), stamps caller+scope
 	h = newIPLimiter(20, 60).middleware(h)    // per-IP rate limit
 	h = securityHeaders(h, tls)               // conservative headers

@@ -121,9 +121,9 @@ func (s *Server) handleSalaGuerra(w http.ResponseWriter, r *http.Request) {
 // lo que COGO diga sobre confianza vale. Es el único dato de esta pantalla que
 // invalida a todos los demás.
 func (s *Server) vistaRegistro(j *journal.Journal, evs []journal.Event) map[string]any {
-	integra, problema := true, ""
+	integra, problema, porPurga := true, "", false
 	if err := j.Verificar(); err != nil {
-		integra, problema = false, err.Error()
+		integra, problema, porPurga = false, err.Error(), journal.RotaPorPurga(err)
 	}
 
 	porTipo := map[string]int{}
@@ -154,7 +154,7 @@ func (s *Server) vistaRegistro(j *journal.Journal, evs []journal.Event) map[stri
 		})
 	}
 	return map[string]any{
-		"total": len(evs), "integra": integra, "problema": problema,
+		"total": len(evs), "integra": integra, "problema": problema, "por_purga": porPurga,
 		"ultimos": ultimos, "por_tipo": aConteos(porTipo), "por_emisor": aConteos(porEmisor),
 	}
 }

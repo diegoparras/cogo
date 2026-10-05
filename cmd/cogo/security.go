@@ -343,15 +343,25 @@ func securityHeaders(next http.Handler, tls bool) http.Handler {
 	})
 }
 
-// --- per-IP rate limit (token bucket) on the sensitive paths ----------------
-// Caps brute-force against the token and abuse of the model-spending endpoints
-// (Guard/lint). Generous enough for a human plus one agent.
+// --- rate limit (token bucket) on the sensitive paths -----------------------
+// Two of them, one outside the gate and one inside:
+//
+//   - per IP, before authentication: caps brute-force against the token and
+//     abuse of the model-spending endpoints (Guard/lint) from anyone at all.
+//   - per caller (issued token, root, or OIDC identity), after the gate: behind
+//     one proxy every client is the same IP, so without this a runaway agent on
+//     one token would exhaust the shared per-IP budget for everybody else, and a
+//     polite one could be starved by a noisy neighbour. Separate buckets, and
+//     the audit names the culprit.
+//
+// Both generous enough for a human plus one agent.
 
 type ipLimiter struct {
 	mu      sync.Mutex
 	buckets map[string]*tokenBucket
 	rate    float64 // tokens per second
 	burst   float64
+	clave   func(*http.Request) string // "" = no key: this limiter does not apply
 }
 
 type tokenBucket struct {
@@ -360,7 +370,14 @@ type tokenBucket struct {
 }
 
 func newIPLimiter(rate, burst float64) *ipLimiter {
-	return &ipLimiter{buckets: map[string]*tokenBucket{}, rate: rate, burst: burst}
+	return &ipLimiter{buckets: map[string]*tokenBucket{}, rate: rate, burst: burst, clave: clientIP}
+}
+
+// newTokenLimiter keys the bucket by the authenticated caller. Mount it INSIDE
+// the gate (the gate stamps the caller); an unauthenticated request has no key
+// and is left to the per-IP limiter.
+func newTokenLimiter(rate, burst float64) *ipLimiter {
+	return &ipLimiter{buckets: map[string]*tokenBucket{}, rate: rate, burst: burst, clave: auth.Caller}
 }
 
 func (l *ipLimiter) allow(ip string, now time.Time) bool {
@@ -386,7 +403,7 @@ func (l *ipLimiter) allow(ip string, now time.Time) bool {
 func (l *ipLimiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" {
-			if !l.allow(clientIP(r), time.Now()) {
+			if k := l.clave(r); k != "" && !l.allow(k, time.Now()) {
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}

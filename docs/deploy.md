@@ -438,8 +438,10 @@ Las capas, el modelo de amenaza y lo que COGO **no** hace (limitaciones honestas
 están en **[seguridad.md](seguridad.md)**. En resumen: no expongas el puerto (túnel
 o proxy TLS), token o SSO siempre, `SECRET_KEY` fija, disco cifrado, y el scrub
 (`ANONIMAL_URL`) prendido para que no queden secretos en las notas. Ya vienen de
-fábrica: rate-limit por IP, security headers, y comparación de token en tiempo
-constante.
+fábrica: rate-limit por IP (afuera del gate) **y por token** (adentro: detrás de
+un proxy todos son la misma IP, y un agente desbocado con un token no tiene que
+vaciarle el cupo a los demás), security headers, y comparación de token en
+tiempo constante.
 
 ---
 

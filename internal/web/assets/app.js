@@ -3879,7 +3879,7 @@ async function pintarSalaGuerra() {
   const ok = reg.integra !== false;
   const cab = el("div", "sg-cadena" + (ok ? " ok" : " mal"));
   cab.appendChild(el("span", "sg-punto"));
-  cab.appendChild(el("strong", null, ok ? "Cadena íntegra" : "CADENA ROTA"));
+  cab.appendChild(el("strong", null, ok ? "Cadena íntegra" : (reg.por_purga ? "CADENA ROTA POR UNA PURGA" : "CADENA ROTA")));
   cab.appendChild(el("span", "sg-sub", ok
     ? (reg.total || 0) + " eventos encadenados por hash; ninguno fue alterado"
     : reg.problema || ""));

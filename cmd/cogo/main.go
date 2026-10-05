@@ -47,6 +47,8 @@ func main() {
 		err = cmdRecibos(args)
 	case "veredicto":
 		err = cmdVeredicto(args)
+	case "purgar":
+		err = cmdPurgar(args)
 	case "sync":
 		err = cmdSync(args)
 	case "lint":
@@ -99,6 +101,9 @@ commands:
   recibos              the receipts: what the agent knew at each authorize (-ultimo, -id, -accion, -desde,
                        -balance: what COGO avoided, per the human's verdicts)
   veredicto <id> bien|mal   say whether COGO was right on that receipt (-nota why)
+  purgar <id>          delete for real: the trashed note, the runner's stdout/stderr in the
+                       journal, and artifacts nobody cites. Breaks the chain ON PURPOSE and
+                       leaves a Purged event saying so (-motivo why)
   lint                 deterministic checks + (optional) LLM contradiction scan
   serve                run as an MCP server over stdio (any LLM connects); -http for HTTP,
                        -sin-radiografias to leave guard and xray out (14 tools instead of 16)

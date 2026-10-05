@@ -163,7 +163,13 @@ func (j *Journal) escribir(e Event) (Event, error) {
 	}
 	j.seq++
 	e.Seq = j.seq
-	e.PrevDigest = j.prev
+	// Un Purged encadena con la cabeza que había ANTES de reescribir, no con
+	// la de ahora: así, aunque el evento purgado fuera el último, la cadena
+	// queda rota donde tiene que quedar y Verificar lo explica. Es la única
+	// excepción, y es a propósito (ver purga.go).
+	if e.Kind != KindPurged || e.PrevDigest == "" {
+		e.PrevDigest = j.prev
+	}
 
 	line, err := json.Marshal(e)
 	if err != nil {
@@ -360,8 +366,8 @@ func (j *Journal) Verificar() error {
 		}
 		anterior = e.Seq
 		if e.PrevDigest != prev {
-			return fmt.Errorf("journal: la cadena se rompe en el evento %d (nota %q): esperaba prev=%q y tiene %q",
-				e.Seq, e.NoteID, prev, e.PrevDigest)
+			return fmt.Errorf("journal: la cadena se rompe en el evento %d (nota %q): esperaba prev=%q y tiene %q%s",
+				e.Seq, e.NoteID, prev, e.PrevDigest, explicarRotura(evs, i))
 		}
 		prev = e.digest()
 	}
@@ -409,9 +415,9 @@ func (j *Journal) CadenaHasta(seq uint64) (string, error) {
 		return "", err
 	}
 	prev := ""
-	for _, e := range evs {
+	for i, e := range evs {
 		if e.PrevDigest != prev {
-			return "", fmt.Errorf("la cadena se rompe en el evento %d (nota %q)", e.Seq, e.NoteID)
+			return "", fmt.Errorf("la cadena se rompe en el evento %d (nota %q)%s", e.Seq, e.NoteID, explicarRotura(evs, i))
 		}
 		// El digest se recalcula con el prev REAL, no con el guardado.
 		e.PrevDigest = prev

@@ -95,8 +95,16 @@ Ninguna capa sola alcanza; la fuerza es apilarlas:
    al reiniciar). **Disco cifrado** en el VPS. **`ANONIMAL` (scrub) prendido**
    para que no queden secretos/PII en las notas.
 
-Ya incluido en COGO: rate limiting por IP, security headers (nosniff, frame
-deny, referrer-policy, HSTS bajo TLS), comparación de token en tiempo constante.
+Ya incluido en COGO: rate limiting por IP (antes de autenticar, contra fuerza
+bruta) y por token (después del gate: cada token emitido, la raíz y cada
+identidad OIDC tienen su propio cupo, así que detrás de un proxy un agente
+desbocado no frena a los demás y la auditoría dice cuál fue), security headers
+(nosniff, frame deny, referrer-policy, HSTS bajo TLS), comparación de token en
+tiempo constante.
+
+Borrar de verdad existe y deja marca: `cogo purgar <id>` saca la salida del
+runner del registro y rompe la cadena a propósito, con un evento `Purged` que
+dice quién, qué y cuándo (manual §26). No hay forma de purgar sin que se note.
 
 ## Lo que COGO NO hace (limitaciones honestas)
 

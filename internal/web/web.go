@@ -36,6 +36,7 @@ import (
 	"github.com/diegoparras/cogo/internal/lint"
 	"github.com/diegoparras/cogo/internal/llm"
 	"github.com/diegoparras/cogo/internal/parametros"
+	"github.com/diegoparras/cogo/internal/purga"
 	"github.com/diegoparras/cogo/internal/recibo"
 	"github.com/diegoparras/cogo/internal/savings"
 	"github.com/diegoparras/cogo/internal/scrub"
@@ -1210,23 +1211,19 @@ func (s *Server) handleTrash(w http.ResponseWriter, r *http.Request) {
 		case "restore":
 			err = core.RestoreTrash(s.dir, id)
 		case "purge":
-			// Grab the note's artifacts before it's gone, purge, then GC any that no
-			// other note (live or trashed) still cites — the store is deduplicated,
-			// so a shared blob must survive until its last citer is purged.
-			var shas []string
-			if target, e := core.ReadTrashNote(s.dir, id); e == nil {
-				shas = core.ArtifactRefs(target)
+			// Borrar de verdad es tres cosas —el archivo, la salida del runner en
+			// el registro, los artefactos que ya nadie cita— y una sola operación
+			// (internal/purga). Deja un Purged en el registro con quién lo pidió.
+			if _, e := core.ReadTrashNote(s.dir, id); e != nil {
+				err = fmt.Errorf("no such trashed note %q", id)
+				break
 			}
-			err = core.PurgeTrash(s.dir, id)
-			if err == nil && len(shas) > 0 {
-				keep := core.ReferencedArtifacts(s.dir)
-				store := artifact.FromEnv(s.dir)
-				for _, sha := range shas {
-					if !keep[sha] {
-						_ = store.Delete(r.Context(), sha)
-					}
-				}
+			j, jerr := s.journal()
+			if jerr != nil {
+				err = jerr
+				break
 			}
+			_, err = purga.Purgar(r.Context(), s.dir, j, id, auth.Caller(r), "desde el visor")
 		default:
 			http.Error(w, "action must be restore or purge", http.StatusBadRequest)
 			return
@@ -1963,7 +1960,14 @@ func (s *Server) cadenaRota() string {
 	}
 	s.cadenaSeq, s.cadenaCabeza, s.cadenaVista, s.cadenaMsg = seq, cabeza, true, ""
 	if err := j.Verificar(); err != nil {
-		s.cadenaMsg = "CADENA DE EVENTOS ROTA — alguien editó el registro; ningún color es confiable hasta investigarlo: " + err.Error()
+		if journal.RotaPorPurga(err) {
+			// Una purga rompe la cadena a propósito y lo deja asentado. Los
+			// colores siguen valiendo (el fold no lee la salida del runner);
+			// lo que ya no vale es cualquier sello anterior a la purga.
+			s.cadenaMsg = "CADENA DE EVENTOS ROTA POR UNA PURGA — los sellos anteriores ya no coinciden: " + err.Error()
+		} else {
+			s.cadenaMsg = "CADENA DE EVENTOS ROTA — alguien editó el registro; ningún color es confiable hasta investigarlo: " + err.Error()
+		}
 	}
 	return s.cadenaMsg
 }

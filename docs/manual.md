@@ -844,6 +844,13 @@ además **cuándo**.
 **No prueba que lo que dicen los eventos sea cierto.** Un sello es sobre la
 historia, no sobre los hechos.
 
+**Y una purga (§26) lo invalida a propósito.** `cogo purgar` reescribe los
+eventos que llevaban salida del runner, así que todo sello anterior deja de
+coincidir. No es un defecto: es la única forma de que borrar algo del
+registro no pueda pasar inadvertido. El evento `Purged` que queda dice qué se
+tocó y cuál era la cabeza anterior; el sello siguiente vuelve a cerrar la
+historia desde ahí.
+
 ### Por qué no es una blockchain
 
 COGO ya tiene la parte útil: una cadena de bloques enlazados por hash. Lo que una
@@ -974,6 +981,37 @@ consultala y deja de estar sin consultar, así que deja de serlo.
 > inicio, así que instalar esta versión **no vuelve latente a medio vault el primer
 > día**: una nota sin registro no es una que nadie consultó, es una que nadie
 > consultó *desde que se empezó a mirar*.
+
+### Purgar: borrar de verdad
+
+Latente no es borrada, y la papelera tampoco: vaciarla borraba el archivo de
+la nota, pero el registro guarda lo que el runner **imprimió** al correr sus
+checks —y ahí puede haber quedado una clave o un dato personal— y el almacén
+de artefactos guarda lo que la nota citaba por hash.
+
+```bash
+cogo purgar pool-satura -motivo "salió una clave por stdout"
+```
+
+Purgar es la única operación que toca las tres cosas: borra la nota de la
+papelera (una nota **viva** no se purga: primero `remove`, así borrar de
+verdad son siempre dos pasos), saca `stdout`/`stderr` de todos sus eventos en
+el registro dejando `purgado: true`, tira los artefactos que ya nadie cita, y
+asienta un evento **`Purged`** con quién lo pidió, qué eventos se tocaron, el
+motivo y la cabeza que el registro tenía antes.
+
+**Rompe la cadena a propósito, y lo dice.** El digest de un evento incluye su
+payload; reescribirlo lo cambia, y el evento siguiente guarda el digest viejo.
+Se podría re-encadenar todo lo que sigue y dejar el registro perfecto —y eso
+es exactamente lo que el sello (§22b) existe para detectar. Por eso no se
+hace: la rotura queda, y `Verificar` la explica con nombre y fecha ("la nota
+X se purgó el día D, pedido por Q") en vez de decir "alguien editó el
+registro". Un sello anterior a la purga deja de coincidir, y eso es correcto:
+la historia que se publicó ya no es la que hay. Los colores siguen valiendo:
+el pliegue no lee la salida del runner.
+
+El botón *vaciar* de la papelera del visor hace lo mismo, con el nombre de
+quien apretó.
 
 ## 27. Cuánto respaldo pide cada acción
 
