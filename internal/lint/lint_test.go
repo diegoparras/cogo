@@ -13,8 +13,8 @@ var today = core.MustDate("2026-06-29")
 // fakeProvider always answers the same thing — no network, deterministic test.
 type fakeProvider struct{ reply string }
 
-func (fakeProvider) Available() bool                                 { return true }
-func (fakeProvider) Name() string                                    { return "fake" }
+func (fakeProvider) Available() bool                                    { return true }
+func (fakeProvider) Name() string                                       { return "fake" }
 func (f fakeProvider) Complete(context.Context, string) (string, error) { return f.reply, nil }
 
 func TestLintBrokenDep(t *testing.T) {

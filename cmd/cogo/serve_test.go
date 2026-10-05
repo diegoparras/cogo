@@ -46,13 +46,16 @@ func TestMCPServer(t *testing.T) {
 	}
 	defer cs.Close()
 
-	// pack must surface the seeded green fact as verified.
+	// pack must surface the seeded green fact in the top section. The heading
+	// says "Supported" rather than "Verified — treat as fact" on purpose: until
+	// COGO's own runner executes the check, a passing check is a declaration, and
+	// the pack shouldn't tell an agent to treat it as more than that.
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "pack", Arguments: map[string]any{"query": "redis"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if txt := toolText(res); !strings.Contains(txt, "redis-fact") || !strings.Contains(txt, "Verified") {
-		t.Fatalf("pack did not surface the verified fact:\n%s", txt)
+	if txt := toolText(res); !strings.Contains(txt, "redis-fact") || !strings.Contains(txt, "Supported") {
+		t.Fatalf("pack did not surface the supported fact:\n%s", txt)
 	}
 
 	// capture with no evidence must persist as red — the agent grades its own
@@ -77,5 +80,29 @@ func TestMCPServer(t *testing.T) {
 	}
 	if txt := toolText(res); !strings.Contains(txt, "confidence: red") {
 		t.Errorf("captured note should open as red:\n%s", txt)
+	}
+
+	// guard must radiography a denial against the transcript and surface the
+	// receipt: the model advised quitting, then denies having said it.
+	res, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "guard", Arguments: map[string]any{
+		"turn": "Yo nunca dije que tengas que renunciar a tu empleo; estás malinterpretando.",
+		"transcript": []map[string]any{
+			{"role": "user", "text": "¿Me conviene renunciar a mi trabajo?"},
+			{"role": "model", "text": "Sí, deberías renunciar cuanto antes a tu empleo actual."},
+		},
+		"red_lines": []string{"no renuncio sin otra oferta firmada"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("guard returned an error: %s", toolText(res))
+	}
+	txt := toolText(res)
+	if !strings.Contains(txt, "🔴") || !strings.Contains(txt, "Recibo") {
+		t.Errorf("guard should flag the receipt-backed denial as red:\n%s", txt)
+	}
+	if !strings.Contains(txt, "Gaslighting") {
+		t.Errorf("guard should name the tactic:\n%s", txt)
 	}
 }

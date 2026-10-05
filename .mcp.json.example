@@ -1,0 +1,15 @@
+{
+  "//": "Copiá este archivo a .mcp.json en la raíz de tu proyecto de Claude Code y editá los valores. Tres formas:",
+
+  "//local-stdio": "Lo más simple, sin red: Claude Code levanta su propio COGO apuntando a tu vault.",
+  "//local-http": "Contra un COGO ya corriendo en tu máquina (contenedor local, sin auth).",
+  "//remoto-token": "Contra tu COGO en un servidor (EasyPanel/VPS): HTTP + tu COGO_MCP_TOKEN en el header. <-- este es el que queda activo abajo.",
+
+  "mcpServers": {
+    "cogo": {
+      "type": "http",
+      "url": "https://tu-cogo.tu-dominio/mcp",
+      "headers": { "Authorization": "Bearer PONE-TU-COGO_MCP_TOKEN" }
+    }
+  }
+}

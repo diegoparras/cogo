@@ -1,6 +1,9 @@
 package core
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // SearchResult is one hit: id, computed color and a one-line summary — no body.
 // Bounded output keeps the agent's context cheap (see §7).
@@ -10,32 +13,54 @@ type SearchResult struct {
 	Type    string
 	Project string
 	Summary string
-	Score   int
+	Score   float64
+	State   string // archived|retracted|superseded; empty = active
+	// Latent marca las notas que ya no entran en el pack por falta de uso.
+	//
+	// La búsqueda SÍ las devuelve, y es a propósito: buscar es cómo se las
+	// encuentra para despertarlas, y una nota que no se puede encontrar no está
+	// olvidada, está perdida. Pero tienen que venir marcadas — devolverlas como
+	// si nada haría creer que un agente las va a ver, y no las va a ver.
+	Latent bool
 }
 
 // Search returns the notes relevant to the query, ordered by trust then
 // relevance then id. limit <= 0 means no limit. It returns ids, colors and
-// one-line summaries only — never bodies.
-func Search(vault map[string]*Note, contradictions map[string]bool, query, project string, today Date, limit int) []SearchResult {
+// one-line summaries only — never bodies. Non-active notes are excluded unless
+// includeArchived is set.
+func Search(vault map[string]*Note, contradictions map[string]bool, query, project string, today Date, limit int, includeArchived bool) []SearchResult {
 	verdicts := EvaluateVault(vault, contradictions, today)
+	state := Lifecycle(vault)
+	lat := Latentes(vault, contradictions, today, time.Now())
 	qterms := terms(query)
 
-	var res []SearchResult
+	var pool []*Note
 	for id, n := range vault {
+		if !includeArchived && state[id] != StateActive {
+			continue
+		}
 		if project != "" && n.Project != project {
 			continue
 		}
-		score := relevance(n, qterms)
-		if len(qterms) > 0 && score == 0 {
+		pool = append(pool, n)
+	}
+	rk := newRanker(pool, qterms)
+
+	var res []SearchResult
+	for _, n := range pool {
+		score := rk.score(n, qterms, today)
+		if len(qterms) > 0 && score <= 0 {
 			continue
 		}
 		res = append(res, SearchResult{
-			ID:      id,
-			Color:   verdicts[id].Color,
+			ID:      n.ID,
+			Color:   verdicts[n.ID].Color,
 			Type:    n.Type,
 			Project: n.Project,
 			Summary: summarize(claimOf(n), 100),
 			Score:   score,
+			State:   stateTag(state, n.ID),
+			Latent:  lat[n.ID].Latente,
 		})
 	}
 

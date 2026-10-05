@@ -94,7 +94,7 @@ func TestRoundTrip(t *testing.T) {
 
 func TestMarshalFencesComputedBlock(t *testing.T) {
 	n, _ := ParseNote([]byte(sampleNote))
-	n.Apply(Verdict{Color: Yellow, Reason: "observed evidence but check not passed", StaleAt: MustDate("2026-08-26")})
+	n.Apply(Verdict{Color: Yellow, Reason: "evidencia observada, pero el check no pasó", StaleAt: MustDate("2026-08-26")})
 	out, err := MarshalNote(n)
 	if err != nil {
 		t.Fatal(err)

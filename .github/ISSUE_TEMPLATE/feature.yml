@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest something COGO should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        COGO deliberately refuses to do a lot of things — it is not a file browser, not a
+        task manager, not a wiki. Describing the **problem** rather than the feature makes it
+        much easier to tell whether it belongs here.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting?
+      description: What are you trying to do, and what stops you today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+      description: Optional — a rough idea is fine.
+  - type: checkboxes
+    id: rule
+    attributes:
+      label: The iron rule
+      options:
+        - label: >
+            This doesn't require anything outside the color engine to write a note's
+            confidence.
+          required: true

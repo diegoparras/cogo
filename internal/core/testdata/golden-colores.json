@@ -1,0 +1,92 @@
+[
+ {
+  "caso": "amarilla-dep-amar",
+  "color": "yellow",
+  "razon": "depende de la nota amarilla \"amarilla-reportada\""
+ },
+ {
+  "caso": "amarilla-razonada",
+  "color": "yellow",
+  "razon": "la evidencia es reportada o razonada (tope: amarillo)"
+ },
+ {
+  "caso": "amarilla-reportada",
+  "color": "yellow",
+  "razon": "la evidencia es reportada o razonada (tope: amarillo)"
+ },
+ {
+  "caso": "amarilla-sin-check",
+  "color": "yellow",
+  "razon": "evidencia observada, pero el check no pasó"
+ },
+ {
+  "caso": "amarilla-vencida",
+  "color": "yellow",
+  "razon": "vencida: pasó su fecha de frescura (todavía no expiró)"
+ },
+ {
+  "caso": "ciclo-a",
+  "color": "red",
+  "razon": "depende de la nota roja \"ciclo-b\""
+ },
+ {
+  "caso": "ciclo-b",
+  "color": "red",
+  "razon": "depende de la nota roja \"ciclo-a\""
+ },
+ {
+  "caso": "roja-contradicha",
+  "color": "red",
+  "razon": "una contradicción abierta toca esta nota"
+ },
+ {
+  "caso": "roja-dep-ausente",
+  "color": "red",
+  "razon": "depende de la nota roja \"no-existe\""
+ },
+ {
+  "caso": "roja-dep-roja",
+  "color": "red",
+  "razon": "depende de la nota roja \"roja-sin-evidencia\""
+ },
+ {
+  "caso": "roja-expirada",
+  "color": "red",
+  "razon": "expirada: pasó el doble de la ventana de frescura sin re-verificar"
+ },
+ {
+  "caso": "roja-sin-evidencia",
+  "color": "red",
+  "razon": "sin evidencia observada ni reportada"
+ },
+ {
+  "caso": "sin-grado-mistake",
+  "color": "ungraded",
+  "razon": "error registrado: es informativo, no se gradúa por confianza"
+ },
+ {
+  "caso": "tipo-bug",
+  "color": "green",
+  "razon": "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción"
+ },
+ {
+  "caso": "tipo-command",
+  "color": "green",
+  "razon": "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción"
+ },
+ {
+  "caso": "tipo-constraint",
+  "color": "green",
+  "razon": "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción"
+ },
+ {
+  "caso": "tipo-runbook",
+  "color": "green",
+  "razon": "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción"
+ },
+ {
+  "caso": "verde-limpia",
+  "color": "green",
+  "razon": "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción"
+ }
+]
