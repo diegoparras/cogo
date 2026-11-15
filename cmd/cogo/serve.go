@@ -53,7 +53,7 @@ func cmdServe(args []string) error {
 
 	// HTTP: the long-running container service. Remote clients reach it behind a
 	// proxy with OIDC (Lockatus); locally it is loopback.
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
+	handler := handlerMCP(srv)
 	authn, err := auth.FromEnv(context.Background())
 	if err != nil {
 		return err
@@ -99,6 +99,19 @@ func cmdServe(args []string) error {
 		fmt.Fprintf(os.Stderr, "  ⚠ WARNING: public interface with no auth (COGO_ALLOW_INSECURE=1). Set COGO_MCP_TOKEN for a VPS.\n")
 	}
 	return http.ListenAndServe(*httpAddr, h)
+}
+
+// handlerMCP es el /mcp del servidor HTTP. Sin estado: la spec del 2026-07-28
+// saca el initialize y la sesión, y el SDK solo la acepta en este modo. A
+// COGO no le cuesta nada, porque ningún tool guarda nada en la sesión: todo
+// vive en el vault. Y gana dos cosas: un redeploy no deja clientes colgados
+// con una sesión que ya no existe, y cada llamada del hook es un solo pedido.
+// Los clientes de la spec anterior siguen entrando con su initialize.
+func handlerMCP(srv *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return srv },
+		&mcp.StreamableHTTPOptions{Stateless: true},
+	)
 }
 
 // --- tool I/O ---

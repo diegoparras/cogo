@@ -124,7 +124,9 @@ cogo init && cogo serve -http 127.0.0.1:8080 -vault ./vault
 ## Connect it to your agent
 
 COGO speaks **MCP** over stdio (local) and Streamable HTTP (remote), so any MCP client works —
-Claude Code, Codex, Copilot, OpenCode, Antigravity:
+Claude Code, Codex, Copilot, OpenCode, Antigravity. Over HTTP it speaks the stateless
+**2026-07-28** revision (no `initialize`, no session: a redeploy leaves no client hanging) and
+still accepts clients on 2025-11-25:
 
 ```json
 {
