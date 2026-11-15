@@ -112,7 +112,8 @@ commands:
   agents               print an AGENTS.md/CLAUDE.md that teaches an agent the COGO protocol
   install              wire COGO into an agent's .mcp.json (stdio by default, or --http);
                        --hooks also writes .claude/settings.local.json so Claude Code
-                       calls COGO by itself (pack on start, authorize before acting)
+                       calls COGO by itself (pack on start, authorize before acting);
+                       -agent codex writes .codex/config.toml and .codex/hooks.json
   hook                 what those hooks run: session-start | pre-tool (reads stdin)
 
 common flags:
@@ -415,6 +416,7 @@ func cmdInstall(args []string) error {
 	hooks := fs.Bool("hooks", false, "also write .claude/settings.local.json with the hooks that make Claude Code call COGO by itself")
 	project := fs.String("project", "", "project for the hooks (pack on start, support lookup)")
 	minima := fs.String("minima", "costly", "hooks: lowest action class that asks COGO before running (reversible|costly|irreversible)")
+	agente := fs.String("agent", "claude", "which agent to wire: claude|codex")
 	_ = fs.Parse(args)
 	conVault(dir)
 
@@ -423,6 +425,17 @@ func cmdInstall(args []string) error {
 		bin = "cogo"
 	}
 	vabs, _ := filepath.Abs(*dir)
+
+	switch *agente {
+	case "claude":
+	case "codex":
+		if *out == ".mcp.json" {
+			*out = filepath.Join(".codex", "config.toml")
+		}
+		return instalarCodex(*out, *name, bin, vabs, *httpURL, *token, *hooks, *project, *minima)
+	default:
+		return fmt.Errorf("-agent %q: tiene que ser claude o codex", *agente)
+	}
 
 	server := map[string]any{"command": bin, "args": []any{"serve", "-vault", vabs}}
 	mode := "stdio"

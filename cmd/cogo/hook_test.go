@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -30,7 +31,8 @@ func stdinHook(tool, comando string) *bytes.Buffer {
 }
 
 func jsonStr(s string) string {
-	return `"` + strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`) + `"`
+	b, _ := json.Marshal(s)
+	return string(b)
 }
 
 // notaVerificada es una nota que llegó a `verified`: check ejecutado por el
@@ -89,6 +91,19 @@ func TestHookDejaPasarConRespaldoVerificado(t *testing.T) {
 	code := ejecutarHook([]string{"pre-tool", "-vault", dir}, stdinHook("Bash", "rm -rf build"), &out, &errb)
 	if code != 0 {
 		t.Fatalf("esperaba 0, dio %d:\n%s", code, errb.String())
+	}
+}
+
+// Codex manda los borrados como un parche: el mismo hook lo frena igual, con
+// el mismo contrato de salida que Claude Code (código 2 y el motivo).
+func TestHookCodexFrenaUnParcheQueBorra(t *testing.T) {
+	soltarRegistro()
+	dir := t.TempDir()
+	parche := "*** Begin Patch\n*** Delete File: migraciones/001.sql\n*** End Patch\n"
+	var out, errb bytes.Buffer
+	code := ejecutarHook([]string{"pre-tool", "-vault", dir}, stdinHook("apply_patch", parche), &out, &errb)
+	if code != 2 || !strings.HasPrefix(errb.String(), "NOT AUTHORIZED") {
+		t.Fatalf("esperaba 2 con el veredicto, dio %d:\n%s", code, errb.String())
 	}
 }
 

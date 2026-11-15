@@ -351,6 +351,9 @@ cogo install --http https://tu-dominio/mcp --token TU-TOKEN --hooks --project ti
 #   ↑ además escribe .claude/settings.local.json: Claude Code corre `cogo hook`
 #     solo (pack al empezar; authorize antes de lo costoso o irreversible).
 #     Va al .local porque lleva la ruta del binario y el token.
+cogo install -agent codex --http https://tu-dominio/mcp --token TU-TOKEN --hooks --project tienda
+#   ↑ Codex: .codex/config.toml + .codex/hooks.json, sin el token.
+#     Codex lo lee de COGO_TOKEN: definila donde arrancás Codex.
 ```
 
 **Local (stdio), a mano** — sin red, cada sesión levanta su COGO:

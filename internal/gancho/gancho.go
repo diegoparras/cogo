@@ -33,8 +33,9 @@ import (
 	"github.com/diegoparras/cogo/internal/accion"
 )
 
-// Entrada es lo que Claude Code manda por stdin a un hook. Solo los campos que
-// se usan; el resto se ignora.
+// Entrada es lo que Claude Code manda por stdin a un hook. Codex manda la misma
+// forma: `tool_name` es "Bash" o "apply_patch" y `tool_input.command` trae el
+// comando o el parche. Solo los campos que se usan; el resto se ignora.
 type Entrada struct {
 	Evento    string         `json:"hook_event_name"`
 	Tool      string         `json:"tool_name"`
@@ -84,8 +85,33 @@ func Traducir(tool string, input map[string]any) (string, bool) {
 		if p := campo("notebook_path"); p != "" {
 			return "editar " + p, true
 		}
+	case "apply_patch": // Codex: toda edición es un parche
+		return traducirParche(campo("command"))
 	}
 	return "", false
+}
+
+// traducirParche lee las cabeceras de un parche de Codex y devuelve qué le hace
+// a cada archivo. El cuerpo no importa: COGO juzga la acción, no el diff.
+func traducirParche(parche string) (string, bool) {
+	verbos := []struct{ cabecera, verbo string }{
+		{"*** Update File: ", "editar "},
+		{"*** Add File: ", "escribir "},
+		{"*** Delete File: ", "borrar "},
+	}
+	var acciones []string
+	for _, linea := range strings.Split(parche, "\n") {
+		linea = strings.TrimSpace(linea)
+		for _, v := range verbos {
+			if p, ok := strings.CutPrefix(linea, v.cabecera); ok && strings.TrimSpace(p) != "" {
+				acciones = append(acciones, v.verbo+strings.TrimSpace(p))
+			}
+		}
+	}
+	if len(acciones) == 0 {
+		return "", false
+	}
+	return strings.Join(acciones, "; "), true
 }
 
 // HayQuePreguntar decide si la acción amerita consultar a COGO: solo si el

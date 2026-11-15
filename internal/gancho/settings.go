@@ -58,6 +58,19 @@ func comillas(s string) string {
 // preservando todo lo demás: otros hooks, permisos, lo que haya. Los hooks de
 // COGO previos se reemplazan, así correr install dos veces no los duplica.
 func Settings(existente []byte, c Comando) ([]byte, error) {
+	return mezclar(existente, c, "Bash|Edit|Write|MultiEdit|NotebookEdit")
+}
+
+// HooksCodex hace lo mismo para el .codex/hooks.json de Codex, que tiene la
+// misma forma que el de Claude Code. Dos diferencias: las ediciones llegan como
+// `apply_patch`, y el archivo vive en el repo sin variante local, así que el
+// token no se escribe nunca: el hook lo lee de COGO_TOKEN.
+func HooksCodex(existente []byte, c Comando) ([]byte, error) {
+	c.Token = ""
+	return mezclar(existente, c, "Bash|apply_patch")
+}
+
+func mezclar(existente []byte, c Comando, matcherPre string) ([]byte, error) {
 	root := map[string]any{}
 	if strings.TrimSpace(string(existente)) != "" {
 		if err := json.Unmarshal(existente, &root); err != nil {
@@ -91,7 +104,7 @@ func Settings(existente []byte, c Comando) ([]byte, error) {
 	poner("SessionStart", "", "session-start", 30)
 	// Y la pregunta antes de tocar algo. Solo las herramientas que cambian
 	// cosas afuera de la conversación.
-	poner("PreToolUse", "Bash|Edit|Write|MultiEdit|NotebookEdit", "pre-tool", 20)
+	poner("PreToolUse", matcherPre, "pre-tool", 20)
 
 	root["hooks"] = hooks
 	b, err := json.MarshalIndent(root, "", "  ")

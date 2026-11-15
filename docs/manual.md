@@ -176,6 +176,20 @@ hasta las ediciones.
 Si COGO no responde, el hook **falla abierto** y lo dice: un hook que bloquea
 todo cuando el servidor está caído se apaga a mano en cinco minutos.
 
+**Con Codex**, lo mismo con `-agent codex`:
+
+```bash
+cogo install -agent codex --http https://tu-cogo/mcp --token cogo_... --hooks --project tienda
+```
+
+Escribe `.codex/config.toml` con la conexión MCP y `.codex/hooks.json` con los
+mismos dos hooks. Codex manda las ediciones como un parche (`apply_patch`):
+COGO lee qué archivos toca y qué les hace, así que borrar una migración se
+juzga como un borrado. Ninguno de los dos archivos lleva el token, porque
+viven en el repo: Codex lo lee de la variable `COGO_TOKEN`, que tenés que
+definir en el entorno desde donde lo arrancás. Codex carga los hooks de un
+proyecto recién cuando confiás en él y revisás el hook.
+
 ## 6. Tu primera nota
 
 Desde el visor: **+ Nueva nota**. Desde un agente: `capture`. Lo mínimo:

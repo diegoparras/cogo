@@ -31,6 +31,20 @@ func TestTraducirHerramientas(t *testing.T) {
 	}
 }
 
+// Codex no tiene Edit ni Write: todas las ediciones son un parche. Lo que COGO
+// juzga son los archivos que el parche toca y qué les hace.
+func TestTraducirParcheDeCodex(t *testing.T) {
+	parche := "*** Begin Patch\n*** Update File: src/a.go\n@@\n-x\n+y\n" +
+		"*** Delete File: viejo.sql\n*** Add File: nuevo.go\n+package x\n*** End Patch\n"
+	got, ok := Traducir("apply_patch", map[string]any{"command": parche})
+	if want := "editar src/a.go; borrar viejo.sql; escribir nuevo.go"; !ok || got != want {
+		t.Fatalf("parche: esperaba (%q,true), dio (%q,%v)", want, got, ok)
+	}
+	if _, ok := Traducir("apply_patch", map[string]any{"command": "cualquier cosa"}); ok {
+		t.Error("un parche sin archivos reconocibles no tiene nada que juzgar")
+	}
+}
+
 // El hook es una puerta sobre lo peligroso conocido: `ls` no consulta a nadie,
 // y lo que no se reconoce tampoco. Un hook que pregunta por todo se apaga a la
 // semana.
@@ -120,6 +134,40 @@ func TestSettingsMezclaYEsIdempotente(t *testing.T) {
 	}
 	if strings.Contains(s, "-vault") {
 		t.Error("en modo remoto no va el vault")
+	}
+}
+
+// El hooks.json de Codex vive en el repo y no tiene variante local: el token no
+// se escribe nunca, aunque venga en el Comando. El hook lo lee de COGO_TOKEN.
+func TestHooksCodexSinTokenEIdempotente(t *testing.T) {
+	previo := []byte(`{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"./mio.sh"}]}]}}`)
+	c := Comando{Binario: "/usr/local/bin/cogo", URL: "https://cogo.example/mcp", Token: "cogo_secreto", Proyecto: "p", Minima: "costly"}
+	una, err := HooksCodex(previo, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dos, err := HooksCodex(una, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(una) != string(dos) {
+		t.Fatalf("no es idempotente:\n%s\n---\n%s", una, dos)
+	}
+	s := string(dos)
+	if strings.Contains(s, "cogo_secreto") || strings.Contains(s, "-token") {
+		t.Fatalf("el token no puede ir al hooks.json de Codex:\n%s", s)
+	}
+	for _, quiero := range []string{`"matcher": "Bash|apply_patch"`, "/usr/local/bin/cogo hook session-start -url https://cogo.example/mcp -project p"} {
+		if !strings.Contains(s, quiero) {
+			t.Errorf("falta %s en:\n%s", quiero, s)
+		}
+	}
+	var root map[string]any
+	if err := json.Unmarshal(dos, &root); err != nil {
+		t.Fatal(err)
+	}
+	if pre := root["hooks"].(map[string]any)["PreToolUse"].([]any); len(pre) != 2 {
+		t.Fatalf("PreToolUse tendría que tener el ajeno y el nuestro: %d", len(pre))
 	}
 }
 
