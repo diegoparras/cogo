@@ -206,6 +206,24 @@ también cuando COGO no responde. Los campos que manda Cursor al escribir y
 borrar archivos no están documentados: COGO acepta `file_path`, `path` y
 `target_file`.
 
+**Sin el binario en la máquina.** Con un COGO hosteado, `--via-mcp` escribe
+hooks que llaman directo a las tools del servidor MCP, en vez de correr
+`cogo hook`:
+
+```bash
+cogo install --http https://tu-cogo/mcp --token cogo_... --hooks --via-mcp --project tienda
+cogo install -agent codex --http https://tu-cogo/mcp --token cogo_... --hooks --via-mcp --project tienda
+```
+
+Antes de cada `Bash` o edición, el harness llama a `authorize` con los campos
+`hook_*`, y COGO decide igual que `cogo hook pre-tool` y contesta el JSON del
+hook. Después de compactar, de retomar o de limpiar la sesión, llama a
+`recall`, que re-ancla el mandato y las restricciones verdes. Al arrancar, los
+hooks de este tipo se saltean porque los servidores todavía no están
+conectados: el pack inicial lo pide el agente, como dice su `AGENTS.md`.
+Necesita Claude Code 2.1.118 o Codex 0.148 en adelante. Cursor no tiene hooks
+que llamen a una tool, así que ahí siguen los de comando.
+
 ## 6. Tu primera nota
 
 Desde el visor: **+ Nueva nota**. Desde un agente: `capture`. Lo mínimo:

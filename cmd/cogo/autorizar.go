@@ -18,6 +18,13 @@ type authorizeIn struct {
 	// Project acota la búsqueda de respaldo; FindSupport la enciende.
 	Project     string `json:"project,omitempty" jsonschema:"optional project filter for find_support"`
 	FindSupport bool   `json:"find_support,omitempty" jsonschema:"when you cite no notes, let COGO look for the notes that bear on the action and use them as support. Red notes and open questions never count"`
+	// Hook* los completa el hook del harness (Claude Code, Codex) cuando llama a
+	// la tool directo, sin el binario. Un agente no los usa.
+	Hook        string `json:"hook,omitempty" jsonschema:"only for harness hooks, never for agents: claude-code or codex. The answer is the hook's JSON instead of text"`
+	HookTool    string `json:"hook_tool,omitempty" jsonschema:"only for harness hooks: the tool about to run (Bash, Edit, Write, apply_patch...)"`
+	HookCommand string `json:"hook_command,omitempty" jsonschema:"only for harness hooks: the shell command or the patch about to run"`
+	HookPath    string `json:"hook_path,omitempty" jsonschema:"only for harness hooks: the file about to be edited"`
+	HookMinimum string `json:"hook_minimum,omitempty" jsonschema:"only for harness hooks: reversible|costly|irreversible, the lowest class that gets checked (default costly)"`
 }
 
 // fuenteVault adapta el vault a lo que necesita el autorizador. Es un mapa de

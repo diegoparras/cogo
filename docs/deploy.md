@@ -356,6 +356,9 @@ cogo install -agent codex --http https://tu-dominio/mcp --token TU-TOKEN --hooks
 #     Codex lo lee de COGO_TOKEN: definila donde arrancás Codex.
 cogo install -agent cursor --http https://tu-dominio/mcp --token TU-TOKEN --hooks --project tienda
 #   ↑ Cursor: .cursor/mcp.json con ${env:COGO_TOKEN} + .cursor/hooks.json.
+cogo install --http https://tu-dominio/mcp --token TU-TOKEN --hooks --via-mcp --project tienda
+#   ↑ sin el binario: los hooks llaman a authorize y recall del servidor.
+#     Claude Code y Codex; Cursor no tiene hooks de ese tipo.
 ```
 
 **Local (stdio), a mano** — sin red, cada sesión levanta su COGO:

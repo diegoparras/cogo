@@ -113,7 +113,8 @@ commands:
                        --hooks also writes .claude/settings.local.json so Claude Code
                        calls COGO by itself (pack on start, authorize before acting);
                        -agent codex writes .codex/config.toml and .codex/hooks.json;
-                       -agent cursor writes .cursor/mcp.json and .cursor/hooks.json
+                       -agent cursor writes .cursor/mcp.json and .cursor/hooks.json;
+                       --via-mcp makes the hooks call the server's tools, no binary
   hook                 what those hooks run: session-start | pre-tool (reads stdin);
                        -formato cursor answers in Cursor's JSON
 
@@ -418,6 +419,7 @@ func cmdInstall(args []string) error {
 	project := fs.String("project", "", "project for the hooks (pack on start, support lookup)")
 	minima := fs.String("minima", "costly", "hooks: lowest action class that asks COGO before running (reversible|costly|irreversible)")
 	agente := fs.String("agent", "claude", "which agent to wire: claude|codex|cursor")
+	viaMCP := fs.Bool("via-mcp", false, "hooks call COGO's MCP tools directly instead of the cogo binary (Claude Code ≥ 2.1.118, Codex ≥ 0.148); needs --http")
 	_ = fs.Parse(args)
 	conVault(dir)
 
@@ -427,18 +429,30 @@ func cmdInstall(args []string) error {
 	}
 	vabs, _ := filepath.Abs(*dir)
 
+	if *viaMCP {
+		if *httpURL == "" {
+			return fmt.Errorf("-via-mcp necesita -http: los hooks llaman al servidor, no al binario")
+		}
+		if *agente == "cursor" {
+			return fmt.Errorf("-via-mcp: Cursor no tiene hooks que llamen a una tool MCP; usá los de comando")
+		}
+	}
+	p := pedidoInstall{
+		Conf: *out, Nombre: *name, Bin: bin, Vault: vabs, URL: *httpURL, Token: *token,
+		Proyecto: *project, Minima: *minima, Hooks: *hooks, ViaMCP: *viaMCP,
+	}
 	switch *agente {
 	case "claude":
 	case "codex":
-		if *out == ".mcp.json" {
-			*out = filepath.Join(".codex", "config.toml")
+		if p.Conf == ".mcp.json" {
+			p.Conf = filepath.Join(".codex", "config.toml")
 		}
-		return instalarCodex(*out, *name, bin, vabs, *httpURL, *token, *hooks, *project, *minima)
+		return instalarCodex(p)
 	case "cursor":
-		if *out == ".mcp.json" {
-			*out = filepath.Join(".cursor", "mcp.json")
+		if p.Conf == ".mcp.json" {
+			p.Conf = filepath.Join(".cursor", "mcp.json")
 		}
-		return instalarCursor(*out, *name, bin, vabs, *httpURL, *token, *hooks, *project, *minima)
+		return instalarCursor(p)
 	default:
 		return fmt.Errorf("-agent %q: tiene que ser claude, codex o cursor", *agente)
 	}
@@ -469,21 +483,26 @@ func cmdInstall(args []string) error {
 	if *hooks {
 		// La ruta del binario es de esta máquina, y el token es secreto: va al
 		// .local, que Claude Code carga igual y no se commitea.
-		p := filepath.Join(filepath.Dir(*out), ".claude", "settings.local.json")
-		previo, _ := os.ReadFile(p)
-		b, err := gancho.Settings(previo, gancho.Comando{
-			Binario: bin, Vault: vabs, URL: *httpURL, Token: *token, Proyecto: *project, Minima: *minima,
-		})
+		ruta := filepath.Join(filepath.Dir(*out), ".claude", "settings.local.json")
+		previo, _ := os.ReadFile(ruta)
+		var b []byte
+		if *viaMCP {
+			b, err = gancho.SettingsMCP(previo, gancho.ViaMCP{Servidor: *name, Proyecto: *project, Minima: *minima})
+		} else {
+			b, err = gancho.Settings(previo, gancho.Comando{
+				Binario: bin, Vault: vabs, URL: *httpURL, Token: *token, Proyecto: *project, Minima: *minima,
+			})
+		}
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(ruta), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(p, b, 0o600); err != nil {
+		if err := os.WriteFile(ruta, b, 0o600); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "cogo: wrote %s — Claude Code now runs `cogo hook` by itself (pack on start; authorize before %s-or-worse actions)\n", p, *minima)
+		avisarHooks(ruta, "Claude Code", p)
 	}
 	fmt.Fprintln(os.Stderr, "  reiniciá tu agente para que tome la config.")
 	return nil

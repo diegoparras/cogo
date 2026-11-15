@@ -240,6 +240,59 @@ func TestHooksCursorSinTokenEIdempotente(t *testing.T) {
 	}
 }
 
+// Con -via-mcp los hooks llaman a la tool del servidor: no hace falta el
+// binario. Reemplazan a los de comando, y lo ajeno queda.
+func TestSettingsViaMCPReemplazaALosDeComando(t *testing.T) {
+	previo, err := Settings([]byte(`{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo fin"}]}]}}`),
+		Comando{Binario: "/usr/local/bin/cogo", URL: "https://cogo.example/mcp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := ViaMCP{Servidor: "cogo", Proyecto: "p", Minima: "costly"}
+	una, err := SettingsMCP(previo, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dos, err := SettingsMCP(una, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(una) != string(dos) {
+		t.Fatalf("no es idempotente:\n%s\n---\n%s", una, dos)
+	}
+	s := string(dos)
+	if strings.Contains(s, " hook pre-tool") || strings.Contains(s, " hook session-start") {
+		t.Errorf("quedaron hooks de comando:\n%s", s)
+	}
+	for _, quiero := range []string{`"type": "mcp_tool"`, `"server": "cogo"`, `"tool": "authorize"`, `"tool": "recall"`,
+		`"hook_command": "${tool_input.command}"`, `"hook_path": "${tool_input.file_path}"`, `"matcher": "compact|resume|clear"`, `"echo fin"`} {
+		if !strings.Contains(s, quiero) {
+			t.Errorf("falta %s en:\n%s", quiero, s)
+		}
+	}
+	// Y de vuelta: los de comando reemplazan a los de MCP.
+	tres, err := Settings(dos, Comando{Binario: "/usr/local/bin/cogo", URL: "https://cogo.example/mcp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(tres), "mcp_tool") {
+		t.Errorf("volver al binario tiene que sacar los mcp_tool:\n%s", tres)
+	}
+}
+
+func TestHooksCodexViaMCP(t *testing.T) {
+	b, err := HooksCodexMCP(nil, ViaMCP{Servidor: "cogo", Minima: "costly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, quiero := range []string{`"matcher": "Bash|apply_patch"`, `"hook": "codex"`, `"hook_tool": "${tool_name}"`, `"hook_command": "${tool_input.command}"`} {
+		if !strings.Contains(s, quiero) {
+			t.Errorf("falta %s en:\n%s", quiero, s)
+		}
+	}
+}
+
 func TestSettingsModoLocal(t *testing.T) {
 	b, err := Settings(nil, Comando{Binario: "/usr/local/bin/cogo", Vault: "/home/d/vault"})
 	if err != nil {

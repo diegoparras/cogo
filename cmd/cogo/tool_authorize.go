@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/diegoparras/cogo/internal/accion"
 	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/gancho"
 	"github.com/diegoparras/cogo/internal/motor"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -18,6 +20,9 @@ func registrarAuthorize(s *mcp.Server, d *deps) {
 		Name:        "authorize",
 		Description: "Ask whether what you know is enough for what you are about to do. Call it BEFORE any action that changes something outside your own answer — writing files, running migrations, deploying, deleting, sending, publishing. Not every action needs the same backing: explaining something from a yellow note is fine, dropping a table from the same note is not. COGO classifies the action, looks up the confidence this vault requires for that class, and checks the notes you say you are relying on. A NOT AUTHORIZED answer is not an obstacle to route around: report it to the human and let them decide. Declaring a lower class does not lower the bar — the text of the action is classified too and the stricter of the two wins. If you cite no notes, pass find_support:true and COGO will look for the notes that bear on the action itself.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in authorizeIn) (*mcp.CallToolResult, any, error) {
+		if in.Hook != "" {
+			return textResult(autorizarComoHook(ctx, d, in)), nil, nil
+		}
 		if strings.TrimSpace(in.Action) == "" {
 			return errResult(fmt.Errorf("authorize needs to know what you are about to do")), nil, nil
 		}
@@ -27,6 +32,41 @@ func registrarAuthorize(s *mcp.Server, d *deps) {
 		}
 		return textResult(texto), v, nil
 	})
+}
+
+// autorizarComoHook es authorize llamado por el hook del harness y no por el
+// agente: traduce la herramienta, aplica la clase mínima igual que `cogo hook
+// pre-tool` y contesta el JSON de PreToolUse que leen Claude Code y Codex.
+// Sin objeción contesta {}, y ante un error también: el hook falla abierto.
+func autorizarComoHook(ctx context.Context, d *deps, in authorizeIn) string {
+	const sinObjecion = "{}"
+	entrada := map[string]any{"command": in.HookCommand, "file_path": in.HookPath, "notebook_path": in.HookPath}
+	texto, ok := gancho.Traducir(in.HookTool, entrada)
+	// Un placeholder que el harness no resolvió no es una acción. Una variable
+	// de shell como ${BUILD} sí lo es, y se juzga.
+	if !ok || strings.Contains(texto, "${tool_input") || strings.Contains(texto, "${tool_name") {
+		return sinObjecion
+	}
+	min, valida := accion.Valida(in.HookMinimum)
+	if !valida {
+		min = accion.Costosa
+	}
+	clase, preguntar := gancho.HayQuePreguntar(texto, min)
+	if !preguntar {
+		return sinObjecion
+	}
+	v, veredicto, err := decidirAutorizacion(ctx, d, authorizeIn{
+		Action: texto, Class: string(clase), Project: in.Project, FindSupport: true,
+	})
+	if err != nil || v.Autoriza {
+		return sinObjecion
+	}
+	b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
+		"hookEventName":            "PreToolUse",
+		"permissionDecision":       "deny",
+		"permissionDecisionReason": veredicto,
+	}})
+	return string(b)
 }
 
 // decidirAutorizacion es la política entera de `authorize`, separada del tool
