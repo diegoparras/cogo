@@ -115,8 +115,9 @@ commands:
                        -agent codex writes .codex/config.toml and .codex/hooks.json;
                        -agent cursor writes .cursor/mcp.json and .cursor/hooks.json;
                        --via-mcp makes the hooks call the server's tools, no binary
-  hook                 what those hooks run: session-start | pre-tool (reads stdin);
-                       -formato cursor answers in Cursor's JSON
+  hook                 what those hooks run: session-start | pre-tool | post-tool (reads stdin);
+                       what COGO does not authorize goes to the person where the harness
+                       can ask (-decide cogo always blocks); -formato codex|cursor
 
 common flags:
   -vault <dir>         vault directory (default $COGO_VAULT or ./vault)
@@ -420,6 +421,7 @@ func cmdInstall(args []string) error {
 	minima := fs.String("minima", "costly", "hooks: lowest action class that asks COGO before running (reversible|costly|irreversible)")
 	agente := fs.String("agent", "claude", "which agent to wire: claude|codex|cursor")
 	viaMCP := fs.Bool("via-mcp", false, "hooks call COGO's MCP tools directly instead of the cogo binary (Claude Code ≥ 2.1.118, Codex ≥ 0.148); needs --http")
+	sinPreguntar := fs.Bool("sin-preguntar", false, "hooks always block what COGO does not authorize, instead of letting the person decide (for unattended runs)")
 	_ = fs.Parse(args)
 	conVault(dir)
 
@@ -440,6 +442,9 @@ func cmdInstall(args []string) error {
 	p := pedidoInstall{
 		Conf: *out, Nombre: *name, Bin: bin, Vault: vabs, URL: *httpURL, Token: *token,
 		Proyecto: *project, Minima: *minima, Hooks: *hooks, ViaMCP: *viaMCP,
+	}
+	if *sinPreguntar {
+		p.Decide = "cogo"
 	}
 	switch *agente {
 	case "claude":
@@ -487,11 +492,9 @@ func cmdInstall(args []string) error {
 		previo, _ := os.ReadFile(ruta)
 		var b []byte
 		if *viaMCP {
-			b, err = gancho.SettingsMCP(previo, gancho.ViaMCP{Servidor: *name, Proyecto: *project, Minima: *minima})
+			b, err = gancho.SettingsMCP(previo, p.viaMCP())
 		} else {
-			b, err = gancho.Settings(previo, gancho.Comando{
-				Binario: bin, Vault: vabs, URL: *httpURL, Token: *token, Proyecto: *project, Minima: *minima,
-			})
+			b, err = gancho.Settings(previo, p.comando())
 		}
 		if err != nil {
 			return err

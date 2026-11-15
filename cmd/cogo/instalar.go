@@ -37,15 +37,16 @@ func mezclarMcpServers(ruta, nombre string, server map[string]any) error {
 // pedidoInstall es lo que `cogo install` decidió, para cualquier agente.
 type pedidoInstall struct {
 	Conf, Nombre, Bin, Vault, URL, Token, Proyecto, Minima string
+	Decide                                                 string // "cogo" con -sin-preguntar
 	Hooks, ViaMCP                                          bool
 }
 
 func (p pedidoInstall) comando() gancho.Comando {
-	return gancho.Comando{Binario: p.Bin, Vault: p.Vault, URL: p.URL, Token: p.Token, Proyecto: p.Proyecto, Minima: p.Minima}
+	return gancho.Comando{Binario: p.Bin, Vault: p.Vault, URL: p.URL, Token: p.Token, Proyecto: p.Proyecto, Minima: p.Minima, Decide: p.Decide}
 }
 
 func (p pedidoInstall) viaMCP() gancho.ViaMCP {
-	return gancho.ViaMCP{Servidor: p.Nombre, Proyecto: p.Proyecto, Minima: p.Minima}
+	return gancho.ViaMCP{Servidor: p.Nombre, Proyecto: p.Proyecto, Minima: p.Minima, Decide: p.Decide}
 }
 
 // avisarHooks dice qué quedó escrito y qué hace.

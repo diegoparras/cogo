@@ -21,7 +21,8 @@ type Comando struct {
 	Token    string
 	Proyecto string
 	Minima   string // clase mínima que dispara la consulta
-	Formato  string // cómo contestarle al harness: vacío para Claude Code y Codex, "cursor"
+	Formato  string // quién llama: vacío para Claude Code, "codex" o "cursor"
+	Decide   string // "cogo" frena siempre; vacío deja que decida el humano
 }
 
 // marcaCogo es lo que identifica a nuestros hooks dentro del archivo, para
@@ -45,6 +46,9 @@ func (c Comando) linea(sub string) string {
 	if c.Minima != "" && sub == "pre-tool" {
 		fmt.Fprintf(&b, " -minima %s", c.Minima)
 	}
+	if c.Decide != "" && sub == "pre-tool" {
+		fmt.Fprintf(&b, " -decide %s", c.Decide)
+	}
 	if c.Formato != "" {
 		fmt.Fprintf(&b, " -formato %s", c.Formato)
 	}
@@ -62,16 +66,20 @@ func comillas(s string) string {
 // preservando todo lo demás: otros hooks, permisos, lo que haya. Los hooks de
 // COGO previos se reemplazan, así correr install dos veces no los duplica.
 func Settings(existente []byte, c Comando) ([]byte, error) {
-	return mezclar(existente, c, "Bash|Edit|Write|MultiEdit|NotebookEdit")
+	return mezclar(existente, c, matcherClaude, true)
 }
 
+const matcherClaude = "Bash|Edit|Write|MultiEdit|NotebookEdit"
+
 // HooksCodex hace lo mismo para el .codex/hooks.json de Codex, que tiene la
-// misma forma que el de Claude Code. Dos diferencias: las ediciones llegan como
-// `apply_patch`, y el archivo vive en el repo sin variante local, así que el
-// token no se escribe nunca: el hook lo lee de COGO_TOKEN.
+// misma forma que el de Claude Code. Las diferencias: las ediciones llegan como
+// `apply_patch`; Codex no sabe preguntar, así que no hace falta el PostToolUse;
+// y el archivo vive en el repo sin variante local, así que el token no se
+// escribe nunca: el hook lo lee de COGO_TOKEN.
 func HooksCodex(existente []byte, c Comando) ([]byte, error) {
 	c.Token = ""
-	return mezclar(existente, c, "Bash|apply_patch")
+	c.Formato = "codex"
+	return mezclar(existente, c, "Bash|apply_patch", false)
 }
 
 // HooksCursor mezcla los hooks de COGO en el .cursor/hooks.json de Cursor, que
@@ -134,6 +142,7 @@ type ViaMCP struct {
 	Servidor string // el nombre del servidor MCP en la config del harness
 	Proyecto string
 	Minima   string
+	Decide   string // "cogo" frena siempre; vacío deja que decida el humano
 }
 
 const matcherReanclar = "compact|resume|clear"
@@ -142,7 +151,7 @@ const matcherReanclar = "compact|resume|clear"
 // que es el contrato que ven los agentes; el hook lo manda con el mismo texto
 // que juzga, aunque en modo hook COGO decide desde los campos hook_*.
 func (v ViaMCP) authorize(harness, tool, action string, campos map[string]any) map[string]any {
-	input := map[string]any{"hook": harness, "hook_tool": tool, "action": action}
+	input := map[string]any{"hook": harness, "hook_tool": tool, "action": action, "hook_tool_use_id": "${tool_use_id}"}
 	for k, val := range campos {
 		input[k] = val
 	}
@@ -152,7 +161,19 @@ func (v ViaMCP) authorize(harness, tool, action string, campos map[string]any) m
 	if v.Minima != "" {
 		input["hook_minimum"] = v.Minima
 	}
+	if v.Decide != "" {
+		input["hook_decide"] = v.Decide
+	}
 	return map[string]any{"type": "mcp_tool", "server": v.Servidor, "tool": "authorize", "input": input, "timeout": 20}
+}
+
+// aprobada le avisa a COGO que una llamada corrió: si había preguntado por
+// ella, el humano la aprobó.
+func (v ViaMCP) aprobada() map[string]any {
+	return map[string]any{"type": "mcp_tool", "server": v.Servidor, "tool": "authorize", "timeout": 10, "input": map[string]any{
+		"hook": "claude-code", "hook_event": "PostToolUse", "hook_tool": "${tool_name}",
+		"hook_tool_use_id": "${tool_use_id}", "action": "${tool_name}",
+	}}
 }
 
 func (v ViaMCP) recall() map[string]any {
@@ -177,6 +198,7 @@ func SettingsMCP(existente []byte, v ViaMCP) ([]byte, error) {
 			entrada("NotebookEdit", v.authorize("claude-code", "NotebookEdit", "NotebookEdit ${tool_input.notebook_path}",
 				map[string]any{"hook_path": "${tool_input.notebook_path}"})),
 		},
+		"PostToolUse": {entrada(matcherClaude, v.aprobada())},
 	})
 }
 
@@ -192,17 +214,23 @@ func HooksCodexMCP(existente []byte, v ViaMCP) ([]byte, error) {
 	})
 }
 
-func mezclar(existente []byte, c Comando, matcherPre string) ([]byte, error) {
+func mezclar(existente []byte, c Comando, matcherPre string, conPost bool) ([]byte, error) {
 	comando := func(sub string, timeout int) map[string]any {
 		return map[string]any{"type": "command", "command": c.linea(sub), "timeout": timeout}
 	}
-	return mezclarEntradas(existente, map[string][]any{
+	nuestras := map[string][]any{
 		// El pack al empezar: entra como contexto sin que nadie lo pida.
 		"SessionStart": {entrada("", comando("session-start", 30))},
 		// Y la pregunta antes de tocar algo. Solo las herramientas que cambian
 		// cosas afuera de la conversación.
 		"PreToolUse": {entrada(matcherPre, comando("pre-tool", 20))},
-	})
+	}
+	if conPost {
+		// Y después: si COGO había preguntado y la herramienta corrió, el humano
+		// la aprobó. Sin pregunta previa, el hook no hace nada.
+		nuestras["PostToolUse"] = []any{entrada(matcherPre, comando("post-tool", 10))}
+	}
+	return mezclarEntradas(existente, nuestras)
 }
 
 func entrada(matcher string, handler map[string]any) any {
@@ -215,7 +243,7 @@ func entrada(matcher string, handler map[string]any) any {
 
 // eventosCogo son los eventos donde COGO escribe hooks, en cualquier modo. Al
 // mezclar se limpian todos, así pasar de comando a MCP no deja restos.
-var eventosCogo = []string{"SessionStart", "PreToolUse"}
+var eventosCogo = []string{"SessionStart", "PreToolUse", "PostToolUse"}
 
 func mezclarEntradas(existente []byte, nuestras map[string][]any) ([]byte, error) {
 	root := map[string]any{}

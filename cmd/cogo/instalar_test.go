@@ -97,6 +97,22 @@ func TestInstallCursorEscribeMcpYHooksSinToken(t *testing.T) {
 	}
 }
 
+// -sin-preguntar vuelve al bloqueo duro: para corridas sin nadie mirando.
+func TestInstallSinPreguntar(t *testing.T) {
+	raiz := t.TempDir()
+	conf := filepath.Join(raiz, ".mcp.json")
+	if err := cmdInstall([]string{"-vault", filepath.Join(raiz, "vault"), "-o", conf, "-hooks", "-sin-preguntar"}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(raiz, ".claude", "settings.local.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "-decide cogo") {
+		t.Errorf("falta -decide cogo:\n%s", b)
+	}
+}
+
 // `cogo install -agent codex -hooks` deja los dos archivos de Codex en .codex/.
 func TestInstallCodexEscribeConfigYHooks(t *testing.T) {
 	raiz := t.TempDir()

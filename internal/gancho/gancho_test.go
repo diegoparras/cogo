@@ -293,6 +293,40 @@ func TestHooksCodexViaMCP(t *testing.T) {
 	}
 }
 
+// Para saber que el humano aprobó, Claude Code necesita el PostToolUse; con
+// Decide "cogo" el pre-tool frena siempre.
+func TestSettingsAsientaLaAprobacionYRespetaDecide(t *testing.T) {
+	b, err := Settings(nil, Comando{Binario: "/usr/local/bin/cogo", Vault: "/v", Decide: "cogo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, quiero := range []string{`"PostToolUse"`, "/usr/local/bin/cogo hook post-tool -vault /v", "hook pre-tool -vault /v -decide cogo"} {
+		if !strings.Contains(s, quiero) {
+			t.Errorf("falta %s en:\n%s", quiero, s)
+		}
+	}
+	if strings.Contains(s, "post-tool -vault /v -decide") {
+		t.Errorf("-decide es del pre-tool:\n%s", s)
+	}
+	m, err := SettingsMCP(nil, ViaMCP{Servidor: "cogo", Decide: "cogo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, quiero := range []string{`"hook_tool_use_id": "${tool_use_id}"`, `"hook_event": "PostToolUse"`, `"hook_decide": "cogo"`} {
+		if !strings.Contains(string(m), quiero) {
+			t.Errorf("falta %s en:\n%s", quiero, m)
+		}
+	}
+	c, err := HooksCodex(nil, Comando{Binario: "/usr/local/bin/cogo", Vault: "/v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(c), "-formato codex") {
+		t.Errorf("los hooks de Codex dicen quién llama, falta -formato codex:\n%s", c)
+	}
+}
+
 func TestSettingsModoLocal(t *testing.T) {
 	b, err := Settings(nil, Comando{Binario: "/usr/local/bin/cogo", Vault: "/home/d/vault"})
 	if err != nil {

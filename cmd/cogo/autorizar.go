@@ -20,7 +20,10 @@ type authorizeIn struct {
 	FindSupport bool   `json:"find_support,omitempty" jsonschema:"when you cite no notes, let COGO look for the notes that bear on the action and use them as support. Red notes and open questions never count"`
 	// Hook* los completa el hook del harness (Claude Code, Codex) cuando llama a
 	// la tool directo, sin el binario. Un agente no los usa.
-	Hook        string `json:"hook,omitempty" jsonschema:"only for harness hooks, never for agents: claude-code or codex. The answer is the hook's JSON instead of text"`
+	Hook        string `json:"hook,omitempty" jsonschema:"only for harness hooks, never for agents: claude-code, codex or cursor. The answer is the hook's JSON instead of text"`
+	HookEvent   string `json:"hook_event,omitempty" jsonschema:"only for harness hooks: PreToolUse (default) or PostToolUse, which tells COGO that a call it asked about did run"`
+	HookUseID   string `json:"hook_tool_use_id,omitempty" jsonschema:"only for harness hooks: the harness's id for this tool call, to match PreToolUse with PostToolUse"`
+	HookDecide  string `json:"hook_decide,omitempty" jsonschema:"only for harness hooks: human (default) asks the person when COGO does not authorize and the harness can ask; cogo always blocks"`
 	HookTool    string `json:"hook_tool,omitempty" jsonschema:"only for harness hooks: the tool about to run (Bash, Edit, Write, apply_patch...)"`
 	HookCommand string `json:"hook_command,omitempty" jsonschema:"only for harness hooks: the shell command or the patch about to run"`
 	HookPath    string `json:"hook_path,omitempty" jsonschema:"only for harness hooks: the file about to be edited"`

@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/diegoparras/cogo/internal/accion"
+	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/decision"
 	"github.com/diegoparras/cogo/internal/gancho"
 	"github.com/diegoparras/cogo/internal/motor"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -35,17 +39,52 @@ func registrarAuthorize(s *mcp.Server, d *deps) {
 }
 
 // autorizarComoHook es authorize llamado por el hook del harness y no por el
-// agente: traduce la herramienta, aplica la clase mínima igual que `cogo hook
-// pre-tool` y contesta el JSON de PreToolUse que leen Claude Code y Codex.
-// Sin objeción contesta {}, y ante un error también: el hook falla abierto.
+// agente. Contesta el JSON de PreToolUse que leen Claude Code y Codex; el
+// hook de Cursor lo traduce al suyo.
 func autorizarComoHook(ctx context.Context, d *deps, in authorizeIn) string {
-	const sinObjecion = "{}"
+	return decidirHook(ctx, d, in).json()
+}
+
+// respuestaHook es lo que COGO le contesta a un hook: nada, frenar o preguntar.
+type respuestaHook struct {
+	Decision string // "" sin objeción, "deny" o "ask"
+	Motivo   string
+	Recibo   string
+}
+
+func (r respuestaHook) json() string {
+	if r.Decision == "" {
+		return "{}"
+	}
+	b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
+		"hookEventName":            "PreToolUse",
+		"permissionDecision":       r.Decision,
+		"permissionDecisionReason": r.Motivo,
+	}})
+	return string(b)
+}
+
+// decidirHook traduce la herramienta, aplica la clase mínima igual que `cogo
+// hook pre-tool` y decide. Cuando COGO no autoriza y el harness sabe
+// preguntar, la decisión pasa al humano y queda pendiente hasta que el
+// PostToolUse confirme que se ejecutó. Sin objeción, y ante cualquier error,
+// no dice nada: el hook falla abierto.
+func decidirHook(ctx context.Context, d *deps, in authorizeIn) respuestaHook {
+	decisiones := decision.Abrir(d.dir)
+	ahora := time.Now().UTC()
+	if in.HookEvent == "PostToolUse" {
+		// Si llegó acá, la herramienta corrió: el humano la aprobó.
+		if r, ok := decisiones.PorToolUse(in.HookUseID); ok {
+			_ = decisiones.Resolver(r, decision.Aprobada, auth.CallerCtx(ctx), ahora)
+		}
+		return respuestaHook{}
+	}
 	entrada := map[string]any{"command": in.HookCommand, "file_path": in.HookPath, "notebook_path": in.HookPath}
 	texto, ok := gancho.Traducir(in.HookTool, entrada)
 	// Un placeholder que el harness no resolvió no es una acción. Una variable
 	// de shell como ${BUILD} sí lo es, y se juzga.
 	if !ok || strings.Contains(texto, "${tool_input") || strings.Contains(texto, "${tool_name") {
-		return sinObjecion
+		return respuestaHook{}
 	}
 	min, valida := accion.Valida(in.HookMinimum)
 	if !valida {
@@ -53,20 +92,62 @@ func autorizarComoHook(ctx context.Context, d *deps, in authorizeIn) string {
 	}
 	clase, preguntar := gancho.HayQuePreguntar(texto, min)
 	if !preguntar {
-		return sinObjecion
+		return respuestaHook{}
 	}
 	v, veredicto, err := decidirAutorizacion(ctx, d, authorizeIn{
 		Action: texto, Class: string(clase), Project: in.Project, FindSupport: true,
 	})
 	if err != nil || v.Autoriza {
-		return sinObjecion
+		return respuestaHook{}
 	}
-	b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
-		"hookEventName":            "PreToolUse",
-		"permissionDecision":       "deny",
-		"permissionDecisionReason": veredicto,
-	}})
-	return string(b)
+	recibo := reciboDe(veredicto)
+	if !puedePreguntar(in) {
+		return respuestaHook{Decision: "deny", Motivo: veredicto, Recibo: recibo}
+	}
+	if recibo != "" {
+		_ = decisiones.Pedir(decision.Pedido{Recibo: recibo, ToolUseID: in.HookUseID, Accion: texto, Via: decision.ViaHook, Cuando: ahora})
+	}
+	return respuestaHook{Decision: "ask", Motivo: motivoParaElHumano(v.Porque, recibo), Recibo: recibo}
+}
+
+// puedePreguntar dice si el harness sabe pedirle permiso al humano. Codex no
+// tiene `ask`: un hook que lo contesta se marca como fallido y la acción
+// sigue, así que ahí COGO frena. Cursor lo respeta en los comandos de shell,
+// no en las ediciones.
+func puedePreguntar(in authorizeIn) bool {
+	if in.HookDecide == "cogo" {
+		return false
+	}
+	switch in.Hook {
+	case "claude-code":
+		return true
+	case "cursor":
+		return in.HookTool == "Bash" || in.HookTool == "Shell"
+	}
+	return false
+}
+
+// motivoParaElHumano es lo que se lee en el diálogo de permiso.
+func motivoParaElHumano(porque, recibo string) string {
+	porque = strings.TrimSpace(porque)
+	if resto, ok := strings.CutPrefix(porque, "COGO "); ok {
+		porque = resto // "COGO no lo autoriza: no encontró…", no "…: COGO no encontró…"
+	}
+	m := "COGO no lo autoriza: " + porque
+	if recibo != "" {
+		m += " Recibo " + recibo + "."
+	}
+	return m + " Si lo aprobás, queda asentado que lo decidiste vos."
+}
+
+var patronRecibo = regexp.MustCompile(`receipt: (r-\d{8}-\d{6}-[0-9a-f]{6})`)
+
+// reciboDe saca el id del recibo del texto del veredicto.
+func reciboDe(veredicto string) string {
+	if m := patronRecibo.FindStringSubmatch(veredicto); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 // decidirAutorizacion es la política entera de `authorize`, separada del tool

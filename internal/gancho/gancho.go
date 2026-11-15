@@ -45,6 +45,38 @@ type Entrada struct {
 	ToolInput map[string]any `json:"tool_input"`
 	Cwd       string         `json:"cwd"`
 	Command   string         `json:"command"` // Cursor, beforeShellExecution
+	// ToolUseID cruza el PreToolUse con el PostToolUse de la misma llamada.
+	ToolUseID string `json:"tool_use_id"`
+	// TurnID solo lo manda Codex y CursorVersion solo Cursor: alcanzan para
+	// reconocer al harness aunque el hook se haya instalado sin -formato.
+	TurnID        string `json:"turn_id"`
+	CursorVersion string `json:"cursor_version"`
+}
+
+// Harness reconoce quién mandó la entrada: "codex", "cursor" o "claude-code".
+func (e Entrada) Harness() string {
+	switch {
+	case e.CursorVersion != "":
+		return "cursor"
+	case e.TurnID != "":
+		return "codex"
+	}
+	return "claude-code"
+}
+
+// Campos saca de tool_input lo que COGO juzga: el comando y la ruta.
+func (e Entrada) Campos() (comando, ruta string) {
+	str := func(k string) string {
+		v, _ := e.ToolInput[k].(string)
+		return strings.TrimSpace(v)
+	}
+	comando = str("command")
+	for _, k := range []string{"file_path", "path", "target_file", "notebook_path"} {
+		if ruta = str(k); ruta != "" {
+			break
+		}
+	}
+	return comando, ruta
 }
 
 // Leer parsea la entrada del hook. Un stdin vacío no es un error: es un hook

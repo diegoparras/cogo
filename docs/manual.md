@@ -168,10 +168,19 @@ cada `Bash`, `Edit` o `Write`, `cogo hook pre-tool` mira qué está por correr.
 Si el texto delata una acción **costosa o irreversible** (`rm -rf`, `drop
 table`, `terraform apply`, `git push --force`…), le pide a COGO que la
 autorice con `find_support: true` — COGO busca solo las notas que hablan de
-eso — y si no alcanza, sale con código 2 y el veredicto es lo que el modelo
-lee. Un `ls` no consulta a nadie: el hook es una puerta sobre lo peligroso
+eso. Un `ls` no consulta a nadie: el hook es una puerta sobre lo peligroso
 conocido, no un juez de lo desconocido. `--minima reversible` baja la vara
 hasta las ediciones.
+
+**Si no alcanza, decidís vos.** COGO no frena a ciegas: Claude Code te muestra
+el diálogo de permiso con el motivo y el número de recibo, y lo aprobás o lo
+rechazás ahí. Cada pregunta queda en `.cogo/decisiones.jsonl`, atada a su
+recibo, como `pendiente`. Si la herramienta corre, el hook `post-tool` la ve
+pasar con el mismo id y la decisión queda `aprobada`, con quién la aprobó.
+Un rechazo no dispara ningún hook, así que lo que no se aprobó en media hora
+queda `vencida`; ninguna vencida o rechazada vuelve a aprobada. En una corrida
+sin nadie mirando, `--sin-preguntar` vuelve al bloqueo duro: el hook sale con
+código 2 y el veredicto es lo que lee el modelo.
 
 Si COGO no responde, el hook **falla abierto** y lo dice: un hook que bloquea
 todo cuando el servidor está caído se apaga a mano en cinco minutos.
@@ -188,7 +197,9 @@ COGO lee qué archivos toca y qué les hace, así que borrar una migración se
 juzga como un borrado. Ninguno de los dos archivos lleva el token, porque
 viven en el repo: Codex lo lee de la variable `COGO_TOKEN`, que tenés que
 definir en el entorno desde donde lo arrancás. Codex carga los hooks de un
-proyecto recién cuando confiás en él y revisás el hook.
+proyecto recién cuando confiás en él y revisás el hook. Codex no sabe
+preguntar: un hook que le contesta `ask` se marca como fallido y la acción
+sigue. Por eso ahí COGO frena lo que no autoriza.
 
 **Con Cursor**, con `-agent cursor`:
 
@@ -201,8 +212,11 @@ Escribe `.cursor/mcp.json`, que pide el token como `${env:COGO_TOKEN}`, y
 `beforeShellExecution` mira los comandos y `preToolUse` mira las escrituras y
 los borrados de archivos. Cursor no lee códigos de salida sino un JSON, y
 bloquea la acción si un hook de permiso no lo contesta bien, así que estos
-hooks corren con `-formato cursor` y contestan siempre `allow` o `deny`,
-también cuando COGO no responde. Los campos que manda Cursor al escribir y
+hooks corren con `-formato cursor` y contestan siempre un JSON, también
+cuando COGO no responde. En los comandos de shell, lo que COGO no autoriza te
+lo pregunta; en las ediciones frena, porque Cursor todavía no respeta la
+pregunta ahí. Cursor no manda un id que cruzar con lo que se ejecutó, así que
+sus preguntas quedan pendientes hasta vencer. Los campos que manda Cursor al escribir y
 borrar archivos no están documentados: COGO acepta `file_path`, `path` y
 `target_file`.
 
@@ -217,7 +231,8 @@ cogo install -agent codex --http https://tu-cogo/mcp --token cogo_... --hooks --
 
 Antes de cada `Bash` o edición, el harness llama a `authorize` con los campos
 `hook_*`, y COGO decide igual que `cogo hook pre-tool` y contesta el JSON del
-hook. Después de compactar, de retomar o de limpiar la sesión, llama a
+hook. En Claude Code, después de cada una también le avisa a COGO que corrió,
+para asentar lo que aprobaste: es un pedido al servidor por herramienta. Después de compactar, de retomar o de limpiar la sesión, llama a
 `recall`, que re-ancla el mandato y las restricciones verdes. Al arrancar, los
 hooks de este tipo se saltean porque los servidores todavía no están
 conectados: el pack inicial lo pide el agente, como dice su `AGENTS.md`.
