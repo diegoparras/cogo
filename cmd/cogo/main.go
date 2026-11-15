@@ -3,7 +3,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -113,8 +112,10 @@ commands:
   install              wire COGO into an agent's .mcp.json (stdio by default, or --http);
                        --hooks also writes .claude/settings.local.json so Claude Code
                        calls COGO by itself (pack on start, authorize before acting);
-                       -agent codex writes .codex/config.toml and .codex/hooks.json
-  hook                 what those hooks run: session-start | pre-tool (reads stdin)
+                       -agent codex writes .codex/config.toml and .codex/hooks.json;
+                       -agent cursor writes .cursor/mcp.json and .cursor/hooks.json
+  hook                 what those hooks run: session-start | pre-tool (reads stdin);
+                       -formato cursor answers in Cursor's JSON
 
 common flags:
   -vault <dir>         vault directory (default $COGO_VAULT or ./vault)
@@ -416,7 +417,7 @@ func cmdInstall(args []string) error {
 	hooks := fs.Bool("hooks", false, "also write .claude/settings.local.json with the hooks that make Claude Code call COGO by itself")
 	project := fs.String("project", "", "project for the hooks (pack on start, support lookup)")
 	minima := fs.String("minima", "costly", "hooks: lowest action class that asks COGO before running (reversible|costly|irreversible)")
-	agente := fs.String("agent", "claude", "which agent to wire: claude|codex")
+	agente := fs.String("agent", "claude", "which agent to wire: claude|codex|cursor")
 	_ = fs.Parse(args)
 	conVault(dir)
 
@@ -433,8 +434,13 @@ func cmdInstall(args []string) error {
 			*out = filepath.Join(".codex", "config.toml")
 		}
 		return instalarCodex(*out, *name, bin, vabs, *httpURL, *token, *hooks, *project, *minima)
+	case "cursor":
+		if *out == ".mcp.json" {
+			*out = filepath.Join(".cursor", "mcp.json")
+		}
+		return instalarCursor(*out, *name, bin, vabs, *httpURL, *token, *hooks, *project, *minima)
 	default:
-		return fmt.Errorf("-agent %q: tiene que ser claude o codex", *agente)
+		return fmt.Errorf("-agent %q: tiene que ser claude, codex o cursor", *agente)
 	}
 
 	server := map[string]any{"command": bin, "args": []any{"serve", "-vault", vabs}}
@@ -447,23 +453,7 @@ func cmdInstall(args []string) error {
 		}
 	}
 
-	// Merge into an existing .mcp.json, preserving any other servers.
-	root := map[string]any{}
-	if b, err := os.ReadFile(*out); err == nil {
-		_ = json.Unmarshal(b, &root)
-	}
-	servers, _ := root["mcpServers"].(map[string]any)
-	if servers == nil {
-		servers = map[string]any{}
-	}
-	servers[*name] = server
-	root["mcpServers"] = servers
-
-	b, err := json.MarshalIndent(root, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(*out, append(b, '\n'), 0o644); err != nil {
+	if err := mezclarMcpServers(*out, *name, server); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "cogo: wired %q → mcpServers.%s (%s)\n", *out, *name, mode)

@@ -21,6 +21,7 @@ type Comando struct {
 	Token    string
 	Proyecto string
 	Minima   string // clase mínima que dispara la consulta
+	Formato  string // cómo contestarle al harness: vacío para Claude Code y Codex, "cursor"
 }
 
 // marcaCogo es lo que identifica a nuestros hooks dentro del archivo, para
@@ -43,6 +44,9 @@ func (c Comando) linea(sub string) string {
 	}
 	if c.Minima != "" && sub == "pre-tool" {
 		fmt.Fprintf(&b, " -minima %s", c.Minima)
+	}
+	if c.Formato != "" {
+		fmt.Fprintf(&b, " -formato %s", c.Formato)
 	}
 	return b.String()
 }
@@ -68,6 +72,54 @@ func Settings(existente []byte, c Comando) ([]byte, error) {
 func HooksCodex(existente []byte, c Comando) ([]byte, error) {
 	c.Token = ""
 	return mezclar(existente, c, "Bash|apply_patch")
+}
+
+// HooksCursor mezcla los hooks de COGO en el .cursor/hooks.json de Cursor, que
+// tiene otra forma: un `version` y, por evento, una lista de comandos sueltos.
+// Los comandos de shell llegan por beforeShellExecution y las ediciones y los
+// borrados por preToolUse, como Write y Delete. El hook contesta en el formato
+// de Cursor, y el token tampoco se escribe: se lee de COGO_TOKEN.
+func HooksCursor(existente []byte, c Comando) ([]byte, error) {
+	c.Token = ""
+	c.Formato = "cursor"
+	root := map[string]any{}
+	if strings.TrimSpace(string(existente)) != "" {
+		if err := json.Unmarshal(existente, &root); err != nil {
+			return nil, fmt.Errorf("hooks.json existente: %w", err)
+		}
+	}
+	if _, ok := root["version"]; !ok {
+		root["version"] = 1
+	}
+	hooks, _ := root["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+	}
+	poner := func(evento, matcher, sub string, timeout int) {
+		lista, _ := hooks[evento].([]any)
+		var limpia []any
+		for _, it := range lista {
+			m, _ := it.(map[string]any)
+			if !esComandoCogo(m["command"]) {
+				limpia = append(limpia, it)
+			}
+		}
+		entrada := map[string]any{"command": c.linea(sub), "timeout": timeout}
+		if matcher != "" {
+			entrada["matcher"] = matcher
+		}
+		hooks[evento] = append(limpia, entrada)
+	}
+	poner("sessionStart", "", "session-start", 30)
+	poner("beforeShellExecution", "", "pre-tool", 20)
+	poner("preToolUse", "Write|Delete", "pre-tool", 20)
+
+	root["hooks"] = hooks
+	b, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(b, '\n'), nil
 }
 
 func mezclar(existente []byte, c Comando, matcherPre string) ([]byte, error) {
@@ -124,10 +176,15 @@ func esNuestro(it any) bool {
 	lista, _ := m["hooks"].([]any)
 	for _, h := range lista {
 		hm, _ := h.(map[string]any)
-		cmd, _ := hm["command"].(string)
-		if strings.Contains(cmd, marcaCogo) && strings.Contains(strings.ToLower(cmd), "cogo") {
+		if esComandoCogo(hm["command"]) {
 			return true
 		}
 	}
 	return false
+}
+
+// esComandoCogo reconoce un comando de hook que invoca `cogo hook`.
+func esComandoCogo(v any) bool {
+	cmd, _ := v.(string)
+	return strings.Contains(cmd, marcaCogo) && strings.Contains(strings.ToLower(cmd), "cogo")
 }

@@ -354,6 +354,8 @@ cogo install --http https://tu-dominio/mcp --token TU-TOKEN --hooks --project ti
 cogo install -agent codex --http https://tu-dominio/mcp --token TU-TOKEN --hooks --project tienda
 #   ↑ Codex: .codex/config.toml + .codex/hooks.json, sin el token.
 #     Codex lo lee de COGO_TOKEN: definila donde arrancás Codex.
+cogo install -agent cursor --http https://tu-dominio/mcp --token TU-TOKEN --hooks --project tienda
+#   ↑ Cursor: .cursor/mcp.json con ${env:COGO_TOKEN} + .cursor/hooks.json.
 ```
 
 **Local (stdio), a mano** — sin red, cada sesión levanta su COGO:

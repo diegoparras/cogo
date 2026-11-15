@@ -190,6 +190,22 @@ viven en el repo: Codex lo lee de la variable `COGO_TOKEN`, que tenés que
 definir en el entorno desde donde lo arrancás. Codex carga los hooks de un
 proyecto recién cuando confiás en él y revisás el hook.
 
+**Con Cursor**, con `-agent cursor`:
+
+```bash
+cogo install -agent cursor --http https://tu-cogo/mcp --token cogo_... --hooks --project tienda
+```
+
+Escribe `.cursor/mcp.json`, que pide el token como `${env:COGO_TOKEN}`, y
+`.cursor/hooks.json` con tres hooks: `sessionStart` mete el pack,
+`beforeShellExecution` mira los comandos y `preToolUse` mira las escrituras y
+los borrados de archivos. Cursor no lee códigos de salida sino un JSON, y
+bloquea la acción si un hook de permiso no lo contesta bien, así que estos
+hooks corren con `-formato cursor` y contestan siempre `allow` o `deny`,
+también cuando COGO no responde. Los campos que manda Cursor al escribir y
+borrar archivos no están documentados: COGO acepta `file_path`, `path` y
+`target_file`.
+
 ## 6. Tu primera nota
 
 Desde el visor: **+ Nueva nota**. Desde un agente: `capture`. Lo mínimo:

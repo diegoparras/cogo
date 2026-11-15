@@ -36,11 +36,15 @@ import (
 // Entrada es lo que Claude Code manda por stdin a un hook. Codex manda la misma
 // forma: `tool_name` es "Bash" o "apply_patch" y `tool_input.command` trae el
 // comando o el parche. Solo los campos que se usan; el resto se ignora.
+//
+// Cursor es distinto en un caso: su beforeShellExecution no trae tool_name y
+// manda el comando arriba de todo. Leer lo normaliza a un Bash.
 type Entrada struct {
 	Evento    string         `json:"hook_event_name"`
 	Tool      string         `json:"tool_name"`
 	ToolInput map[string]any `json:"tool_input"`
 	Cwd       string         `json:"cwd"`
+	Command   string         `json:"command"` // Cursor, beforeShellExecution
 }
 
 // Leer parsea la entrada del hook. Un stdin vacío no es un error: es un hook
@@ -57,6 +61,9 @@ func Leer(r io.Reader) (Entrada, error) {
 	if err := json.Unmarshal(b, &e); err != nil {
 		return Entrada{}, fmt.Errorf("entrada del hook: %w", err)
 	}
+	if e.Tool == "" && strings.TrimSpace(e.Command) != "" {
+		e.Tool, e.ToolInput = "Bash", map[string]any{"command": e.Command}
+	}
 	return e, nil
 }
 
@@ -68,17 +75,31 @@ func Traducir(tool string, input map[string]any) (string, bool) {
 		v, _ := input[k].(string)
 		return strings.TrimSpace(v)
 	}
+	// ruta prueba los nombres que usa cada harness para el archivo. Los de
+	// Cursor no están documentados; file_path es el de Claude Code.
+	ruta := func() string {
+		for _, k := range []string{"file_path", "path", "target_file"} {
+			if p := campo(k); p != "" {
+				return p
+			}
+		}
+		return ""
+	}
 	switch tool {
-	case "Bash":
+	case "Bash", "Shell": // Shell es el de Cursor
 		if c := campo("command"); c != "" {
 			return c, true
+		}
+	case "Delete": // Cursor
+		if p := ruta(); p != "" {
+			return "borrar " + p, true
 		}
 	case "Edit", "MultiEdit":
 		if p := campo("file_path"); p != "" {
 			return "editar " + p, true
 		}
 	case "Write":
-		if p := campo("file_path"); p != "" {
+		if p := ruta(); p != "" {
 			return "escribir " + p, true
 		}
 	case "NotebookEdit":

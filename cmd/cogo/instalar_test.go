@@ -65,6 +65,38 @@ func TestTomlCodexNoPisaUnaTablaAMano(t *testing.T) {
 	}
 }
 
+// `cogo install -agent cursor -hooks` deja .cursor/mcp.json y .cursor/hooks.json,
+// y el token solo como referencia a COGO_TOKEN, que Cursor resuelve al cargar.
+func TestInstallCursorEscribeMcpYHooksSinToken(t *testing.T) {
+	raiz := t.TempDir()
+	conf := filepath.Join(raiz, ".cursor", "mcp.json")
+	err := cmdInstall([]string{"-agent", "cursor", "-http", "https://cogo.example/mcp", "-token", "secreto-cursor", "-o", conf, "-hooks", "-project", "tienda"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := os.ReadFile(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := os.ReadFile(filepath.Join(raiz, ".cursor", "hooks.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, quiero := range []string{`"mcpServers"`, "https://cogo.example/mcp", "Bearer ${env:COGO_TOKEN}"} {
+		if !strings.Contains(string(m), quiero) {
+			t.Errorf("falta %s en mcp.json:\n%s", quiero, m)
+		}
+	}
+	for _, quiero := range []string{"beforeShellExecution", "sessionStart", "-formato cursor", "-project tienda"} {
+		if !strings.Contains(string(h), quiero) {
+			t.Errorf("falta %s en hooks.json:\n%s", quiero, h)
+		}
+	}
+	if strings.Contains(string(m)+string(h), "secreto-cursor") {
+		t.Error("el token no puede quedar en los archivos de Cursor")
+	}
+}
+
 // `cogo install -agent codex -hooks` deja los dos archivos de Codex en .codex/.
 func TestInstallCodexEscribeConfigYHooks(t *testing.T) {
 	raiz := t.TempDir()

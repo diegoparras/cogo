@@ -171,6 +171,75 @@ func TestHooksCodexSinTokenEIdempotente(t *testing.T) {
 	}
 }
 
+// Cursor manda el comando de shell sin tool_name, arriba de todo.
+func TestLeerEntradaDeCursor(t *testing.T) {
+	e, err := Leer(strings.NewReader(`{"hook_event_name":"beforeShellExecution","command":"rm -rf build","cwd":"/p","sandbox":false}`))
+	if err != nil || e.Tool != "Bash" || e.ToolInput["command"] != "rm -rf build" {
+		t.Fatalf("entrada de Cursor: %+v %v", e, err)
+	}
+}
+
+// En el preToolUse de Cursor las ediciones son Write y los borrados Delete. Los
+// campos de esos dos no están documentados: se aceptan los nombres probables.
+func TestTraducirHerramientasDeCursor(t *testing.T) {
+	casos := []struct {
+		tool   string
+		input  map[string]any
+		quiero string
+	}{
+		{"Shell", map[string]any{"command": "rm -rf build"}, "rm -rf build"},
+		{"Delete", map[string]any{"file_path": "a.sql"}, "borrar a.sql"},
+		{"Delete", map[string]any{"path": "a.sql"}, "borrar a.sql"},
+		{"Write", map[string]any{"path": "b.go"}, "escribir b.go"},
+	}
+	for _, c := range casos {
+		if got, ok := Traducir(c.tool, c.input); !ok || got != c.quiero {
+			t.Errorf("%s %v: esperaba %q, dio (%q,%v)", c.tool, c.input, c.quiero, got, ok)
+		}
+	}
+}
+
+// El hooks.json de Cursor tiene otra forma: version, y cada entrada es el
+// comando directo. Tampoco lleva el token.
+func TestHooksCursorSinTokenEIdempotente(t *testing.T) {
+	previo := []byte(`{"version":1,"hooks":{"beforeShellExecution":[{"command":"./mio.sh"}],"afterFileEdit":[{"command":"./fmt.sh"}]}}`)
+	c := Comando{Binario: "/usr/local/bin/cogo", URL: "https://cogo.example/mcp", Token: "cogo_secreto", Proyecto: "p", Minima: "costly"}
+	una, err := HooksCursor(previo, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dos, err := HooksCursor(una, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(una) != string(dos) {
+		t.Fatalf("no es idempotente:\n%s\n---\n%s", una, dos)
+	}
+	s := string(dos)
+	if strings.Contains(s, "cogo_secreto") || strings.Contains(s, "-token") {
+		t.Fatalf("el token no puede ir al hooks.json de Cursor:\n%s", s)
+	}
+	for _, quiero := range []string{`"version": 1`, "hook pre-tool -url https://cogo.example/mcp -project p -minima costly -formato cursor", `"matcher": "Write|Delete"`} {
+		if !strings.Contains(s, quiero) {
+			t.Errorf("falta %s en:\n%s", quiero, s)
+		}
+	}
+	var root map[string]any
+	if err := json.Unmarshal(dos, &root); err != nil {
+		t.Fatal(err)
+	}
+	h := root["hooks"].(map[string]any)
+	if n := len(h["beforeShellExecution"].([]any)); n != 2 {
+		t.Errorf("beforeShellExecution tendría que tener el ajeno y el nuestro: %d", n)
+	}
+	if _, ok := h["afterFileEdit"]; !ok {
+		t.Error("se perdió el hook ajeno afterFileEdit")
+	}
+	if n := len(h["sessionStart"].([]any)); n != 1 {
+		t.Errorf("sessionStart tendría que tener exactamente el nuestro: %d", n)
+	}
+}
+
 func TestSettingsModoLocal(t *testing.T) {
 	b, err := Settings(nil, Comando{Binario: "/usr/local/bin/cogo", Vault: "/home/d/vault"})
 	if err != nil {

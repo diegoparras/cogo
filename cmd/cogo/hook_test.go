@@ -107,6 +107,49 @@ func TestHookCodexFrenaUnParcheQueBorra(t *testing.T) {
 	}
 }
 
+// hookCursor corre el hook en el formato de Cursor y exige un JSON válido: si
+// Cursor recibe otra cosa de un hook de permiso, bloquea la acción.
+func hookCursor(t *testing.T, args []string, stdin string) (map[string]any, int) {
+	t.Helper()
+	var out, errb bytes.Buffer
+	code := ejecutarHook(append(args, "-formato", "cursor"), bytes.NewBufferString(stdin), &out, &errb)
+	var r map[string]any
+	if err := json.Unmarshal(out.Bytes(), &r); err != nil {
+		t.Fatalf("Cursor necesita JSON en stdout, dio %q (stderr %q)", out.String(), errb.String())
+	}
+	return r, code
+}
+
+func TestHookCursorContestaSiempreJSON(t *testing.T) {
+	soltarRegistro()
+	dir := t.TempDir()
+	r, code := hookCursor(t, []string{"pre-tool", "-vault", dir},
+		`{"hook_event_name":"beforeShellExecution","command":"rm -rf build","cwd":"/p"}`)
+	if code != 0 || r["permission"] != "deny" {
+		t.Fatalf("rm -rf sin respaldo se niega en JSON, con código 0: %d %v", code, r)
+	}
+	if m, _ := r["agent_message"].(string); !strings.HasPrefix(m, "NOT AUTHORIZED") {
+		t.Errorf("el agente tiene que leer el veredicto: %v", r)
+	}
+	if m, _ := r["user_message"].(string); m == "" {
+		t.Errorf("el usuario tiene que ver por qué: %v", r)
+	}
+	if r, _ := hookCursor(t, []string{"pre-tool", "-vault", dir}, `{"hook_event_name":"beforeShellExecution","command":"ls -la"}`); r["permission"] != "allow" {
+		t.Errorf("ls pasa: %v", r)
+	}
+	if r, _ := hookCursor(t, []string{"pre-tool", "-vault", dir}, `{roto`); r["permission"] != "allow" {
+		t.Errorf("con un stdin roto falla abierto, pero en JSON: %v", r)
+	}
+}
+
+func TestHookCursorSessionStartDaContexto(t *testing.T) {
+	soltarRegistro()
+	r, _ := hookCursor(t, []string{"session-start", "-vault", t.TempDir()}, `{"hook_event_name":"sessionStart","session_id":"s"}`)
+	if c, _ := r["additional_context"].(string); !strings.Contains(c, "Context pack") {
+		t.Fatalf("el pack va en additional_context: %v", r)
+	}
+}
+
 // La clase mínima es la perilla: con `reversible`, editar un archivo también
 // pregunta; con el default, no.
 func TestHookRespetaLaClaseMinima(t *testing.T) {

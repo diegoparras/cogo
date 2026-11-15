@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,67 @@ import (
 
 	"github.com/diegoparras/cogo/internal/gancho"
 )
+
+// mezclarMcpServers escribe un servidor en un JSON con `mcpServers` (el
+// .mcp.json de Claude Code, el .cursor/mcp.json de Cursor) sin tocar los demás.
+func mezclarMcpServers(ruta, nombre string, server map[string]any) error {
+	root := map[string]any{}
+	if b, err := os.ReadFile(ruta); err == nil {
+		_ = json.Unmarshal(b, &root)
+	}
+	servers, _ := root["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	servers[nombre] = server
+	root["mcpServers"] = servers
+	b, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(ruta), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(ruta, append(b, '\n'), 0o644)
+}
+
+// instalarCursor escribe el .cursor/mcp.json y, con hooks, el .cursor/hooks.json
+// al lado. El token no se escribe: el mcp.json lo pide como ${env:COGO_TOKEN},
+// que Cursor resuelve al cargar, y los hooks lo leen de COGO_TOKEN.
+func instalarCursor(conf, nombre, bin, vault, url, token string, hooks bool, proyecto, minima string) error {
+	server := map[string]any{"command": bin, "args": []any{"serve", "-vault", vault}}
+	modo := "stdio"
+	if url != "" {
+		modo = "http"
+		server = map[string]any{"url": url}
+		if token != "" {
+			server["headers"] = map[string]any{"Authorization": "Bearer ${env:COGO_TOKEN}"}
+		}
+	}
+	if err := mezclarMcpServers(conf, nombre, server); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "cogo: wired %q → mcpServers.%s (%s)\n", conf, nombre, modo)
+	if token != "" {
+		fmt.Fprintln(os.Stderr, "cogo: the token was NOT written to disk. Set COGO_TOKEN to it in the environment Cursor starts from.")
+	}
+
+	if hooks {
+		p := filepath.Join(filepath.Dir(conf), "hooks.json")
+		previo, _ := os.ReadFile(p)
+		b, err := gancho.HooksCursor(previo, gancho.Comando{
+			Binario: bin, Vault: vault, URL: url, Proyecto: proyecto, Minima: minima,
+		})
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(p, b, 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "cogo: wrote %s — Cursor now runs `cogo hook` by itself (pack on start; authorize before %s-or-worse actions)\n", p, minima)
+	}
+	return nil
+}
 
 // instalarCodex escribe el .codex/config.toml (la conexión MCP) y, con hooks,
 // el .codex/hooks.json al lado. Ninguno de los dos lleva el token: Codex lo
