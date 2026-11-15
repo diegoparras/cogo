@@ -13,6 +13,7 @@ import (
 	"github.com/diegoparras/cogo/internal/ancla"
 	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/decision"
 	"github.com/diegoparras/cogo/internal/journal"
 	"github.com/diegoparras/cogo/internal/lease"
 	"github.com/diegoparras/cogo/internal/motor"
@@ -494,14 +495,22 @@ func (s *Server) vistaRecibos() map[string]any {
 		Motivo   string `json:"motivo"`
 		Juzgado  bool   `json:"juzgado"`
 		Acertado bool   `json:"acertado"`
+		// Decision es lo que hizo la persona cuando COGO no autorizó y se le
+		// preguntó: aprobada, rechazada, pendiente o vencida. Vacío si no se
+		// le preguntó.
+		Decision string `json:"decision,omitempty"`
 	}
 	vs, _ := veredicto.Abrir(s.dir).Todos()
+	decisiones := decision.Abrir(s.dir).Estados(time.Now().UTC())
 	var filas []fila
 	for i, r := range todos {
 		f := fila{ID: r.ID, Cuando: r.Cuando.UTC().Format(time.RFC3339), Quien: r.Quien, Accion: r.Accion,
 			Clase: r.Clase, Autoriza: r.Autoriza, Notas: len(r.Notas), Seq: r.Seq}
 		if v, ok := vs[r.ID]; ok {
 			f.Juzgado, f.Acertado = true, v.Acertado
+		}
+		if d, ok := decisiones[r.ID]; ok {
+			f.Decision = string(d.Estado)
 		}
 		if jerr == nil && i < 20 {
 			rec := recibo.Reconstruir(j, r)
@@ -547,6 +556,12 @@ func (s *Server) vistaEvitado() map[string]any {
 	out["balance"] = veredicto.Balancear(autorizo, vs)
 	out["bloqueos"] = bloqueos
 	out["bloqueos_por_clase"] = porClase
+	// Lo que decidió la persona cuando COGO no autorizó y se le preguntó.
+	porEstado := map[string]int{}
+	for _, d := range decision.Abrir(s.dir).Estados(time.Now().UTC()) {
+		porEstado[string(d.Estado)]++
+	}
+	out["decisiones"] = porEstado
 
 	// Verificado por ejecución contra declarado: el runner ejecutó el check
 	// (verified) o alguien dijo que pasó (claimed_passed).

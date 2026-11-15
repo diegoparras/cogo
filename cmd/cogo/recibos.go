@@ -11,6 +11,7 @@ import (
 	"github.com/diegoparras/cogo/internal/auth"
 	"github.com/diegoparras/cogo/internal/confidence"
 	"github.com/diegoparras/cogo/internal/core"
+	"github.com/diegoparras/cogo/internal/decision"
 	"github.com/diegoparras/cogo/internal/recibo"
 	"github.com/diegoparras/cogo/internal/veredicto"
 )
@@ -109,20 +110,27 @@ func cmdRecibos(args []string) error {
 		return err
 	}
 	vs, _ := veredicto.Abrir(*dir).Todos()
+	decisiones := decision.Abrir(*dir).Estados(time.Now().UTC())
 	for _, r := range lista {
-		decision := "AUTHORIZED"
+		resultado := "AUTHORIZED"
 		if !r.Autoriza {
-			decision = "NOT AUTHORIZED"
+			resultado = "NOT AUTHORIZED"
+		}
+		if d, ok := decisiones[r.ID]; ok {
+			resultado += "  · la persona: " + string(d.Estado)
+			if d.Quien != "" {
+				resultado += " (" + d.Quien + ")"
+			}
 		}
 		if v, ok := vs[r.ID]; ok {
 			if v.Acertado {
-				decision += "  (el humano dice: bien)"
+				resultado += "  (el humano dice: bien)"
 			} else {
-				decision += "  (el humano dice: MAL)"
+				resultado += "  (el humano dice: MAL)"
 			}
 		}
 		fmt.Printf("%s  %s  %s\n  %s\n  %s (%s) · pedía %s · quién: %s · registro hasta el evento %d\n",
-			r.ID, r.Cuando.Local().Format("2006-01-02 15:04:05"), decision, r.Accion, r.Clase, r.Porque, r.Necesita, r.Quien, r.Seq)
+			r.ID, r.Cuando.Local().Format("2006-01-02 15:04:05"), resultado, r.Accion, r.Clase, r.Porque, r.Necesita, r.Quien, r.Seq)
 		for _, n := range r.Notas {
 			extra := ""
 			if p, ok := r.Juicios[n.ID]; ok {

@@ -4016,6 +4016,16 @@ async function pintarSalaGuerra() {
       ["sin juzgar", bal.sin_juzgar],
     ]));
   }
+  const dp = ev.decisiones || {};
+  if ((dp.aprobada || 0) + (dp.rechazada || 0) + (dp.pendiente || 0) + (dp.vencida || 0) > 0) {
+    cajaEv.appendChild(el("div", "sg-sub", "Lo que decidiste vos cuando COGO no autorizó y te preguntó. Lo que no aprobaste en media hora vence."));
+    cajaEv.appendChild(barras([
+      { nombre: "aprobadas por vos", n: dp.aprobada || 0 },
+      { nombre: "rechazadas", n: dp.rechazada || 0 },
+      { nombre: "esperando tu respuesta", n: dp.pendiente || 0, color: "yellow" },
+      { nombre: "vencidas sin aprobar", n: dp.vencida || 0 },
+    ]));
+  }
   const ver = ev.verificacion;
   if (ver) {
     cajaEv.appendChild(el("div", "sg-sub", "Verificado por ejecución contra declarado: solo lo primero lo probó una máquina."));
@@ -4046,11 +4056,13 @@ async function pintarSalaGuerra() {
     }
     cajaRc.appendChild(el("div", "sg-sub", rc.total + " recibos · los últimos 20 reconstruidos contra el registro de hoy"));
     const t = el("table", "dtab");
-    t.innerHTML = "<tr><th></th><th>acción</th><th>clase</th><th>notas</th><th>hasta el evento</th><th>fiel</th><th>cuándo</th><th>¿tenía razón?</th></tr>";
+    t.innerHTML = "<tr><th></th><th>acción</th><th>clase</th><th>notas</th><th>hasta el evento</th><th>fiel</th><th>cuándo</th><th>decidiste</th><th>¿tenía razón?</th></tr>";
+    const decidiste = { aprobada: "aprobaste", rechazada: "rechazaste", pendiente: "pendiente", vencida: "venció" };
     (rc.ultimos || []).forEach(x => {
       const tr = el("tr");
       tr.innerHTML = `<td>${x.autoriza ? "✓" : "✗"}</td><td class="motivo">${esc(x.accion)}</td><td>${esc(x.clase)}</td>` +
-        `<td class="num">${x.notas}</td><td class="num">${x.seq}</td><td>${x.fiel ? "sí" : "<b>NO</b>"}</td><td>${haceRato(x.cuando)}</td>`;
+        `<td class="num">${x.notas}</td><td class="num">${x.seq}</td><td>${x.fiel ? "sí" : "<b>NO</b>"}</td><td>${haceRato(x.cuando)}</td>` +
+        `<td>${x.decision ? esc(decidiste[x.decision] || x.decision) : "—"}</td>`;
       tr.title = esc(x.id + " · " + (x.motivo || ""));
       const td = el("td");
       if (x.juzgado) {
