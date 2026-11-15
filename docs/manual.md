@@ -295,7 +295,40 @@ El tipo de cada nota sale de una heurística por palabras ("decidimos" →
 `decision`, "nunca" → `constraint`, "pasos" → `runbook`, un bloque de un solo
 comando → `command`); lo que no reconoce es `architecture`, que describe y no
 exige. Con Jev activo (§27b), el tipo y el "¿esto afirma algo?" los juzga él.
-Importar dos veces no duplica: una nota que ya existe no se pisa nunca.
+Importar dos veces no duplica: una nota que ya existe no se pisa nunca. Y
+ninguna sección con un secreto entra: es la misma regla que `capture`.
+
+### La memoria que el agente ya tiene
+
+Claude Code y Codex guardan lo que aprenden en archivos locales. Esa memoria
+ya se usa en cada sesión, pero sin color: el agente la lee como si todo fuera
+igual de cierto, lo de ayer y lo de hace un año. COGO no compite con ella: le
+pone el semáforo.
+
+```bash
+cogo importar ~/repos/tienda -project tienda -memoria claude         # la de Claude Code
+cogo importar ~/repos/tienda -project tienda -memoria claude,codex   # y la de Codex
+```
+
+- **Claude Code** guarda una carpeta por repo en `~/.claude/projects/`, con un
+  archivo por memoria. COGO encuentra la del repo que le pasás, o la que digas
+  con `-claude-dir` si la moviste con `autoMemoryDirectory`. Cada archivo es
+  una nota: el `description` es la afirmación, el índice `MEMORY.md` no entra,
+  y el tipo de memoria decide el de la nota. Una corrección o una preferencia
+  (`feedback`, `user`) es una `constraint`; lo que pasa en el proyecto
+  (`project`) es una `decision`; una referencia es `architecture`.
+- **Codex** guarda una sola memoria por máquina, no por repo, en
+  `~/.codex/memories` o `memories_v2`, o donde diga `-codex-home`. Entran el
+  resumen y el consolidado, partidos por secciones; lo crudo y los resúmenes por
+  sesión son pasos intermedios y no entran. Como no es de un repo, conviene
+  mirar con `-dry` qué entra antes de crearlo.
+
+Todo entra amarillo y anclado al archivo de la memoria, aunque viva fuera del
+repo. Lo que lo hace distinto de importar un documento es la fecha: la vigencia
+corre desde que la memoria se escribió, no desde que se importó. Una memoria de
+proyecto de hace un año vence sola y deja de respaldar nada. Y si el agente
+reescribe una memoria después, la nota deriva y avisa: la versión vieja ya no
+se puede dar por buena en silencio.
 
 ## 7. Anatomía de una nota
 

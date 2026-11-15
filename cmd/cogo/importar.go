@@ -10,6 +10,7 @@ import (
 
 	"github.com/diegoparras/cogo/internal/core"
 	"github.com/diegoparras/cogo/internal/importar"
+	"github.com/diegoparras/cogo/internal/secretscan"
 )
 
 // cogo importar <raíz> -project <p>: arranque en frío. Lee lo que el proyecto
@@ -20,10 +21,13 @@ func cmdImportar(args []string) error {
 	dir := vaultFlag(fs)
 	proyecto := fs.String("project", "", "proyecto de las notas (obligatorio)")
 	dry := fs.Bool("dry", false, "mostrar qué se crearía, sin escribir")
+	memoria := fs.String("memoria", "", "sumar la memoria que el agente ya tiene: claude, codex, o claude,codex")
+	claudeDir := fs.String("claude-dir", "", "carpeta de la memoria de Claude Code (default: la de este repo en ~/.claude/projects)")
+	codexHome := fs.String("codex-home", "", "home de Codex (default: $CODEX_HOME o ~/.codex)")
 	_ = fs.Parse(args)
 	conVault(dir)
 	if fs.NArg() != 1 {
-		return fmt.Errorf("uso: cogo importar <raíz del repo o carpeta de docs> -project <p> [-dry]")
+		return fmt.Errorf("uso: cogo importar <raíz del repo o carpeta de docs> -project <p> [-memoria claude,codex] [-dry]")
 	}
 	if strings.TrimSpace(*proyecto) == "" {
 		return fmt.Errorf("importar necesita -project: las notas importadas son de un proyecto")
@@ -39,11 +43,72 @@ func cmdImportar(args []string) error {
 	if err != nil {
 		return err
 	}
-	existe := func(id string) bool { _, ok := vault[id]; return ok }
-	notas, r, err := importar.Notas(raiz, importar.Opciones{Proyecto: *proyecto, Hoy: today(), Existe: existe})
+	// Lo que ya está en el vault, o lo que entró antes en esta misma corrida
+	// desde otra fuente, no se vuelve a crear.
+	tomadas := map[string]bool{}
+	existe := func(id string) bool { _, ok := vault[id]; return ok || tomadas[id] }
+	opts := importar.Opciones{Proyecto: *proyecto, Hoy: today(), Existe: existe}
+	notas, r, err := importar.Notas(raiz, opts)
 	if err != nil {
 		return err
 	}
+	sumar := func(ns []*core.Note, rr importar.Resumen) {
+		notas = append(notas, ns...)
+		r.Archivos += rr.Archivos
+		r.Secciones += rr.Secciones
+		for m, n := range rr.Saltadas {
+			r.Saltadas[m] += n
+		}
+	}
+	for _, n := range notas {
+		tomadas[n.ID] = true
+	}
+	if strings.TrimSpace(*memoria) != "" {
+		for _, fuente := range strings.Split(*memoria, ",") {
+			var ns []*core.Note
+			var rr importar.Resumen
+			switch strings.TrimSpace(fuente) {
+			case "claude":
+				d := *claudeDir
+				if d == "" {
+					home, _ := os.UserHomeDir()
+					d = importar.DirMemoriaClaude(home, raiz)
+				}
+				ns, rr, err = importar.MemoriaClaude(d, opts)
+			case "codex":
+				h := *codexHome
+				if h == "" {
+					if h = os.Getenv("CODEX_HOME"); h == "" {
+						home, _ := os.UserHomeDir()
+						h = filepath.Join(home, ".codex")
+					}
+				}
+				ns, rr, err = importar.MemoriaCodex(h, opts)
+				fmt.Println("ojo: la memoria de Codex es de toda la máquina, no de este repo; mirá qué entra con -dry")
+			default:
+				return fmt.Errorf("-memoria %q: las que COGO sabe leer son claude y codex", fuente)
+			}
+			if err != nil {
+				return err
+			}
+			for _, n := range ns {
+				tomadas[n.ID] = true
+			}
+			sumar(ns, rr)
+		}
+	}
+	// Ninguna nota con un secreto entra al vault, venga de un documento o de una
+	// memoria: es la misma regla que capture.
+	limpias := notas[:0]
+	for _, n := range notas {
+		if resumen, bloqueada := secretscan.Nota(n); bloqueada {
+			r.Saltadas["posible secreto"]++
+			fmt.Printf("  no entra %s: %s\n", n.ID, resumen)
+			continue
+		}
+		limpias = append(limpias, n)
+	}
+	notas = limpias
 	fmt.Printf("%d archivo(s), %d sección(es): %d nota(s) nueva(s)", r.Archivos, r.Secciones, len(notas))
 	if len(r.Saltadas) > 0 {
 		var motivos []string
