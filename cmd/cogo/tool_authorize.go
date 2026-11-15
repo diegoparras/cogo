@@ -15,6 +15,7 @@ import (
 	"github.com/diegoparras/cogo/internal/decision"
 	"github.com/diegoparras/cogo/internal/gancho"
 	"github.com/diegoparras/cogo/internal/motor"
+	"github.com/diegoparras/cogo/internal/recibo"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -30,12 +31,75 @@ func registrarAuthorize(s *mcp.Server, d *deps) {
 		if strings.TrimSpace(in.Action) == "" {
 			return errResult(fmt.Errorf("authorize needs to know what you are about to do")), nil, nil
 		}
+		// La vuelta de una pregunta: la persona ya contestó.
+		if len(req.Params.InputResponses) > 0 {
+			return respuestaDeLaPersona(ctx, d, req, in), nil, nil
+		}
 		v, texto, err := decidirAutorizacion(ctx, d, in)
 		if err != nil {
 			return errResult(err), nil, nil
 		}
+		// Lo que COGO no autoriza, si el cliente sabe preguntar, lo decide la
+		// persona. La pregunta viaja como un pedido de entrada en el resultado,
+		// y el cliente vuelve a llamar con la respuesta.
+		if id := reciboDe(texto); !v.Autoriza && id != "" && sabePreguntar(req) {
+			_ = decision.Abrir(d.dir).Pedir(decision.Pedido{Recibo: id, Accion: in.Action, Via: decision.ViaPregunta, Cuando: time.Now().UTC()})
+			return &mcp.CallToolResult{
+				InputRequests: mcp.InputRequestMap{clavePregunta: &mcp.ElicitParams{
+					Mode:            "form",
+					Message:         mensajeParaLaPersona(in.Action, v.Porque, id),
+					RequestedSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+				}},
+				RequestState: id,
+			}, nil, nil
+		}
 		return textResult(texto), v, nil
 	})
+}
+
+const clavePregunta = "cogo_aprobacion"
+
+// sabePreguntar dice si el cliente puede mostrarle un formulario a la persona.
+// Un cliente de la spec anterior sobre HTTP sin estado no puede: el servidor
+// no tiene sesión desde la cual preguntarle, y ahí no declara la capacidad.
+func sabePreguntar(req *mcp.CallToolRequest) bool {
+	caps := req.ClientCapabilities()
+	if caps == nil || caps.Elicitation == nil {
+		return false
+	}
+	e := caps.Elicitation
+	return e.Form != nil || e.URL == nil
+}
+
+func mensajeParaLaPersona(accion, porque, recibo string) string {
+	return "COGO no autoriza esta acción del agente:\n\n    " + accion + "\n\n" + strings.TrimSpace(porque) +
+		"\n\n¿La autorizás vos? Si aceptás, queda asentado que la decidiste vos. Recibo " + recibo + "."
+}
+
+// respuestaDeLaPersona cierra la pregunta. El RequestState lo devuelve el
+// cliente, así que solo vale si nombra una pregunta abierta sobre esta misma
+// acción: un cliente no puede aprobar otra cosa cambiando el número.
+func respuestaDeLaPersona(ctx context.Context, d *deps, req *mcp.CallToolRequest, in authorizeIn) *mcp.CallToolResult {
+	id := req.Params.RequestState
+	ahora := time.Now().UTC()
+	decisiones := decision.Abrir(d.dir)
+	abierta, ok := decisiones.Estados(ahora)[id]
+	if !ok || abierta.Estado != decision.Pendiente || abierta.Via != decision.ViaPregunta || abierta.Accion != in.Action {
+		return errResult(fmt.Errorf("authorize: the answer does not match any open question"))
+	}
+	porque := ""
+	if r, hay := recibo.Abrir(d.dir).Buscar(id); hay {
+		porque = r.Porque
+	}
+	quien := auth.CallerCtx(ctx)
+	if res, _ := req.Params.InputResponses[clavePregunta].(*mcp.ElicitResult); res != nil && res.Action == "accept" {
+		_ = decisiones.Resolver(id, decision.Aprobada, quien, ahora)
+		return textResult(fmt.Sprintf("AUTHORIZED BY THE PERSON — %s\n\nCOGO did not authorize it: %s\nThe person was asked and approved it. It is on record as their decision, not COGO's.\n\nreceipt: %s",
+			in.Action, porque, id))
+	}
+	_ = decisiones.Resolver(id, decision.Rechazada, quien, ahora)
+	return textResult(fmt.Sprintf("NOT AUTHORIZED — the person was asked and did not approve it.\n\n%s\n\nDo not proceed. Reporting the block is a valid outcome; working around it is not.\n\nreceipt: %s",
+		porque, id))
 }
 
 // autorizarComoHook es authorize llamado por el hook del harness y no por el

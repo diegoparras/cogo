@@ -1126,6 +1126,24 @@ working around it is not.
 Y **una sola nota floja hunde el pedido**: te apoyás en el conjunto, y el conjunto
 vale lo que su parte más débil.
 
+### Y si no alcanza, decidís vos
+
+Un NOT AUTHORIZED que solo frena deja al agente sin salida. Si el cliente MCP
+sabe mostrarte un formulario, `authorize` no contesta el rechazo: te pregunta.
+Ves la acción, el motivo y el número de recibo, y aceptás o no. El agente
+recibe `AUTHORIZED BY THE PERSON` o `NOT AUTHORIZED — the person was asked and
+did not approve it`, y la respuesta queda en `.cogo/decisiones.jsonl` como
+tuya, no de COGO. Cerrar el formulario sin contestar cuenta como no aprobado.
+
+La pregunta viaja dentro del resultado, como manda la spec de MCP del
+2026-07-28, y el cliente vuelve a llamar con la respuesta. Esa vuelta la trae
+el cliente, así que COGO solo la acepta si nombra una pregunta abierta sobre
+la misma acción: cambiar el número de recibo no aprueba otra cosa. Por stdio
+funciona también con clientes de la spec anterior. Por HTTP, un cliente de la
+spec anterior no puede contestar, porque el servidor corre sin sesión desde la
+cual preguntarle, y ahí `authorize` frena como siempre. Lo mismo si el cliente
+no sabe mostrar formularios.
+
 ## 27b. Jev: un juez acotado como instrumento
 
 COGO juzga el **estado** de las cosas —qué evidencia hay, si venció, si el

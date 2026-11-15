@@ -50,6 +50,45 @@ func TestMCPHTTPHablaLaSpecSinEstado(t *testing.T) {
 	}
 }
 
+// Por HTTP sin estado, un cliente nuevo puede contestar la pregunta, porque
+// viaja dentro del resultado. Uno de la spec anterior no: el servidor no tiene
+// sesión desde la cual preguntarle, y en vez de romperse, frena como antes.
+func TestMCPHTTPPreguntaSoloAlClienteNuevo(t *testing.T) {
+	casos := []struct{ nombre, protocolo, quiero string }{
+		{"cliente nuevo", "", "AUTHORIZED BY THE PERSON"},
+		{"cliente de la spec anterior", "2025-11-25", "NOT AUTHORIZED"},
+	}
+	for _, c := range casos {
+		t.Run(c.nombre, func(t *testing.T) {
+			soltarRegistro()
+			ts := httptest.NewServer(handlerMCP(newMCPServer(t.TempDir())))
+			defer ts.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cli := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ClientOptions{
+				ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: "accept"}, nil
+				},
+			})
+			cs, err := cli.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: ts.URL, DisableStandaloneSSE: true},
+				&mcp.ClientSessionOptions{ProtocolVersion: c.protocolo})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cs.Close()
+			res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "authorize", Arguments: map[string]any{
+				"action": "borrar la base de staging", "find_support": true,
+			}})
+			if err != nil {
+				t.Fatalf("authorize: %v", err)
+			}
+			if txt := toolText(res); !strings.HasPrefix(txt, c.quiero) {
+				t.Fatalf("esperaba %q:\n%s", c.quiero, txt)
+			}
+		})
+	}
+}
+
 // Sin estado, un redeploy no deja colgado a nadie: un pedido con un
 // Mcp-Session-Id que el servidor nunca emitió se atiende igual.
 func TestMCPHTTPNoDependeDeLaSesion(t *testing.T) {
