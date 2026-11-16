@@ -147,6 +147,10 @@ address and a token when you enable it:
 /plugin install cogo --marketplace diegoparras/cogo
 ```
 
+**In Claude Desktop, one click:** every release ships a `cogo-<os>-<arch>.mcpb` bundle
+with the binary inside. Open it, pick the folder for your vault, and COGO runs on your
+machine over stdio. `cogo mcpb` builds one from any binary.
+
 **In Codex and Cursor:** `cogo install -agent codex --hooks` or `cogo install -agent cursor --hooks`
 write their config and hooks (see the [manual](docs/manual.md)).
 

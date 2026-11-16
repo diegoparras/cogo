@@ -468,8 +468,9 @@ gh attestation verify oci://$IMG --repo diegoparras/cogo   # procedencia SLSA
 ```
 
 **Los binarios** (en las releases por tag): cada release trae `SHA256SUMS` +
-`SHA256SUMS.sig` + `SHA256SUMS.pem`. Verificás el checksum firmado y después el
-binario:
+`SHA256SUMS.sig` + `SHA256SUMS.pem`, y al lado de cada binario su
+`cogo-<os>-<arch>.mcpb`, el paquete para Claude Desktop, que también entra en los
+checksums. Verificás el checksum firmado y después el binario:
 ```bash
 cosign verify-blob --signature SHA256SUMS.sig --certificate SHA256SUMS.pem \
   --certificate-identity-regexp "https://github.com/diegoparras/cogo/.+" \

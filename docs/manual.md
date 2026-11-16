@@ -233,6 +233,18 @@ el almacén seguro del sistema y no en `settings.json`. En la máquina no hace
 falta el binario. El skill y los hooks del plugin se generan desde el mismo
 código que `cogo agents` y `cogo install`, y un test falla si quedan viejos.
 
+**Con Claude Desktop**, un clic: cada release trae un `cogo-<os>-<arch>.mcpb`,
+el formato de MCP Bundles, con el binario adentro. Lo abrís, elegís la carpeta
+del vault, y Claude Desktop corre COGO en tu máquina por stdio. Si querés armar
+uno a partir de un binario propio:
+
+```bash
+cogo mcpb -binario ./cogo -os linux -arch amd64 -version 0.2.0 -o cogo-linux-amd64.mcpb
+```
+
+La lista de tools del manifiesto sale del propio servidor, y un test valida el
+manifiesto contra el esquema oficial.
+
 **Sin el binario en la máquina.** Con un COGO hosteado, `--via-mcp` escribe
 hooks que llaman directo a las tools del servidor MCP, en vez de correr
 `cogo hook`:

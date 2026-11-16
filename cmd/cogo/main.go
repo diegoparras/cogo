@@ -64,6 +64,8 @@ func main() {
 		err = cmdVerificarSellos(args)
 	case "agents":
 		err = cmdAgents(args)
+	case "mcpb":
+		err = cmdMCPB(args)
 	case "install":
 		err = cmdInstall(args)
 	case "-h", "--help", "help":
@@ -116,6 +118,8 @@ commands:
                        -agent codex writes .codex/config.toml and .codex/hooks.json;
                        -agent cursor writes .cursor/mcp.json and .cursor/hooks.json;
                        --via-mcp makes the hooks call the server's tools, no binary
+  mcpb                 package a cogo binary as a .mcpb bundle for Claude Desktop
+                       (-binario, -os, -arch, -version, -o)
   hook                 what those hooks run: session-start | pre-tool | post-tool (reads stdin);
                        what COGO does not authorize goes to the person where the harness
                        can ask (-decide cogo always blocks); -formato codex|cursor
