@@ -9,6 +9,7 @@ import (
 
 	"github.com/diegoparras/cogo/internal/agentsmd"
 	"github.com/diegoparras/cogo/internal/gancho"
+	"github.com/diegoparras/cogo/internal/web"
 )
 
 // El plugin de Claude Code vive en plugins/cogo, y el repo entero es su
@@ -69,6 +70,10 @@ func TestElPluginEstaAlDia(t *testing.T) {
 	leer(filepath.Join(plugin, ".claude-plugin", "plugin.json"), &pj)
 	if pj.Name != "cogo" || pj.Version != version {
 		t.Errorf("plugin.json: nombre %q, versión %q (el binario es %s)", pj.Name, pj.Version, version)
+	}
+	// Y el visor muestra la misma: una sola versión, en los tres lugares.
+	if web.Version != version {
+		t.Errorf("el visor dice %s y el binario %s: se suben juntas", web.Version, version)
 	}
 	if pj.UserConfig["token"]["sensitive"] != true || pj.UserConfig["url"]["required"] != true {
 		t.Errorf("el token va enmascarado y la dirección es obligatoria: %v", pj.UserConfig)
