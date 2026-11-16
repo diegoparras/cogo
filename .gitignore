@@ -8,6 +8,9 @@
 .cogo/
 vault/.cogo/
 .mcp.json
+# El del plugin sí va: no lleva tokens, solo ${user_config.url} y
+# ${user_config.token}, que Claude Code completa con lo que carga la persona.
+!plugins/cogo/.mcp.json
 
 # El vault del repo es una DEMO: las notas fisherboy-* existen para que quien
 # clone abra COGO y vea algo funcionando. Todo lo demás que aparezca acá son
