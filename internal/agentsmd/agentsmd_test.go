@@ -44,6 +44,27 @@ func TestGenerateStdioAndDigest(t *testing.T) {
 	}
 }
 
+// El skill del plugin de Claude Code dice el mismo protocolo que el AGENTS.md,
+// más lo que en el plugin hace el harness: authorize antes de actuar, recall
+// después de compactar, y qué hacer cuando la persona decide.
+func TestSkillTraeElMismoProtocolo(t *testing.T) {
+	s := Skill()
+	if !strings.HasPrefix(s, "---\nname: cogo\ndescription: ") {
+		t.Fatalf("el skill empieza con su frontmatter:\n%q", s)
+	}
+	md := Generate(Options{})
+	ini := strings.Index(md, "## Protocolo (obligatorio)")
+	fin := strings.Index(md, "## Conexión (MCP)")
+	if ini < 0 || fin < ini || !strings.Contains(s, md[ini:fin]) {
+		t.Fatal("el skill tiene que traer el protocolo tal cual lo dice el AGENTS.md")
+	}
+	for _, quiero := range []string{"`authorize`", "`recall`", "AUTHORIZED BY THE PERSON", "NOT AUTHORIZED"} {
+		if !strings.Contains(s, quiero) {
+			t.Errorf("falta %s en el skill", quiero)
+		}
+	}
+}
+
 func TestRenderDigestEmpty(t *testing.T) {
 	if got := RenderDigest(nil); !strings.Contains(got, "sin notas") {
 		t.Errorf("empty digest should say so, got %q", got)

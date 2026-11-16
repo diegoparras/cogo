@@ -1,0 +1,28 @@
+{
+  "name": "cogo",
+  "displayName": "COGO",
+  "version": "0.1.0",
+  "description": "La memoria del agente con semáforo: contexto al empezar, authorize antes de lo costoso o irreversible, y la decisión en tus manos cuando COGO no autoriza.",
+  "author": {
+    "name": "Diego Parrás",
+    "url": "https://github.com/diegoparras"
+  },
+  "homepage": "https://github.com/diegoparras/cogo",
+  "repository": "https://github.com/diegoparras/cogo",
+  "license": "MIT",
+  "keywords": ["memory", "mcp", "agents", "trust", "authorization"],
+  "userConfig": {
+    "url": {
+      "type": "string",
+      "title": "Dirección de tu COGO",
+      "description": "El endpoint MCP de tu COGO, por ejemplo https://cogo.tu-dominio.com/mcp",
+      "required": true
+    },
+    "token": {
+      "type": "string",
+      "title": "Token",
+      "description": "Un token de Conexiones MCP del visor de COGO. Vacío si tu COGO corre en loopback sin autenticación.",
+      "sensitive": true
+    }
+  }
+}

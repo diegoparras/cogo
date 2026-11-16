@@ -138,6 +138,18 @@ still accepts clients on 2025-11-25:
 
 What Claude learns today, Cursor reads tomorrow: **the same vault.**
 
+**In Claude Code, one line.** The plugin wires the MCP server, the hooks that call
+`authorize` before costly or irreversible actions and `recall` after compacting, and a
+skill with the protocol, with nothing to install on your machine. It asks for your COGO's
+address and a token when you enable it:
+
+```
+/plugin install cogo --marketplace diegoparras/cogo
+```
+
+**In Codex and Cursor:** `cogo install -agent codex --hooks` or `cogo install -agent cursor --hooks`
+write their config and hooks (see the [manual](docs/manual.md)).
+
 ### The 16 tools your agent gets
 
 | tool | what it does |

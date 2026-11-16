@@ -220,6 +220,19 @@ sus preguntas quedan pendientes hasta vencer. Los campos que manda Cursor al esc
 borrar archivos no están documentados: COGO acepta `file_path`, `path` y
 `target_file`.
 
+**Con el plugin de Claude Code**, una línea:
+
+```
+/plugin install cogo --marketplace diegoparras/cogo
+```
+
+El repo de COGO es su propio marketplace, y el plugin trae todo junto: el
+servidor MCP, los hooks en modo MCP de abajo y un skill con este protocolo.
+Al habilitarlo pide la dirección de tu COGO y un token, que queda guardado en
+el almacén seguro del sistema y no en `settings.json`. En la máquina no hace
+falta el binario. El skill y los hooks del plugin se generan desde el mismo
+código que `cogo agents` y `cogo install`, y un test falla si quedan viejos.
+
 **Sin el binario en la máquina.** Con un COGO hosteado, `--via-mcp` escribe
 hooks que llaman directo a las tools del servidor MCP, en vez de correr
 `cogo hook`:

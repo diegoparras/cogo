@@ -31,20 +31,7 @@ func Generate(o Options) string {
 	b.WriteString("Este proyecto usa **COGO** como memoria: notas con un **color de confianza computado** ")
 	b.WriteString("(verde/amarillo/rojo). El color ya viene calculado por COGO — no lo decidís vos, lo obedecés.\n\n")
 
-	b.WriteString("## Protocolo (obligatorio)\n\n")
-	b.WriteString("1. **Consultá antes de actuar.** Antes de responder o cambiar algo en este proyecto, ")
-	b.WriteString("pedí contexto a COGO con la herramienta MCP `pack` (o `search` para listar, `open` para una nota). ")
-	b.WriteString("Trae lo que ya se sabe, coloreado.\n")
-	b.WriteString("2. **Respetá el color.**\n")
-	b.WriteString("   - 🟢 **verde** = verificado. Podés apoyarte.\n")
-	b.WriteString("   - 🟡 **amarillo** = probable. Usalo con cautela y decí que es probable.\n")
-	b.WriteString("   - 🔴 **rojo** = **NO te apoyes**. Está en cuarentena (`pack` ya lo degrada a *do-not-rely*): ")
-	b.WriteString("es un supuesto sin evidencia, una cita rota, o una contradicción abierta. Tratalo como \"esto puede estar mal\".\n")
-	b.WriteString("3. **Capturá lo que verifiques.** Cuando confirmes algo nuevo, guardalo con `capture`: ")
-	b.WriteString("un *claim* declarativo + la evidencia (archivo, comando, log) + el `check` que lo probaría. ")
-	b.WriteString("No escribas el color: COGO lo computa a partir de la evidencia.\n")
-	b.WriteString("4. **No pises el verde.** Si ya existe una nota verde, no la sobrescribas a ciegas: verificala de nuevo o usá un id nuevo.\n")
-	b.WriteString("5. **El rojo no se \"arregla\" escribiendo.** Una contradicción o una cita rota se resuelve corrigiendo la nota o la evidencia, no cambiando el texto para que suene mejor.\n\n")
+	protocolo(&b)
 
 	b.WriteString("## Conexión (MCP)\n\n")
 	b.WriteString(connectionSnippet(o))
@@ -65,6 +52,25 @@ func Generate(o Options) string {
 
 	fmt.Fprintf(&b, "\n<!-- Generado por COGO para %s. Regeneralo cuando cambie el protocolo o la conexión. -->\n", name)
 	return b.String()
+}
+
+// protocolo es lo que un agente tiene que saber de COGO, igual en el AGENTS.md
+// y en el skill del plugin.
+func protocolo(b *strings.Builder) {
+	b.WriteString("## Protocolo (obligatorio)\n\n")
+	b.WriteString("1. **Consultá antes de actuar.** Antes de responder o cambiar algo en este proyecto, ")
+	b.WriteString("pedí contexto a COGO con la herramienta MCP `pack` (o `search` para listar, `open` para una nota). ")
+	b.WriteString("Trae lo que ya se sabe, coloreado.\n")
+	b.WriteString("2. **Respetá el color.**\n")
+	b.WriteString("   - 🟢 **verde** = verificado. Podés apoyarte.\n")
+	b.WriteString("   - 🟡 **amarillo** = probable. Usalo con cautela y decí que es probable.\n")
+	b.WriteString("   - 🔴 **rojo** = **NO te apoyes**. Está en cuarentena (`pack` ya lo degrada a *do-not-rely*): ")
+	b.WriteString("es un supuesto sin evidencia, una cita rota, o una contradicción abierta. Tratalo como \"esto puede estar mal\".\n")
+	b.WriteString("3. **Capturá lo que verifiques.** Cuando confirmes algo nuevo, guardalo con `capture`: ")
+	b.WriteString("un *claim* declarativo + la evidencia (archivo, comando, log) + el `check` que lo probaría. ")
+	b.WriteString("No escribas el color: COGO lo computa a partir de la evidencia.\n")
+	b.WriteString("4. **No pises el verde.** Si ya existe una nota verde, no la sobrescribas a ciegas: verificala de nuevo o usá un id nuevo.\n")
+	b.WriteString("5. **El rojo no se \"arregla\" escribiendo.** Una contradicción o una cita rota se resuelve corrigiendo la nota o la evidencia, no cambiando el texto para que suene mejor.\n\n")
 }
 
 func connectionSnippet(o Options) string {
