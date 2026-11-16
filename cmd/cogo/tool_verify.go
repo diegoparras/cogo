@@ -27,7 +27,6 @@ func registrarVerify(s *mcp.Server, d *deps) {
 		if !ok {
 			return errResult(fmt.Errorf("no note with id %q", in.ID)), nil, nil
 		}
-		ver := core.Verificacion{Por: auth.CallerCtx(ctx), Reanclar: in.Reanchor}
 		var corrida string
 		if strings.TrimSpace(in.Check) != "" {
 			// El agente elige QUÉ check declarado corre; el comando lo puso el
@@ -42,21 +41,24 @@ func registrarVerify(s *mcp.Server, d *deps) {
 			if err := aplicarEjecucion(n, res, core.LoadEvidenceRoots(dir), in.Reanchor); err != nil {
 				return errResult(err), nil, nil
 			}
-			ver = core.Verificacion{}
-		}
-		if ver != (core.Verificacion{}) {
+		} else {
+			// Sin check, es una declaración. Se declara aunque no haya nadie
+			// identificado: stdio y un COGO local sin autenticación no tienen
+			// identidad, y core.Verificar lo asienta como "sin identificar".
+			// Antes esto se decidía comparando contra una Verificacion vacía, y
+			// sin identidad ni reanchor la Verificacion ES vacía: verify no
+			// declaraba nada y contestaba como si lo hubiera hecho.
+			ver := core.Verificacion{Por: auth.CallerCtx(ctx), Reanclar: in.Reanchor}
 			if err := core.Verificar(n, core.LoadEvidenceRoots(dir), today(), ver); err != nil {
 				return errResult(err), nil, nil
 			}
 		}
-		v := core.Evaluate(n, vault, contradictions(), today())
-		n.Apply(v)
-
 		path := n.Path
 		if path == "" {
 			path = filepath.Join(dir, in.ID+".md")
 		}
-		if err := core.WriteNoteFile(path, n); err != nil {
+		v, err := core.EscribirConColor(path, n, vault, contradictions(), today())
+		if err != nil {
 			return errResult(err), nil, nil
 		}
 		_ = regenIndex(dir, vault)

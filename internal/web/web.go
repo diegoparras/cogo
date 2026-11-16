@@ -1281,13 +1281,14 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	v := core.Evaluate(n, vault, s.contras(), s.today())
-	n.Apply(v)
 	path := n.Path
 	if path == "" {
 		path = filepath.Join(s.dir, id+".md")
 	}
-	if err := core.WriteNoteFile(path, n); err != nil {
+	// El color se pide después de escribir: la verificación entra al registro
+	// de eventos con la escritura (ver core.EscribirConColor).
+	v, err := core.EscribirConColor(path, n, vault, s.contras(), s.today())
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

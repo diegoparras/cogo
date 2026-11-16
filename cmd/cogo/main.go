@@ -593,14 +593,15 @@ func cmdVerify(args []string) error {
 	}); err != nil {
 		return err
 	}
-	v := core.Evaluate(note, vault, nil, today())
-	note.Apply(v)
-
 	path := note.Path
 	if path == "" {
 		path = filepath.Join(*dir, id+".md")
 	}
-	if err := core.WriteNoteFile(path, note); err != nil {
+	// La misma escritura que la tool MCP y el visor: hoy la CLI evalúa con el
+	// motor anterior, pero si mañana instala el de eventos, el color tiene que
+	// seguir pidiéndose después de escribir.
+	v, err := core.EscribirConColor(path, note, vault, nil, today())
+	if err != nil {
 		return err
 	}
 	if err := regenIndex(*dir, vault); err != nil {
