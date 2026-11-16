@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="COGO">
-  <rect x="3" y="3" width="42" height="42" rx="12" fill="#2c313c"/>
-  <circle cx="24" cy="14" r="4.6" fill="#3fb950"/>
-  <circle cx="24" cy="24" r="4.6" fill="#d6a01a"/>
-  <circle cx="24" cy="34" r="4.6" fill="#f85149"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="COGO">
+  <rect width="64" height="64" rx="15" fill="#3f4654"/>
+  <g stroke="#ffffff" stroke-width="2.6" stroke-linecap="round">
+    <line x1="32" y1="42.5" x2="21" y2="24"/>
+    <line x1="32" y1="42.5" x2="43" y2="24"/>
+  </g>
+  <circle cx="21" cy="23" r="4.6" fill="#ffffff"/>
+  <circle cx="43" cy="23" r="4.6" fill="#ffffff"/>
+  <circle cx="32" cy="43.5" r="5.8" fill="#ffffff"/>
 </svg>

@@ -1,0 +1,14 @@
+{
+  "name": "cogo",
+  "description": "COGO, la memoria para agentes con un color de confianza computado.",
+  "owner": {
+    "name": "Diego Parrás"
+  },
+  "plugins": [
+    {
+      "name": "cogo",
+      "source": "./plugins/cogo",
+      "description": "La memoria del agente con semáforo: contexto al empezar, authorize antes de lo costoso o irreversible, y la decisión en tus manos cuando COGO no autoriza."
+    }
+  ]
+}

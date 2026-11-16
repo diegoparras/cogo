@@ -25,7 +25,7 @@ type Scrubber interface {
 // Noop is the default: scrubbing off, text passes through untouched.
 type Noop struct{}
 
-func (Noop) Enabled() bool                                     { return false }
+func (Noop) Enabled() bool                                        { return false }
 func (Noop) Scrub(_ context.Context, text string) (string, error) { return text, nil }
 
 // Anonimal calls the suite's Anonimal service: POST {text} -> {redacted_text}.

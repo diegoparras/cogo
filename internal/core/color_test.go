@@ -30,12 +30,12 @@ func TestEvaluateSingleNote(t *testing.T) {
 	}{
 		// bug window = 60d. stale at +60, expires at +120.
 		{"green: observed + passed + fresh", note("g", "bug", "2026-06-19", obs("api.go:40"), "passed"), Green},
-		{"yellow: reported evidence caps at yellow", note("y1", "bug", "2026-06-19", []Evidence{{"doc", "README#redis"}}, "passed"), Yellow},
+		{"yellow: reported evidence caps at yellow", note("y1", "bug", "2026-06-19", []Evidence{{Kind: "doc", Ref: "README#redis"}}, "passed"), Yellow},
 		{"yellow: observed but check not run", note("y2", "bug", "2026-06-19", obs("api.go:40"), "not_run"), Yellow},
 		{"yellow: stale but not expired", note("y3", "bug", "2026-04-20", obs("api.go:40"), "passed"), Yellow},
 		{"red: expired", note("r1", "bug", "2026-02-19", obs("api.go:40"), "passed"), Red},
 		{"red: no evidence", note("r2", "bug", "2026-06-19", nil, "passed"), Red},
-		{"red: evidence without a ref counts as none", note("r3", "bug", "2026-06-19", []Evidence{{"file_read", ""}}, "passed"), Red},
+		{"red: evidence without a ref counts as none", note("r3", "bug", "2026-06-19", []Evidence{{Kind: "file_read", Ref: ""}}, "passed"), Red},
 		{"ungraded: mistakes never decay", note("m", "mistake", "2020-01-01", obs("x"), "passed"), Ungraded},
 	}
 	for _, c := range cases {
@@ -58,8 +58,8 @@ func TestContradictionForcesRed(t *testing.T) {
 }
 
 func TestDependencyPropagation(t *testing.T) {
-	redDep := note("b", "bug", "2026-06-19", nil, "passed")                         // no evidence -> red
-	yellowDep := note("c", "bug", "2026-06-19", []Evidence{{"doc", "r"}}, "passed") // reported -> yellow
+	redDep := note("b", "bug", "2026-06-19", nil, "passed")                                    // no evidence -> red
+	yellowDep := note("c", "bug", "2026-06-19", []Evidence{{Kind: "doc", Ref: "r"}}, "passed") // reported -> yellow
 
 	t.Run("depends on red -> red", func(t *testing.T) {
 		a := note("a", "bug", "2026-06-19", obs("api.go:40"), "passed", "b") // green on its own

@@ -1,0 +1,27 @@
+[
+ {
+  "caso": "fisherboy-auth-federated",
+  "color": "green",
+  "razon": "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción"
+ },
+ {
+  "caso": "fisherboy-logout-cookie",
+  "color": "ungraded",
+  "razon": "error registrado: es informativo, no se gradúa por confianza"
+ },
+ {
+  "caso": "fisherboy-queue-backlog",
+  "color": "red",
+  "razon": "sin evidencia observada ni reportada"
+ },
+ {
+  "caso": "fisherboy-redis-hostname",
+  "color": "yellow",
+  "razon": "evidencia observada, pero el check no pasó"
+ },
+ {
+  "caso": "fisherboy-redis-topology",
+  "color": "green",
+  "razon": "evidencia observada, check pasado, fresca, dependencias verdes, sin contradicción"
+ }
+]

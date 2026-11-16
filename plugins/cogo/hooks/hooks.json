@@ -1,0 +1,97 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "input": {
+              "action": "${tool_name}",
+              "hook": "claude-code",
+              "hook_event": "PostToolUse",
+              "hook_tool": "${tool_name}",
+              "hook_tool_use_id": "${tool_use_id}"
+            },
+            "server": "plugin:cogo:cogo",
+            "timeout": 10,
+            "tool": "authorize",
+            "type": "mcp_tool"
+          }
+        ],
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "input": {
+              "action": "${tool_input.command}",
+              "hook": "claude-code",
+              "hook_command": "${tool_input.command}",
+              "hook_minimum": "costly",
+              "hook_tool": "Bash",
+              "hook_tool_use_id": "${tool_use_id}"
+            },
+            "server": "plugin:cogo:cogo",
+            "timeout": 20,
+            "tool": "authorize",
+            "type": "mcp_tool"
+          }
+        ],
+        "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "input": {
+              "action": "${tool_name} ${tool_input.file_path}",
+              "hook": "claude-code",
+              "hook_minimum": "costly",
+              "hook_path": "${tool_input.file_path}",
+              "hook_tool": "${tool_name}",
+              "hook_tool_use_id": "${tool_use_id}"
+            },
+            "server": "plugin:cogo:cogo",
+            "timeout": 20,
+            "tool": "authorize",
+            "type": "mcp_tool"
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit"
+      },
+      {
+        "hooks": [
+          {
+            "input": {
+              "action": "NotebookEdit ${tool_input.notebook_path}",
+              "hook": "claude-code",
+              "hook_minimum": "costly",
+              "hook_path": "${tool_input.notebook_path}",
+              "hook_tool": "NotebookEdit",
+              "hook_tool_use_id": "${tool_use_id}"
+            },
+            "server": "plugin:cogo:cogo",
+            "timeout": 20,
+            "tool": "authorize",
+            "type": "mcp_tool"
+          }
+        ],
+        "matcher": "NotebookEdit"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "input": {},
+            "server": "plugin:cogo:cogo",
+            "timeout": 30,
+            "tool": "recall",
+            "type": "mcp_tool"
+          }
+        ],
+        "matcher": "compact|resume|clear"
+      }
+    ]
+  }
+}

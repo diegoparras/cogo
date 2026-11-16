@@ -48,6 +48,14 @@ func (d Date) After(o Date) bool  { return d.t.After(o.t) }
 func (d Date) Before(o Date) bool { return d.t.Before(o.t) }
 func (d Date) Time() time.Time    { return d.t }
 
+// DaysSince returns whole days from o to d (negative if o is in the future).
+func (d Date) DaysSince(o Date) int {
+	if d.t.IsZero() || o.t.IsZero() {
+		return 0
+	}
+	return int(d.t.Sub(o.t).Hours() / 24)
+}
+
 func (d Date) String() string {
 	if d.t.IsZero() {
 		return ""

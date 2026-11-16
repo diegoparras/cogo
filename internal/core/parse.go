@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/diegoparras/cogo/internal/atomico"
 	"gopkg.in/yaml.v3"
 )
 
@@ -49,15 +50,27 @@ func ParseNote(data []byte) (*Note, error) {
 // Wire structs give the writer full control over field order and over omitting
 // empty optionals, independently of how Note is read.
 type fmInputs struct {
-	ID           string     `yaml:"id"`
-	Type         string     `yaml:"type"`
-	Project      string     `yaml:"project,omitempty"`
-	Evidence     []Evidence `yaml:"evidence,omitempty"`
-	Check        *Check     `yaml:"check,omitempty"`
-	LastVerified *Date      `yaml:"last_verified,omitempty"`
-	DependsOn    []string   `yaml:"depends_on,omitempty"`
-	Supersedes   string     `yaml:"supersedes,omitempty"`
-	CausedBy     string     `yaml:"caused_by,omitempty"`
+	ID           string            `yaml:"id"`
+	Type         string            `yaml:"type"`
+	Project      string            `yaml:"project,omitempty"`
+	Evidence     []Evidence        `yaml:"evidence,omitempty"`
+	Check        *Check            `yaml:"check,omitempty"`
+	LastVerified *Date             `yaml:"last_verified,omitempty"`
+	DependsOn    []string          `yaml:"depends_on,omitempty"`
+	Supersedes   string            `yaml:"supersedes,omitempty"`
+	CausedBy     string            `yaml:"caused_by,omitempty"`
+	Status       string            `yaml:"status,omitempty"`
+	Author       string            `yaml:"author,omitempty"`
+	Origin       string            `yaml:"origin,omitempty"`
+	Pinned       bool              `yaml:"pinned,omitempty"`
+	Scope        map[string]string `yaml:"scope,omitempty"`
+
+	// Notas de brecha (type: gap). Van con omitempty porque una nota común no
+	// las lleva, y el frontmatter tiene que seguir siendo legible de un vistazo.
+	Question      string   `yaml:"question,omitempty"`
+	Blocks        []string `yaml:"blocks,omitempty"`
+	CostToResolve string   `yaml:"cost_to_resolve,omitempty"`
+	Attempted     []string `yaml:"attempted,omitempty"`
 }
 
 type fmComputed struct {
@@ -77,6 +90,16 @@ func MarshalNote(n *Note) ([]byte, error) {
 		DependsOn:  n.DependsOn,
 		Supersedes: n.Supersedes,
 		CausedBy:   n.CausedBy,
+		Status:     n.Status,
+		Author:     n.Author,
+		Origin:     n.Origin,
+		Pinned:     n.Pinned,
+		Scope:      n.Scope,
+
+		Question:      n.Question,
+		Blocks:        n.Blocks,
+		CostToResolve: n.CostToResolve,
+		Attempted:     n.Attempted,
 	}
 	if n.Check != (Check{}) {
 		c := n.Check
@@ -133,11 +156,36 @@ func ReadNoteFile(path string) (*Note, error) {
 	return n, nil
 }
 
+// writeHook, if set, is called after every successful note write — the single
+// choke point a face uses to record per-note history without core doing that
+// I/O itself (it stays pure by default). See SetWriteHook.
+//
+// Recibe la nota ANTES y DESPUÉS de la escritura. El antes es lo que permite
+// traducir un cambio a eventos del registro —qué apareció, qué pasó de estado—
+// sin que core sepa que existe un registro. Es nil cuando la nota es nueva.
+var writeHook func(path string, antes, despues *Note)
+
+// SetWriteHook installs a callback run after each WriteNoteFile. Pass nil to
+// disable. Set once by the server; nil in tests keeps core deterministic.
+func SetWriteHook(f func(path string, antes, despues *Note)) { writeHook = f }
+
 // WriteNoteFile renders a note and writes it to disk.
 func WriteNoteFile(path string, n *Note) error {
 	data, err := MarshalNote(n)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	// El estado anterior se lee antes de pisarlo, y solo si alguien lo va a
+	// mirar: sin hook no hay lectura extra.
+	var antes *Note
+	if writeHook != nil {
+		antes, _ = ReadNoteFile(path) // nil si es nueva o ilegible
+	}
+	if err := atomico.Escribir(path, data, 0o644); err != nil {
+		return err
+	}
+	if writeHook != nil {
+		writeHook(path, antes, n)
+	}
+	return nil
 }

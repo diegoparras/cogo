@@ -1,0 +1,12 @@
+# Todo el texto con \n, también en Windows. Un checkout con autocrlf dejaba
+# transitions.yaml y states_gen.go con \r\n, y dos tests que comparan texto
+# fallaban sin que nadie hubiera roto nada — además del ruido de "LF will be
+# replaced by CRLF" en cada comando de git.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.bin binary

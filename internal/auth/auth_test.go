@@ -10,7 +10,7 @@ import (
 // federated builds an enabled Auth without going through OIDC discovery — enough
 // to exercise the gate and the session cookie offline (no Lockatus needed).
 func federated() *Auth {
-	return &Auth{enabled: true, secret: []byte("test-secret"), flows: map[string]flow{}}
+	return &Auth{enabled: true, federated: true, secret: []byte("test-secret"), flows: map[string]flow{}}
 }
 
 var ok = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
@@ -71,5 +71,68 @@ func TestGate(t *testing.T) {
 	}
 	if code := serve(a, req); code != http.StatusOK {
 		t.Errorf("authed /api should pass, got %d", code)
+	}
+}
+
+func TestTokenGate(t *testing.T) {
+	a := &Auth{enabled: true, token: "s3cret"}
+
+	// No / wrong Bearer -> 401 on protected paths.
+	if code := serve(a, httptest.NewRequest(http.MethodGet, "/mcp", nil)); code != http.StatusUnauthorized {
+		t.Errorf("token mode, no bearer, /mcp should 401, got %d", code)
+	}
+	wrong := httptest.NewRequest(http.MethodGet, "/api/notes", nil)
+	wrong.Header.Set("Authorization", "Bearer nope")
+	if code := serve(a, wrong); code != http.StatusUnauthorized {
+		t.Errorf("wrong bearer should 401, got %d", code)
+	}
+
+	// Correct Bearer -> passes.
+	good := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	good.Header.Set("Authorization", "Bearer s3cret")
+	if code := serve(a, good); code != http.StatusOK {
+		t.Errorf("correct bearer should pass, got %d", code)
+	}
+
+	// Static assets stay open even in token mode.
+	if code := serve(a, httptest.NewRequest(http.MethodGet, "/app.js", nil)); code != http.StatusOK {
+		t.Errorf("static asset should stay open, got %d", code)
+	}
+}
+
+func TestIssuedTokenVerifier(t *testing.T) {
+	a := &Auth{enabled: true, token: "root"}
+	a.SetVerifier(func(secret string) (string, bool, bool) {
+		switch secret {
+		case "rw-token":
+			return "CI", false, true // full scope
+		case "ro-token":
+			return "reader", true, true // read-only
+		}
+		return "", false, false
+	})
+
+	rw := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	rw.Header.Set("Authorization", "Bearer rw-token")
+	if caller, ro, ok := a.authorize(rw); !ok || ro || caller != "token:CI" {
+		t.Errorf("rw-token should authorize full as token:CI: caller=%q ok=%v readonly=%v", caller, ok, ro)
+	}
+
+	roReq := httptest.NewRequest(http.MethodGet, "/api/notes", nil)
+	roReq.Header.Set("Authorization", "Bearer ro-token")
+	if _, ro, ok := a.authorize(roReq); !ok || !ro {
+		t.Errorf("ro-token should authorize read-only: ok=%v readonly=%v", ok, ro)
+	}
+
+	root := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	root.Header.Set("Authorization", "Bearer root")
+	if caller, _, ok := a.authorize(root); !ok || caller != "root" {
+		t.Errorf("root token should authorize as root, got caller=%q ok=%v", caller, ok)
+	}
+
+	bad := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	bad.Header.Set("Authorization", "Bearer nope")
+	if _, _, ok := a.authorize(bad); ok {
+		t.Error("unknown token must not authorize")
 	}
 }
