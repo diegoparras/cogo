@@ -22,7 +22,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const version = "0.2.0"
+const version = "0.2.1"
 
 // cmdServe runs cogo as an MCP server over stdio: the same binary, the same
 // core, exposed to any LLM client. Side-effect-free by construction — it only

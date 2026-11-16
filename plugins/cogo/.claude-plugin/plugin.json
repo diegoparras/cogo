@@ -1,7 +1,7 @@
 {
   "name": "cogo",
   "displayName": "COGO",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "La memoria del agente con semáforo: contexto al empezar, authorize antes de lo costoso o irreversible, y la decisión en tus manos cuando COGO no autoriza.",
   "author": {
     "name": "Diego Parrás",
